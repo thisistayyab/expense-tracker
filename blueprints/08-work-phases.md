@@ -75,14 +75,13 @@ Tasks:
 - [x] Component kit skeletons: `Money`, `Card`, `Button`, `ListRow`, `ProgressBar`, `Sheet`,
       `TextField`, `FieldRow`, `PickerSheet`, `EmptyState`, `SectionHeader` (visual only, no data).
 - [x] Navigation shell: `(tabs)/_layout.tsx` + `FloatingTabBar` for Overview · Activity ·
-      Budgets · Insights, with placeholder screens and no feature logic; the kit demo moved to
-      `/kitchen-sink` so the tabs own `/`.
+      Budgets · Insights, with placeholder screens and no feature logic. The P0 kit demo screen
+      was deleted once P1 landed: `/` is Overview and no dev screen is linked from the UI.
 - [x] Lint/format config, `tsc --noEmit` green, path aliases verified.
 - [ ] Freeze the dependency set (lockfile committed). *(lockfile updated, not committed)*
 
 Files: `src/lib/theme/*`, `src/components/*`, `src/constants/*`, `src/lib/format/*`,
-`src/lib/db/client.ts`, `src/app/_layout.tsx`, `src/app/(tabs)/*`, `src/app/kitchen-sink.tsx`
-(kit demo), `app.json`.
+`src/lib/db/client.ts`, `src/app/_layout.tsx`, `src/app/(tabs)/*`, `app.json`.
 Demo: app launches to a token-driven placeholder screen in both themes.
 Gate: `npx tsc --noEmit`, `npx expo lint`, `npx expo-doctor` clean on a fresh clone.
 Risk: adding native modules forces dev builds — do it on day 1, not day 20.
@@ -93,33 +92,44 @@ USD/EUR/JPY/KWD formatter matrix. Two things stay open on purpose: the device bu
 in the working environment) and an `expo-linear-gradient` accent button — the button is solid
 iris until the FAB lands, because P0 may not add a dependency outside the approved list. The
 same rule applies to the tab bar: it uses the translucent `tabBar` token, not a real backdrop
-blur, until `expo-blur` earns a place in the dependency set. The
-schema is still zero: `client.ts` only opens the DB and sets WAL/`foreign_keys`, P1 owns migration
-001.
+blur, until `expo-blur` earns a place in the dependency set. The schema gap P0 left open has
+since been closed by P1: `client.ts` now migrates and seeds on boot, and the schema is at v1.
 
 ## P1 — Data layer (3 days)
 
 Goal: the schema is real, seeded, migrated, and queryable — with pure logic tested.
 
 Tasks:
-- [ ] `src/lib/db/client.ts`: open DB, `PRAGMA journal_mode=WAL`, `foreign_keys=ON`.
-- [ ] Migration 001 (full schema from `02-data-model.md`), `user_version` runner.
-- [ ] Seed starter categories + one default account (idempotent).
-- [ ] Repositories: `accounts`, `categories`, `transactions`, `budgets`, `recurring`,
+- [x] `src/lib/db/client.ts`: open DB, `PRAGMA journal_mode=WAL`, `foreign_keys=ON`.
+- [x] Migration 001 (full schema from `02-data-model.md`), `user_version` runner.
+- [x] Seed starter categories + one default account (idempotent).
+- [x] Repositories: `accounts`, `categories`, `transactions`, `budgets`, `recurring`,
       `settings` (only SQL lives here). Transactions take/return `itemName`, `place`, `note`,
       `amountMinor`, `currency`.
-- [ ] `src/lib/domain/`: `money.ts` (parse/format minor units with a per-currency exponent),
-      `dates.ts` (local date, period ranges), `budgets.ts`, `safeToSpend.ts`.
-- [ ] Settings resolution: device country/currency from `expo-localization`, persisted on first
+- [x] `src/lib/domain/`: `dates.ts` (local date, period ranges), `budgets.ts`, `safeToSpend.ts`,
+      `region.ts`. Money parsing/formatting stays in `src/lib/format/money.ts` — it was already
+      pure and imported by the UI, so a second `domain/money.ts` was not created.
+- [x] Settings resolution: device country/currency from `expo-localization`, persisted on first
       open; seed the default account in that currency.
-- [ ] Jest + `jest-expo` configured; tests for money parsing (0/2/3-decimal currencies, excess
+- [x] Jest + `jest-expo` configured; tests for money parsing (0/2/3-decimal currencies, excess
       decimals rejected), period boundaries, DST day, leap year, month-end clamping, overspend
       clamp, mixed-currency exclusion.
-- [ ] Fixture seeder: 12 months / ~2,000 transactions for perf work.
+- [x] Fixture seeder: 12 months / ~2,000 transactions for perf work.
 
-Demo: log rows via a debug screen, restart, data persists.
+Demo: log rows via a debug screen, restart, data persists. `/dev-data` seeds fixtures, re-runs
+migrations and deletes transactions; it is reached from a `__DEV__`-only card on Overview, so a
+release build ships no dev entry point at all.
 Gate: all unit tests pass; running migrations twice is a no-op; deleting the DB file restores
 a clean seeded state.
+
+Status at implementation time: 47 tests pass across 6 suites, `tsc` and `expo lint` clean. The
+migration, seeding, repositories and fixture seeder run against a real SQLite engine (Node's
+`node:sqlite`) through a narrow `Db` adapter rather than against `expo-sqlite`, because Jest has
+no native module. That covers: ten tables after a fresh migrate, a second migrate applying
+nothing, seeds not duplicating, the transfer CHECK and account foreign key rejecting bad rows,
+totals excluding the other currency, one overall budget per period/currency via the partial
+index, and balances including income, expenses and transfers. Still unverified: deleting the DB
+file on a device and surviving a real restart — both need the dev build.
 
 ## P2 — Capture (4 days)
 

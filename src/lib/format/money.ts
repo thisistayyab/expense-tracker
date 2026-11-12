@@ -113,7 +113,11 @@ export function parseMoneyInput(
   decimalSeparator = ".",
 ): number | null {
   const { exponent } = getCurrency(code);
-  const cleaned = input.trim().replace(/\s/g, "").replace(/,/g, "");
+  const collapsed = input.trim().replace(/\s/g, "");
+  // Only the *other* separator can be grouping: stripping the comma while it is the
+  // decimal separator turned "1 250,75" into 125075 instead of 1250.75.
+  const cleaned =
+    decimalSeparator === "." ? collapsed.replace(/,/g, "") : collapsed.replace(/\./g, "");
   if (!cleaned) return null;
 
   const separatorPattern = decimalSeparator === "." ? /\./g : new RegExp(`\\${decimalSeparator}`, "g");

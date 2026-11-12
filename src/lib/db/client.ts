@@ -1,10 +1,12 @@
 import * as SQLite from "expo-sqlite";
 
+import { detectRegionDefaults } from "../region";
+import { migrate } from "./migrate";
+import { seedIfEmpty } from "./seed";
+
 /**
- * P0 owns the connection and its pragmas; P1 owns the schema, the migration
- * runner and the repositories. Keeping this file schema-free means the app can
- * boot (and the splash can be proven to wait for a real database) before any
- * table exists.
+ * One connection, opened once. `initDatabase` is what the SQLiteProvider calls on
+ * boot: pragmas → migrations → first-run seed. Screens never see this file.
  */
 export const DATABASE_NAME = "expense-tracker.db";
 
@@ -15,10 +17,16 @@ async function applyPragmas(db: SQLite.SQLiteDatabase): Promise<void> {
 
 export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
   await applyPragmas(db);
-  const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
-  const version = row?.user_version ?? 0;
+
+  const migration = await migrate(db);
+  const seeded = await seedIfEmpty(db, detectRegionDefaults());
+
   if (__DEV__) {
-    console.info(`[db] ${DATABASE_NAME} ready at user_version=${version}`);
+    console.info(
+      `[db] ${DATABASE_NAME} at user_version=${migration.to}` +
+        ` (applied ${migration.applied.length ? migration.applied.join(",") : "none"}),` +
+        ` seeded ${seeded.categories} categories${seeded.account ? " + Cash account" : ""}`,
+    );
   }
 }
 

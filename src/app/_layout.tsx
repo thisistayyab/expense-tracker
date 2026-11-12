@@ -43,6 +43,14 @@ function BootGate({ ready, children }: { ready: boolean; children: ReactNode }) 
 function Navigation() {
   const { theme } = useTheme();
 
+  const detailOptions = {
+    headerShown: true,
+    headerStyle: { backgroundColor: theme.colors.bg },
+    headerTintColor: theme.colors.textPrimary,
+    headerTitleStyle: { ...theme.text.title3, color: theme.colors.textPrimary },
+    headerShadowVisible: false,
+  };
+
   return (
     <Stack
       screenOptions={{
@@ -51,17 +59,7 @@ function Navigation() {
       }}
     >
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen
-        name="kitchen-sink"
-        options={{
-          headerShown: true,
-          title: "Component kit",
-          headerStyle: { backgroundColor: theme.colors.bg },
-          headerTintColor: theme.colors.textPrimary,
-          headerTitleStyle: { ...theme.text.title3, color: theme.colors.textPrimary },
-          headerShadowVisible: false,
-        }}
-      />
+      <Stack.Screen name="dev-data" options={{ ...detailOptions, title: "Data tools" }} />
     </Stack>
   );
 }
