@@ -59,27 +59,43 @@ fake data; UI builds against them. Never let UI invent field names.
 Goal: a runnable shell with the design system wired in, before any feature exists.
 
 Tasks:
-- [ ] `npx expo install expo-sqlite expo-localization expo-haptics expo-notifications
+- [x] `npx expo install expo-sqlite expo-localization expo-haptics expo-notifications
       react-native-svg expo-local-authentication expo-file-system expo-sharing expo-image-picker
       expo-crypto`
-- [ ] Commit `src/constants/currencies.ts` (ISO 4217 + exponent + symbol) and
+- [x] Commit `src/constants/currencies.ts` (ISO 4217 + exponent + symbol) and
       `countries.ts` (ISO 3166-1 + default currency), plus starter categories.
-- [ ] `lib/format/money.ts`: `Intl.NumberFormat` path **and** the static-table fallback, both
+- [x] `lib/format/money.ts`: `Intl.NumberFormat` path **and** the static-table fallback, both
       returning identical strings for USD/EUR/JPY/KWD.
-- [ ] Confirm dev builds on one iOS and one Android device/emulator.
-- [ ] `src/lib/theme/tokens.ts` + `ThemeProvider` + `useTheme` (light/dark, system default).
-- [ ] Root `_layout.tsx`: providers, splash hold, DB init, error boundary, theme.
-- [ ] `expo-font` loads `assets/fonts/Geist-Variable.ttf`; splash hides only after the font is
-      ready; verify `tnum` alignment on a column of amounts on iOS and Android.
-- [ ] Component kit skeletons: `Money`, `Card`, `Button`, `ListRow`, `ProgressBar`, `Sheet`,
+- [ ] Confirm dev builds on one iOS and one Android device/emulator. *(not run — needs hardware)*
+- [x] `src/lib/theme/tokens.ts` + `ThemeProvider` + `useTheme` (light/dark, system default).
+- [x] Root `_layout.tsx`: providers, splash hold, DB init, error boundary, theme.
+- [x] `expo-font` loads `assets/fonts/Geist-Variable.ttf`; splash hides only after the font is
+      ready; verify `tnum` alignment on a column of amounts on iOS and Android. *(tnum proven in
+      the renderer; on-device weight rendering still needs the dev build above)*
+- [x] Component kit skeletons: `Money`, `Card`, `Button`, `ListRow`, `ProgressBar`, `Sheet`,
       `TextField`, `FieldRow`, `PickerSheet`, `EmptyState`, `SectionHeader` (visual only, no data).
-- [ ] Lint/format config, `tsc --noEmit` green, path aliases verified.
-- [ ] Freeze the dependency set (lockfile committed).
+- [x] Navigation shell: `(tabs)/_layout.tsx` + `FloatingTabBar` for Overview · Activity ·
+      Budgets · Insights, with placeholder screens and no feature logic; the kit demo moved to
+      `/kitchen-sink` so the tabs own `/`.
+- [x] Lint/format config, `tsc --noEmit` green, path aliases verified.
+- [ ] Freeze the dependency set (lockfile committed). *(lockfile updated, not committed)*
 
-Files: `src/lib/theme/*`, `src/components/*`, `src/app/_layout.tsx`, `app.json` (splash/icon).
+Files: `src/lib/theme/*`, `src/components/*`, `src/constants/*`, `src/lib/format/*`,
+`src/lib/db/client.ts`, `src/app/_layout.tsx`, `src/app/(tabs)/*`, `src/app/kitchen-sink.tsx`
+(kit demo), `app.json`.
 Demo: app launches to a token-driven placeholder screen in both themes.
 Gate: `npx tsc --noEmit`, `npx expo lint`, `npx expo-doctor` clean on a fresh clone.
 Risk: adding native modules forces dev builds — do it on day 1, not day 20.
+
+Status at implementation time: typecheck, lint and doctor (20/20) pass; currency and country
+reference data were validated against Intl (153 currencies, 189 countries) including the
+USD/EUR/JPY/KWD formatter matrix. Two things stay open on purpose: the device builds (no hardware
+in the working environment) and an `expo-linear-gradient` accent button — the button is solid
+iris until the FAB lands, because P0 may not add a dependency outside the approved list. The
+same rule applies to the tab bar: it uses the translucent `tabBar` token, not a real backdrop
+blur, until `expo-blur` earns a place in the dependency set. The
+schema is still zero: `client.ts` only opens the DB and sets WAL/`foreign_keys`, P1 owns migration
+001.
 
 ## P1 — Data layer (3 days)
 
