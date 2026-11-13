@@ -7,6 +7,7 @@ export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { FieldRow, type FieldRowProps } from "./FieldRow";
 export { ListRow, type ListRowProps } from "./ListRow";
 export { Money, type MoneyProps, type MoneyTone } from "./Money";
+export { MonthSelector, type MonthSelectorProps } from "./MonthSelector";
 export { PickerSheet, type PickerOption, type PickerSheetProps } from "./PickerSheet";
 export {
   ProgressBar,
@@ -14,6 +15,7 @@ export {
   type ProgressBarProps,
   type ProgressState,
 } from "./ProgressBar";
+export { ProgressRing, type ProgressRingProps } from "./ProgressRing";
 export { SectionHeader, type SectionHeaderProps } from "./SectionHeader";
 export { Sheet, type SheetProps } from "./Sheet";
 export { TextField, type TextFieldProps } from "./TextField";

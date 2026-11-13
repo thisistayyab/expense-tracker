@@ -202,8 +202,8 @@ action that clears the flag and the Overview dev card offers "Show onboarding"; 
 production control. `EXPO_PUBLIC_FORCE_ONBOARDING=1` additionally starts each dev launch on the
 welcome screen without touching the saved flag, for when the UI reset is unreachable.
 
-Known deviations and gaps: the pager shows two dots because the third step (first budget) is P4,
-and “Restore a backup” is omitted until P6 rather than shown as a dead control. A notification-tap
+Known deviations and gaps at P3: the pager showed two dots until the third step (first budget)
+landed in P4, and “Restore a backup” is omitted until P6 rather than shown as a dead control. A notification-tap
 launch cannot be exercised until notifications land in P6; there is deliberately no handler yet.
 The stopwatch gates, keyboard geometry, nested sheets (including the new calendar) and the
 10-launch check still need a device; nothing here was timed on hardware. The add-screen mockup
@@ -264,20 +264,50 @@ Checks: `npx tsc --noEmit` (0), `npx expo lint` (0), `npx jest --ci` (80/80 acro
 Goal: budgets exist and the home screen answers "can I spend today?".
 
 Tasks:
-- [ ] Period math: weekly/monthly/yearly with anchor, month-end clamping.
-- [ ] Budget CRUD (per category + overall) with `currency` snapshots, threshold states,
-      copy-last-month, "recreate in <new currency>" for old-currency budgets.
-- [ ] Onboarding step 3: first-budget field in the chosen currency (skippable), wired into the
+- [x] Period math: weekly/monthly/yearly with anchor, month-end clamping.
+- [x] Budget CRUD (per category + overall) with `currency` snapshots, threshold states,
+      "recreate in <new currency>" for old-currency budgets. Copy-last-month is not a button:
+      budgets are standing limits that already carry over, which is what the control emulated.
+- [x] Onboarding step 3: first-budget field in the chosen currency (skippable), wired into the
       same finish-write transaction as steps 1–2.
-- [ ] `safeToSpend` query + breakdown sheet with the plain-language formula.
-- [ ] Home composition: month selector, hero, budget rows, recent rows, FAB.
-- [ ] Unit tests for safe-to-spend including committed bills and zero budgets.
-- [ ] Calculation transparency: "excludes N bills you haven't logged".
+- [x] `safeToSpend` query + breakdown sheet with the plain-language formula.
+- [x] Home composition: month selector, hero, budget rows, recent rows, FAB.
+- [x] Unit tests for safe-to-spend including committed bills and zero budgets.
+- [x] Calculation transparency: "excludes N bills you haven't logged".
 
 Demo: set budgets, log expenses (named and unnamed), watch safe-to-spend fall; open breakdown
 and reconcile by hand; switch currency and confirm old totals are excluded, not converted.
 Gate: hero and sheet agree to the cent; changing a budget updates Home without reload; the
 formula is documented in code and tests.
+
+Status: P4 is implemented. `domain/budget-period.ts` owns the monthly/yearly windows and the
+month selector's floor (the earliest transaction month); weekly windows stay anchored to
+`budgets.start_date`. `domain/budget-plan.ts` is the one composition both screens render —
+overall limit, spend, committed bills, one row per category and the previous-currency list — so
+the hero and the breakdown sheet cannot disagree. `useBudgetPlan` reads settings and budgets
+first to fix the window, then aggregates spend, other currencies and unposted bills; the new
+`sumSpentByCategory`, `countSpentInOtherCurrencies`, `earliestLocalDate` and
+`sumCommittedUnposted` queries keep the currency/period rules in SQL. Budgets is now overall
+limit + category limits + a soft over-allocation warning + the period pill (`budget_period`
+setting) + "Recreate in <CUR>" for limits left in a previous currency, which retires (never
+deletes) the old row. Home is the month selector, the ink hero with a percent pill and progress
+track, the truth line, the three closest budget cards, three recent rows with a currency
+footnote that deep-links into filtered Activity, plus the breakdown sheet and FAB.
+
+Deliberate deviations: copy-last-month is not shipped as a control (see the task note), and
+because budgets are standing limits the P4 doc's "monthly copy" framing is superseded. The
+hero's radial glow from 07 is not reproduced — no gradient dependency is installed and adding
+one was out of scope — so the ink card and accent track carry the hierarchy instead. The month
+selector only appears for monthly budgets; weekly and yearly windows stay current-serving.
+
+Tests: `domain/__tests__/budget-plan-test.ts` (composition, currency/period scoping, overspend
+clamp, previous-currency exclusion, closest-to-limit), `budget-period-test.ts` (windows, month
+offsets, labels) and `db/__tests__/budget-queries-test.ts` (spend-by-category excluding
+income/transfers/other currencies, committed-bill boundaries, overall upsert/deactivate,
+first-budget-in-transaction and the skip path). The suite is 103 tests across 16 suites;
+`npx tsc --noEmit` and `npx expo lint` are clean. Still device-gated: "a budget edit updates
+Home without reload" is wired through focus refresh and a shared hook but was not exercised on
+hardware, and the 60 fps/stopwatch checks remain unmeasured.
 
 ## P5 — Insight (3 days)
 

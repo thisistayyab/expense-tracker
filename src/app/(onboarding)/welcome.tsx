@@ -4,6 +4,7 @@ import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 
+import { Pager } from "../../features/onboarding/Pager";
 import { detectRegionDefaults } from "../../lib/region";
 import { useOnboarding } from "../../lib/onboarding";
 
@@ -136,11 +137,8 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={{ paddingHorizontal: 22, paddingBottom: 24 }}>
-          <View style={{ flexDirection: "row", justifyContent: "center", gap: 6, marginBottom: 16 }}>
-            <View style={{ width: 18, height: 5, borderRadius: 3, backgroundColor: PAPER }} />
-            <View
-              style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: "rgba(245,245,243,0.25)" }}
-            />
+          <View style={{ marginBottom: 16 }}>
+            <Pager active={0} total={3} tone="ink" />
           </View>
 
           <Pressable

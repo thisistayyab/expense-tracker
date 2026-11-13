@@ -161,3 +161,25 @@ export async function setNextDueAt(db: Db, id: string, nextDueAt: string): Promi
 export async function deleteRecurringRule(db: Db, id: string): Promise<void> {
   await db.runAsync("DELETE FROM recurring_rules WHERE id = ?", [id]);
 }
+
+/**
+ * Bills already known but not yet logged, due between today and the end of the
+ * period (02 committed_unposted). Safe-to-spend sets this money aside so the daily
+ * number cannot silently spend the rent.
+ *
+ * Only active expense rules in the given currency count; transfers and income are
+ * not commitments, and a rule due after the period ends belongs to a later one.
+ */
+export async function sumCommittedUnposted(
+  db: Db,
+  options: { currency: string; fromDate: string; toDate: string },
+): Promise<{ totalMinor: number; count: number }> {
+  const row = await db.getFirstAsync<{ total_minor: number; count: number }>(
+    `SELECT COALESCE(SUM(amount_minor), 0) AS total_minor, COUNT(*) AS count
+       FROM recurring_rules
+      WHERE is_active = 1 AND type = 'expense' AND currency = ?
+        AND next_due_at BETWEEN ? AND ?`,
+    [options.currency.toUpperCase(), options.fromDate, options.toDate],
+  );
+  return { totalMinor: row?.total_minor ?? 0, count: row?.count ?? 0 };
+}

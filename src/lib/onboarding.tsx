@@ -9,7 +9,11 @@ import {
   type ReactNode,
 } from "react";
 
-import { applyRegionSelection, type RegionSelection } from "./db/onboarding";
+import {
+  applyRegionSelection,
+  type FirstBudget,
+  type RegionSelection,
+} from "./db/onboarding";
 import { getSetting, setSettings, SETTING_KEYS } from "./db/repos/settings";
 import type { Db } from "./db/types";
 
@@ -23,7 +27,8 @@ const FORCE_ONBOARDING = __DEV__ && process.env.EXPO_PUBLIC_FORCE_ONBOARDING ===
 type OnboardingContextValue = {
   /** null while the flag is still being read, so routing never guesses. */
   onboarded: boolean | null;
-  finish: (region: RegionSelection) => Promise<void>;
+  /** `budget` is optional: skipping the last step still completes onboarding. */
+  finish: (region: RegionSelection, budget?: FirstBudget | null) => Promise<void>;
   /** Dev-only: clear the flag so the welcome screen can be replayed in-session. */
   reset: () => Promise<void>;
 };
@@ -62,8 +67,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   }, [db]);
 
   const finish = useCallback(
-    async (region: RegionSelection) => {
-      await applyRegionSelection(db, region);
+    async (region: RegionSelection, budget?: FirstBudget | null) => {
+      await applyRegionSelection(db, region, { budget });
       setOnboarded(true);
     },
     [db],

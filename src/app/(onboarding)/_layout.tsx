@@ -3,7 +3,8 @@ import { Redirect, Stack } from "expo-router";
 import { useOnboarding } from "../../lib/onboarding";
 
 /**
- * Two steps in P2: welcome, then country & currency. First-budget joins in P4.
+ * Three steps: welcome, country & currency, then an optional first budget. The last
+ * step is skippable, so onboarding never forces a number the user does not have.
  *
  * Finishing flips the flag, so this layout redirects to the tabs on the same
  * render — no explicit navigation in the screen to race the state change.

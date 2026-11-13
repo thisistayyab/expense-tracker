@@ -1,10 +1,25 @@
+import { isCurrencyCode } from "../../constants/currencies";
 import { newId } from "../ids";
-import type { Db } from "./types";
+import { upsertBudget } from "./repos/budgets";
+import type { BudgetPeriod, Db } from "./types";
 
 export type RegionSelection = {
   country: string;
   currency: string;
   locale: string;
+};
+
+/** Optional last onboarding step; a budget is never required to start. */
+export type FirstBudget = {
+  limitMinor: number;
+  period: BudgetPeriod;
+  startDate: string;
+};
+
+export type ApplyRegionOptions = {
+  /** Written in the same transaction as the region, or not at all. */
+  budget?: FirstBudget | null;
+  now?: string;
 };
 
 /**
@@ -16,15 +31,19 @@ export type RegionSelection = {
  * the wrong money. If the device-currency Cash account exists it is reused; only a
  * missing currency creates an account, so flipping back and forth never litters the
  * library with empty accounts.
+ *
+ * The first budget rides along in the same transaction: there is no moment where
+ * onboarding is done but the app has been told about a limit it never saved.
  */
 export async function applyRegionSelection(
   db: Db,
   region: RegionSelection,
-  now = new Date().toISOString(),
+  options: ApplyRegionOptions = {},
 ): Promise<void> {
   const country = region.country.toUpperCase();
   const currency = region.currency.toUpperCase();
   const locale = region.locale.trim() || "en-US";
+  const now = options.now ?? new Date().toISOString();
 
   await db.withTransactionAsync(async () => {
     const existing = await db.getAllAsync<{ id: string }>(
@@ -60,6 +79,28 @@ export async function applyRegionSelection(
         `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
         [key, value, now],
+      );
+    }
+
+    const budget = options.budget;
+    if (
+      budget &&
+      Number.isSafeInteger(budget.limitMinor) &&
+      budget.limitMinor > 0 &&
+      isCurrencyCode(currency)
+    ) {
+      await upsertBudget(db, {
+        categoryId: null,
+        period: budget.period,
+        limitMinor: budget.limitMinor,
+        currency,
+        startDate: budget.startDate,
+      });
+      // The period the user just budgeted in is the period every screen should use.
+      await db.runAsync(
+        `INSERT INTO settings (key, value, updated_at) VALUES ('budget_period', ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        [budget.period, now],
       );
     }
   });

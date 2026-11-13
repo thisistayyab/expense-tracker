@@ -186,6 +186,7 @@ Documented settings keys (all values are strings; booleans are `'0'`/`'1'`):
 | `theme` | `'system'` | `system` \| `light` \| `dark` |
 | `last_account_id` | uuid | Default account on the add sheet |
 | `currency_changed_at` | ISO date | Used to explain "entries before this date are in another currency" |
+| `budget_period` | `'monthly'` | `weekly` \| `monthly` \| `yearly`; the period Overview and Budgets measure by, written by onboarding and the Budgets period pill |
 
 Future tables (documented, **not** created in v1): `goals`, `goal_contributions`,
 `households`, `household_members`, `sync_outbox`, `ai_suggestions`.

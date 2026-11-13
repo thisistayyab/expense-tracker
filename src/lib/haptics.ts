@@ -18,4 +18,8 @@ export const haptics = {
   error: () => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
   },
+  /** Crossing a budget limit (04 haptics map) — a warning, not a failure. */
+  budget: () => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+  },
 };

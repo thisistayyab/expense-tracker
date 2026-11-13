@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -30,6 +30,7 @@ import {
   updateTransaction,
 } from "../../lib/db/repos/transactions";
 import type { Account, Category, Db, Transaction } from "../../lib/db/types";
+import { isCurrencyCode } from "../../constants/currencies";
 import { addDays, toIsoDate } from "../../lib/domain/dates";
 import { groupTransactionsByDay, type TransactionDaySection } from "../../lib/domain/transaction-groups";
 import { formatMoney } from "../../lib/format/money";
@@ -183,7 +184,20 @@ export default function ActivityScreen() {
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [filters, setFilters] = useState<TransactionFilters>(EMPTY_FILTERS);
+  // Overview's "other currency" footnote deep-links here filtered to that currency.
+  const params = useLocalSearchParams<{ currency?: string }>();
+  const paramCurrency =
+    typeof params.currency === "string" && isCurrencyCode(params.currency)
+      ? params.currency.toUpperCase()
+      : null;
+  const [baseFilters, setFilters] = useState<TransactionFilters>(EMPTY_FILTERS);
+  // The URL wins while it is present: tapping Overview's other-currency footnote
+  // filters Activity without copying the param into state (and without an effect).
+  // Removing the filter clears the param, so the two can never disagree.
+  const filters = useMemo(
+    () => (paramCurrency ? { ...baseFilters, currency: paramCurrency } : baseFilters),
+    [baseFilters, paramCurrency],
+  );
   const [rows, setRows] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -208,6 +222,7 @@ export default function ActivityScreen() {
     const timer = setTimeout(() => setDebouncedQuery(query), 150);
     return () => clearTimeout(timer);
   }, [query]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -283,8 +298,9 @@ export default function ActivityScreen() {
   const clearAll = useCallback(() => {
     setQuery("");
     setFilters(EMPTY_FILTERS);
+    if (paramCurrency) router.setParams({ currency: "" });
     Keyboard.dismiss();
-  }, []);
+  }, [paramCurrency]);
 
   const openDetail = useCallback((row: Transaction) => {
     router.push(`/transaction/${row.id}`);
@@ -418,7 +434,10 @@ export default function ActivityScreen() {
       result.push({
         key: "currency",
         label: filters.currency,
-        clear: () => setFilters((current) => ({ ...current, currency: null })),
+        clear: () => {
+          if (paramCurrency) router.setParams({ currency: "" });
+          setFilters((current) => ({ ...current, currency: null }));
+        },
       });
     }
     if (filters.notePresent) {
@@ -429,7 +448,7 @@ export default function ActivityScreen() {
       });
     }
     return result;
-  }, [accountById, categoryById, filters, removeDateFilter]);
+  }, [accountById, categoryById, filters, paramCurrency, removeDateFilter]);
 
   const categoryOptions = useMemo(() => {
     if (!categoryTarget || categoryTarget.type === "transfer") return [];
@@ -616,6 +635,7 @@ export default function ActivityScreen() {
           categories={categories}
           currencies={currencies}
           onApply={(next) => {
+            if (paramCurrency) router.setParams({ currency: "" });
             setFilters(next);
             setFilterOpen(false);
           }}

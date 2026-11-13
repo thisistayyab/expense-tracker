@@ -9,6 +9,8 @@ export const SETTING_KEYS = {
   theme: "theme",
   lastAccountId: "last_account_id",
   currencyChangedAt: "currency_changed_at",
+  /** weekly | monthly | yearly — the period Overview and Budgets both honour. */
+  budgetPeriod: "budget_period",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

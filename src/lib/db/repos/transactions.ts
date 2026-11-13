@@ -429,3 +429,56 @@ export async function restoreTransaction(db: Db, transaction: Transaction): Prom
     ],
   );
 }
+
+export type CategorySpendRow = {
+  /** null = spend that never got a category; still part of the total. */
+  categoryId: string | null;
+  spentMinor: number;
+};
+
+/**
+ * Expense totals per category for one currency and window. Feeds the budget rows;
+ * transfers and other currencies are excluded by the same rules as `sumSpent`.
+ */
+export async function sumSpentByCategory(
+  db: Db,
+  options: { currency: string; fromDate: string; toDate: string },
+): Promise<CategorySpendRow[]> {
+  const rows = await db.getAllAsync<{ category_id: string | null; spent_minor: number }>(
+    `SELECT category_id, COALESCE(SUM(amount_minor), 0) AS spent_minor
+       FROM transactions
+      WHERE type = 'expense' AND currency = ? AND local_date BETWEEN ? AND ?
+      GROUP BY category_id`,
+    [options.currency.toUpperCase(), options.fromDate, options.toDate],
+  );
+  return rows.map((row) => ({
+    categoryId: row.category_id,
+    spentMinor: row.spent_minor ?? 0,
+  }));
+}
+
+/**
+ * Expense rows in the window that are *not* in the active currency, so Home can
+ * say "12 entries in EUR are not included" instead of silently converting them.
+ */
+export async function countSpentInOtherCurrencies(
+  db: Db,
+  options: { currency: string; fromDate: string; toDate: string },
+): Promise<{ currency: string; count: number }[]> {
+  return db.getAllAsync<{ currency: string; count: number }>(
+    `SELECT currency, COUNT(*) AS count
+       FROM transactions
+      WHERE type = 'expense' AND currency <> ? AND local_date BETWEEN ? AND ?
+      GROUP BY currency
+      ORDER BY count DESC`,
+    [options.currency.toUpperCase(), options.fromDate, options.toDate],
+  );
+}
+
+/** Earliest day with data, so the month selector cannot walk past the first entry. */
+export async function earliestLocalDate(db: Db): Promise<string | null> {
+  const row = await db.getFirstAsync<{ earliest: string | null }>(
+    "SELECT MIN(local_date) AS earliest FROM transactions",
+  );
+  return row?.earliest ?? null;
+}

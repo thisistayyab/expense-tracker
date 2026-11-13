@@ -11,6 +11,8 @@ export type ProgressBarProps = {
   /** Force a state instead of deriving it from the value. */
   state?: ProgressState;
   color?: string;
+  /** Track override — the ink hero needs a light track instead of surfaceSunken. */
+  trackColor?: string;
 };
 
 export function progressStateFor(value: number): ProgressState {
@@ -19,7 +21,7 @@ export function progressStateFor(value: number): ProgressState {
   return "normal";
 }
 
-export function ProgressBar({ value, height = 6, state, color }: ProgressBarProps) {
+export function ProgressBar({ value, height = 6, state, color, trackColor }: ProgressBarProps) {
   const { theme } = useTheme();
   const resolvedState = state ?? progressStateFor(value);
   const clamped = Math.max(0, Math.min(value, 1));
@@ -39,7 +41,7 @@ export function ProgressBar({ value, height = 6, state, color }: ProgressBarProp
       style={{
         height,
         borderRadius: height,
-        backgroundColor: theme.colors.surfaceSunken,
+        backgroundColor: trackColor ?? theme.colors.surfaceSunken,
         overflow: "hidden",
       }}
     >
