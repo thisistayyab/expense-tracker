@@ -88,13 +88,13 @@ Edge cases:
 
 ```mermaid
 flowchart TD
-  A["+ button / widget / deep link<br/>(explicit user action only)"] --> B["Modal opens in keypad mode<br/>amount ready — no second tap"]
+  A["+ button / widget / deep link<br/>(explicit user action only)"] -->  B["Modal opens with amount field<br/>native numeric keyboard"]
   B --> T{"Type?"}
   T -- "Expense" --> C1["Category chips<br/>+ item name row + account + date"]
   T -- "Income" --> C2["Income categories<br/>+ item name row + account + date"]
   T -- "Transfer" --> C3["From account → To account<br/>no category" ]
   C1 --> F{"Name field focused?"}
-  F -- "yes" --> K["Keyboard mode:<br/>keypad unmounts, rows collapse,<br/>Save pinned (ADR-014)"]
+  F -- "yes" -->  K["Keyboard open:<br/>sheet lifts, body scrolls,<br/>header + Save pinned (ADR-014)"]
   K --> NM["Item name typed (optional)<br/>trim · max 80 chars"]
   NM --> V
   F -- "no" --> V{"amount_minor > 0?"}
@@ -123,7 +123,7 @@ Notes:
 - Item name is optional too. Empty stays `NULL` — never write `''`, or the fallback chain
   (`item_name → place → category`) and the "named entries" metric both break.
 - `local_date`, `currency` and `amount_minor` are computed once at save and never recomputed.
-- Exactly one input surface is mounted at a time; the keypad and OS keyboard never coexist.
+- There is only one input surface: amount and name both use the OS keyboard; no second keypad is mounted.
 - Deep link `expensetracker://add?amount=12.50` prefills the amount only.
 
 ---

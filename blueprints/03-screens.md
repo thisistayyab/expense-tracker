@@ -38,7 +38,7 @@ with a cross-platform fallback set; each gets a color from the palette ramp.
 
 ---
 
-## 2. Overview (Home) — `(tabs)/index.tsx` [v1]
+## 2. Overview (Home) — `(tabs)/overview.tsx` [v1]
 
 **Purpose:** the five-second answer.
 
@@ -60,7 +60,7 @@ with a cross-platform fallback set; each gets a color from the palette ramp.
 7. Floating **+** button (bottom-right, above the floating tab bar) → `add` modal.
 8. Empty state (no transactions yet): centered gradient icon, "Start with one", one sentence, and
    a primary "Log your first expense" button plus two setup rows. **No FAB** in this state — the
-   CTA is the only entry point. No keypad or keyboard is shown until that button is tapped, so
+   CTA is the only entry point. No keyboard is shown until that button is tapped, so
    the home screen never mounts an input.
 
 **States:** loading (skeleton matching layout, not a spinner), empty, populated, error
@@ -83,7 +83,7 @@ taps and ≤ 5 seconds **from tapping +**. This sheet is never the first thing a
 
 | Field | Control | Required | Notes |
 | --- | --- | --- | --- |
-| Price* | custom keypad → amount display | yes (> 0) | Currency from Settings; decimals limited by the currency exponent |
+| Price* | numeric text field (native decimal/number pad) | yes (> 0) | Currency from Settings; decimals limited by the currency exponent |
 | Category | chip row + "More…" searchable sheet | no | Falls back to "Uncategorized"; recent categories first |
 | Item name | single-line text row, "What was it?" | no | e.g. `Chicken shawarma`; max 80 chars; trimmed on save |
 | Account | row → picker | no | Defaults to last used account **in the active currency** |
@@ -100,12 +100,10 @@ the sheet never expands details by default.
 - Never auto-presented: not on cold start, not on resume, not from a notification tap. Only the
   + button, a home-screen shortcut, or an explicit deep link opens it. A notification opens the
   relevant transaction or bill instead.
-- Price uses a custom keypad (not the OS keyboard) so layout never jumps and no keyboard
-  flicker occurs; haptic tick per key, success haptic on save. The `.` key is absent for
-  0-decimal currencies.
+- Price uses the OS numeric keyboard (decimal pad, or number pad for 0-decimal currencies).
+  There is only one input surface, so moving between amount and name never swaps keyboards or
+  collapses the sheet; decimals are clamped to the currency exponent. Success haptic on save.
 - The item-name row is one tap away and optional: the fast path stays price → category → Save.
-  Focusing it swaps the keypad for the OS keyboard **in place** — the two input surfaces are
-  never mounted at the same time (ADR-013).
 - While the name field is empty, up to 5 recently used item names (last 30 days, grouped
   case-insensitively) appear as small chips under it; typing hides them, and tapping one fills
   the field and dismisses the keyboard.
@@ -115,16 +113,16 @@ the sheet never expands details by default.
 - Editing an existing transaction reuses this screen with prefilled values.
 - `?amount=...` deep-link param prefills for widgets/shortcuts.
 
-**States:** default, keyboard mode (name/place/note focused: keypad hidden, rows collapsed,
-Save pinned above the keyboard), details expanded, income mode (income categories, no transfer
-account row), transfer mode (from-account + to-account, category and item-name hidden), income vs
-expense vs transfer to/from account filtered to the active currency, validation
-(`amount_minor` > 0; transfer needs a different destination account), saving (button spinner,
-inputs locked).
+**States:** default, keyboard open (the whole sheet lifts above the OS keyboard, the body
+scrolls, and the header plus Save stay pinned), details expanded, income mode (income categories,
+no transfer account row), transfer mode (from-account + to-account, category and item-name
+hidden), income vs expense vs transfer to/from account filtered to the active currency,
+validation (`amount_minor` > 0; transfer needs a different destination account), saving (button
+spinner, inputs locked).
 **Acceptance:** one-handed reachable for all primary controls; median price+category save ≤ 5 s
 and ≤ 8 s including an item name; save works offline always; double-tap Save cannot create two
 rows (idempotency guard while in-flight); launching the app ten times never presents a keyboard
-or this sheet; switching to the OS keyboard never covers Save or the amount.
+or this sheet; the OS keyboard never covers Save or the amount.
 
 ---
 
@@ -248,8 +246,8 @@ that opens the currency picker sheet with its own search.
 
 **States:** unchanged selection, dirty (Continue/Apply enabled), confirming currency change,
 write error (retry, selection preserved).
-**Acceptance:** selecting Japan then typing an amount shows `¥` and a keypad with no decimal
-key; switching back to USD formats the same screen with two decimals; no stored amount changed.
+**Acceptance:** selecting Japan then typing an amount shows `¥` and a number pad with no decimal
+separator; switching back to USD formats the same screen with two decimals; no stored amount changed.
 
 ## 10. Categories — `settings/categories.tsx` [v1]
 

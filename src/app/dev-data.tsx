@@ -16,6 +16,7 @@ import {
 } from "../lib/db/repos/transactions";
 import type { Db } from "../lib/db/types";
 import { formatMoney } from "../lib/format/money";
+import { useOnboarding } from "../lib/onboarding";
 import { useTheme } from "../lib/theme";
 
 type Snapshot = {
@@ -45,6 +46,7 @@ const EMPTY: Snapshot = {
 export default function DevDataScreen() {
   const { theme } = useTheme();
   const db: Db = useSQLiteContext();
+  const { reset } = useOnboarding();
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -136,6 +138,20 @@ export default function DevDataScreen() {
         : `No-op: already at v${result.to}.`;
     });
 
+  /**
+   * Clears the persisted flag and updates the provider in the same action. The tabs
+   * layout sees `onboarded=false` on the next render and redirects to the welcome
+   * screen, so no reload (and no dev-menu dependency) is involved.
+   */
+  const replayOnboarding = () => {
+    setBusy(true);
+    setMessage("Clearing the onboarding flag…");
+    reset().catch((error: unknown) => {
+      setMessage(`Could not reset onboarding: ${String(error)}`);
+      setBusy(false);
+    });
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
@@ -214,6 +230,12 @@ export default function DevDataScreen() {
               label="Delete all transactions"
               variant="ghost"
               onPress={wipeTransactions}
+              disabled={busy}
+            />
+            <Button
+              label="Replay onboarding (reloads the app)"
+              variant="ghost"
+              onPress={replayOnboarding}
               disabled={busy}
             />
           </View>

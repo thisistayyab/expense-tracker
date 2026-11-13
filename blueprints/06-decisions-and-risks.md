@@ -47,11 +47,11 @@ item names get used.
 
 ### ADR-010 — Entry starts from an explicit action; the app never opens into an input
 **Status:** accepted (revision after design review).
-**Context:** An earlier draft measured entry "from cold open" and pre-focused the amount keypad
-on the empty home state. Reviewing it surfaced a real flaw: an app that greets you with a keypad
+**Context:** An earlier draft measured entry "from cold open" and pre-focused the amount field
+on the empty home state. Reviewing it surfaced a real flaw: an app that greets you with a keyboard
 feels like a data-entry form, invites accidental input, and makes the first screen feel like it
 is demanding something before the user has decided to log anything. Speed is not worth that.
-**Decision:** Home is always the launch screen. No keyboard, keypad, or add sheet is mounted on
+**Decision:** Home is always the launch screen. No keyboard or add sheet is mounted on
 launch or resume. The add sheet opens only from the + button, a home-screen shortcut, or an
 explicit deep link. The 5-second budget is measured from tapping + to a saved transaction.
 **Consequences:** the first tap is always the user's, not the app's; the entry-speed metric is
@@ -101,17 +101,18 @@ or converts stored amounts; the UI states what stays behind.
 currency switch fragments history visually — accepted, and surfaced with a footnote and a
 filtered view rather than hidden. Accounts and transfers are single-currency by construction.
 
-### ADR-014 — One input surface at a time in the add sheet
-**Status:** accepted.
-**Context:** Adding a text field (item name) to a keypad-first sheet risks mounting both the OS
-keyboard and the custom keypad, which jumps the layout, hides Save, and destroys the 5-second
-promise.
-**Decision:** the sheet is always in exactly one mode: keypad mode or keyboard mode. Focusing any
-text field hides the keypad, collapses the secondary rows (account/date/details, values kept) and
-pins Save above the keyboard; dismissing the keyboard restores keypad mode with the same state.
-**Consequences:** no layout jump, Save is always reachable, the amount block stays visible in
-both modes. Cost: two layouts to maintain and test on both platforms, including the "hardware
-keyboard" case where the OS keyboard never appears.
+### ADR-014 — One native input surface in the add sheet
+**Status:** accepted (revised after device feedback; the custom keypad was removed).
+**Context:** A custom keypad plus the OS keyboard created two layouts. Focusing the item name
+swapped surfaces, collapsed the sheet and made it drop behind the keyboard when the keyboard was
+dismissed and reopened; the extra keypad also looked like a second form.
+**Decision:** the amount is a native numeric field (`decimal-pad`, or `number-pad` for
+0-exponent currencies). There is no custom keypad. The sheet keeps one stable layout: its body
+scrolls, the header and Save stay pinned, and the whole sheet lifts above the keyboard. Numeric
+limits live in `sanitizeMoneyInput` and the repository/parser, not in keypad state.
+**Consequences:** one input surface, no keypad/keyboard swap, and no layout collapse. Cost: the
+amount loses per-key haptics and depends on the platform keyboard's geometry; verify pad type
+and sheet lift on both iOS and Android.
 
 ### ADR-015 — Bundled Geist typeface instead of the system stack
 **Status:** accepted.
@@ -139,7 +140,7 @@ and log locally).
 | R6 | Timezone drift on travel/backup restore | Transactions in wrong month | `local_date` snapshot; explicit tests |
 | R7 | Expo SDK upgrade breaks native modules | Freeze before release | Pin SDK, upgrade only between releases with `expo-doctor` + dev build |
 | R8 | Web build (`output: server`) breaks on native-only imports | CI/web failure | Platform-split modules, `.web.tsx` variants, no top-level native calls |
-| R9 | Keyboard/amount-input jank on low-end Android | Entry feels slow | Custom keypad, no OS keyboard for amount, fixed row heights; ADR-014 keeps one input surface mounted |
+| R9 | Keyboard/amount-input jank on low-end Android | Entry feels slow | One native input surface, stable sheet layout, keyboard-lifted body, fixed Save; ADR-014 keeps one surface |
 | R10 | Notification permission denied | Missed bill reminders | In-app "bills due" card as primary, notifications as enhancement |
 | R11 | A currency switch silently changes what "spent this month" means | Users lose trust in every number | Per-row currency snapshots, aggregates filtered by active currency, explicit "N entries in USD not included" footnote, confirmation sheet before applying |
 | R12 | The new item-name field slows entry down or is always skipped | The wedge breaks and reports stay generic | Field stays optional and one tap away, recent-name chips, save never blocked; measure named-entry rate (≥ 60%) |
@@ -183,10 +184,10 @@ and log locally).
 - [ ] All v1 screens from `03-screens.md` implemented with empty/loading/error states.
 - [ ] Money/date/period pure functions unit-tested (boundaries, DST, leap year, month-end,
       0/2/3-decimal currencies, mixed-currency exclusion).
-- [ ] Country/currency verified end to end: pick Japan → keypad loses its decimal key and amounts
-      render `¥`; pick Kuwait → three decimals; switch back → no stored amount changed.
+- [ ] Country/currency verified end to end: pick Japan → the amount field rejects decimals and
+      amounts render `¥`; pick Kuwait → three decimals; switch back → no stored amount changed.
 - [ ] Offline-only flow verified on device with airplane mode.
-- [ ] Launch and resume verified to show no keyboard, keypad, or add sheet.
+- [ ] Launch and resume verified to show no keyboard or add sheet.
 - [ ] Dark mode and 200% text scaling verified on both platforms.
 - [ ] CSV export and JSON backup verified on a clean device.
 - [ ] `npx tsc --noEmit`, `npx expo lint`, `npx expo-doctor` clean.

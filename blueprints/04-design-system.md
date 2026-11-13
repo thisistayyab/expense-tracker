@@ -125,7 +125,7 @@ truncate: reserve the right edge of every row for the widest realistic currency 
 produced — symbol + exponent from the currency table), `AmountHero`, `IconTile` (tinted,
 10–12% category color), `CategoryChip` (icon + label, ink when selected), `ProgressBar` (6 px,
 rounded, states: normal / warning ≥80% / over), `ProgressRing` (78 px, 7 px stroke, for the
-budget total), `AmountKeypad` (`.` hidden for 0-exponent currencies), `TextField`, `FieldRow`,
+budget total), `AmountField` (native numeric keyboard, exponent-limited), `TextField`, `FieldRow`,
 `SegmentedControl` (ink thumb), `Sheet`, `PickerSheet`, `ListRow`, `DayGroup` (one card per day
 with an inset day header), `SectionHeader` (`eyebrow` + accent `See all`), `FloatingTabBar`,
 `FAB` (60 px, iris gradient), `EmptyState`, `UndoSnackbar`, `MonthSelector`, `FilterSheet`,
@@ -160,16 +160,15 @@ Reanimated 4 is installed; keep it purposeful.
 | Progress bar / ring fill | 420 ms | `easeOutCubic` |
 | Hero number count-up | 600 ms | `easeOutCubic`, once per mount |
 | Undo snackbar | 4 s visible, 200 ms in/out | `easeOut` |
-| Keyboard/keypad swap (add) | 180 ms cross-fade | `easeOut` |
+| Add-sheet keyboard lift | follows OS keyboard | native |
 
-Rules: no animation on scroll-critical lists; nothing may delay the keypad; respect
+Rules: no animation on scroll-critical lists; nothing may delay the keyboard or Save; respect
 `reduceMotion` (skip count-up, glow pulse and pill expansion).
 
 ## Haptics map
 
 | Event | Haptic |
 | --- | --- |
-| Keypad digit | `selection` (light) |
 | Category chip / tab | `selection` |
 | Save success | `notificationSuccess` |
 | Undo | `impactLight` |

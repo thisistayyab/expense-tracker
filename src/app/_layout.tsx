@@ -7,7 +7,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { DATABASE_NAME, initDatabase } from "../lib/db/client";
+import { OnboardingProvider, useOnboarding } from "../lib/onboarding";
 import { ThemeProvider, useAppFonts, useTheme } from "../lib/theme";
+import { UndoProvider } from "../lib/undo/UndoProvider";
 
 // Keep the native splash up until the font and the database are both ready: a
 // frame in a fallback face (FOUT) or an unhydrated screen is worse than 100 ms
@@ -39,7 +41,12 @@ function BootGate({ ready, children }: { ready: boolean; children: ReactNode }) 
   return <View style={[styles.root, { backgroundColor: theme.colors.bg }]}>{children}</View>;
 }
 
-/** Needs to sit inside the providers so the stack chrome can read the theme. */
+/**
+ * Every route is registered; access is decided by the group layouts, which read
+ * the onboarding flag and render a `Redirect`. This is deliberately simpler than
+ * `Stack.Protected`: guards that remove a screen mid-transition left the router
+ * on a path with no owner ("Unmatched Route") on device.
+ */
 function Navigation() {
   const { theme } = useTheme();
 
@@ -58,9 +65,40 @@ function Navigation() {
         contentStyle: { backgroundColor: theme.colors.bg },
       }}
     >
+      <Stack.Screen name="index" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(onboarding)" />
+      <Stack.Screen
+        name="add"
+        options={{
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+          headerShown: false,
+          gestureEnabled: false,
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
+      <Stack.Screen name="transaction/[id]" options={{ ...detailOptions, title: "Transaction" }} />
+      <Stack.Screen name="settings/index" options={{ ...detailOptions, title: "Settings" }} />
+      <Stack.Screen
+        name="settings/region"
+        options={{ ...detailOptions, title: "Currency & region" }}
+      />
       <Stack.Screen name="dev-data" options={{ ...detailOptions, title: "Data tools" }} />
     </Stack>
+  );
+}
+
+/** Waits for the onboarding flag so a returning user never sees the welcome screen. */
+function AppShell({ fontsReady }: { fontsReady: boolean }) {
+  const { onboarded } = useOnboarding();
+
+  return (
+    <BootGate ready={fontsReady && onboarded !== null}>
+      <UndoProvider>
+        <Navigation />
+      </UndoProvider>
+    </BootGate>
   );
 }
 
@@ -79,9 +117,9 @@ export default function RootLayout() {
         <ErrorBoundary>
           <Suspense fallback={null}>
             <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase}>
-              <BootGate ready={fontsLoaded || Boolean(fontError)}>
-                <Navigation />
-              </BootGate>
+              <OnboardingProvider>
+                <AppShell fontsReady={fontsLoaded || Boolean(fontError)} />
+              </OnboardingProvider>
             </SQLiteProvider>
           </Suspense>
         </ErrorBoundary>

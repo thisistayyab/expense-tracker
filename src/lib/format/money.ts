@@ -85,9 +85,31 @@ export function formatMoney(
   return signed;
 }
 
-/** Number of decimals the keypad must accept for this currency. */
+/** Number of decimals the amount field must accept for this currency. */
 export function decimalPlaces(code: string): number {
   return getCurrency(code).exponent;
+}
+
+/**
+ * Keep an editable amount valid for the active currency while the user types:
+ * digits and at most one decimal separator, no more fraction digits than the
+ * exponent allows, and a nine-digit whole limit. 0-exponent currencies never keep
+ * a separator or a fraction.
+ */
+export function sanitizeMoneyInput(input: string, code: string): string {
+  const exponent = getCurrency(code).exponent;
+  if (exponent === 0) {
+    const whole = input.replace(/,/g, "").split(".")[0];
+    return whole.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 9);
+  }
+
+  // A decimal keypad may emit "," in some locales, so accept both while typing.
+  // A dot wins when both appear, which drops grouping commas from pasted amounts.
+  const normalized = input.includes(".") ? input : input.replace(/,/g, ".");
+  const [wholeRaw = "", ...fractions] = normalized.replace(/[^\d.]/g, "").split(".");
+  const whole = wholeRaw.replace(/^0+(?=\d)/, "").slice(0, 9);
+  if (!fractions.length) return whole;
+  return `${whole || "0"}.${fractions.join("").slice(0, exponent)}`;
 }
 
 /** 1250 USD → "12.50"; 1200 JPY → "1200"; 1250 KWD → "1.250". */

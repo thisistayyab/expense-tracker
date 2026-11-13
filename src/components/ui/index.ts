@@ -1,5 +1,6 @@
 export { Button, type ButtonProps, type ButtonVariant } from "./Button";
 export { Card, type CardProps } from "./Card";
+export { DatePickerSheet, type DatePickerSheetProps } from "./DatePickerSheet";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { FieldRow, type FieldRowProps } from "./FieldRow";
 export { ListRow, type ListRowProps } from "./ListRow";

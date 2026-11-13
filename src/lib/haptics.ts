@@ -9,4 +9,13 @@ export const haptics = {
   selection: () => {
     void Haptics.selectionAsync().catch(() => {});
   },
+  tick: () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  },
+  success: () => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  },
+  error: () => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+  },
 };

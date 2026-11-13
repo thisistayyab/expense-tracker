@@ -27,8 +27,8 @@ Regenerate: `node blueprints/designs/build.mjs`, then screenshot each HTML (see
 `designs/README.md`). **The PNG is the reference for look; this document is the reference for
 structure and measurements.** If they disagree, one of them is a bug.
 
-**Launch rule:** the app always opens on Overview with no input mounted. A keypad or keyboard may
-only appear inside the add sheet, after an explicit `+` tap — never on cold start, resume, or a
+**Launch rule:** the app always opens on Overview with no input mounted. The keyboard may only
+appear inside the add sheet, after an explicit `+` tap — never on cold start, resume, or a
 notification tap. See ADR-010.
 
 ## Global frame
@@ -151,18 +151,23 @@ expense amount red just because it is an expense.
 
 ![Add transaction](./designs/mockups/png/add.png)
 
-**Composition (keypad mode, default):** grabber → header (close circle · segmented · spacer) →
+> The mockup image still shows the retired custom keypad; the shipped amount field uses the
+> native numeric keyboard.
+
+**Composition:** grabber → header (close circle · segmented · spacer) →
 amount block → category chip row → **item-name row** → recent-name chips → account/date/details
-group card → keypad → iris Save pill.
+group card → iris Save pill. The OS keyboard lifts the sheet when a field is focused; no second
+keypad is mounted.
 
 1. Presented as a native modal sheet (radius 28–32 top, swipe to dismiss). Grabber is platform
    chrome. Reachable only from an explicit add action.
 2. Header: close in a 38 pt white circle (44 pt target), segmented control 232 wide, track
    `surfaceMuted`, selected segment an **ink pill with white label**. Segments: Expense / Income /
    Transfer.
-3. Amount block: 54/58, weight 700, tracking −2.2, tabular, with a 3 × 38 accent caret. Category
-   name under it at 13/600 in `accent` — one source of truth, no duplicate label in the chip.
-   For 0-exponent currencies the `.` key is absent and no decimals can be entered.
+3. Amount block: 54/58, weight 700, tracking −2.2, tabular, editable native numeric field with a
+   caret. Category name under it at 13/600 in `accent` — one source of truth, no duplicate label
+   in the chip. For 0-exponent currencies the number pad has no decimal separator and input is
+   sanitized to reject fractions.
 4. Category chips: 34 tall, pill radius 17, icon 15 + label 13/600; unselected white with a 1 px
    contact shadow, selected **ink with white text**. Last chip is always `More…`; the row scrolls
    horizontally and fades at the right edge (never clips mid-word without a fade).
@@ -173,14 +178,12 @@ group card → keypad → iris Save pill.
 7. Account / date / details: one white 22-radius card, three 52 pt rows with inset hairlines;
    account and date show a chevron, the details row shows `Note, place, tags…` in `text3` with a
    `+`. Expanded, it becomes place + note inputs and tag chips.
-8. Keypad: 3 columns, 51 pt rows, 25/500 digits, no key borders (press state is a soft circle),
-   21 pt glyphs for `.` and `⌫`.
-9. Save: full-width iris pill 56 tall, glow `0 12px 26px` at 34% accent; disabled state is
+8. Save: full-width iris pill 56 tall, glow `0 12px 26px` at 34% accent; disabled state is
    `surfaceSunken` with `text3` label; saving shows a 20 pt spinner and locks input.
 
-**Keyboard mode** (any text field focused) — same state, one input surface (ADR-014): amount drops
-to 32/38, category chips and name row stay, account/date/details collapse (values preserved),
-keypad unmounts, Save pins above the keyboard. Dismissing restores keypad mode with state intact.
+**Keyboard open** — the sheet lifts above the OS keyboard, its body scrolls, and the header plus
+Save stay pinned. The amount and item name share the same OS keyboard; no secondary keypad is
+mounted and the layout never collapses. The header X dismisses the keyboard before closing.
 
 **Transfer mode:** category chips and the name row are replaced by a `To account` row; the account
 row becomes `From account`; both pickers list only accounts in the active currency.

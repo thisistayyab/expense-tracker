@@ -1,5 +1,12 @@
 import type { BottomTabBarProps } from "expo-router/build/layouts/Tabs";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useReducedMotion,
+} from "react-native-reanimated";
 
 import { haptics } from "../../lib/haptics";
 import { useTheme } from "../../lib/theme";
@@ -10,7 +17,7 @@ import { TabIcon, type TabIconName } from "./TabIcon";
  * and the navigator cannot disagree about the four destinations.
  */
 const DESTINATIONS: Record<string, { label: string; icon: TabIconName }> = {
-  index: { label: "Overview", icon: "overview" },
+  overview: { label: "Overview", icon: "overview" },
   transactions: { label: "Activity", icon: "activity" },
   budget: { label: "Budgets", icon: "budget" },
   insights: { label: "Insights", icon: "insights" },
@@ -34,6 +41,10 @@ export const TAB_BAR_CLEARANCE = BAR_HEIGHT + BAR_INSET * 2;
  */
 export function FloatingTabBar({ state, descriptors, emitter, navigateToTab, insets }: BottomTabBarProps) {
   const { theme } = useTheme();
+  const reduceMotion = useReducedMotion();
+  const pillLayout = reduceMotion
+    ? undefined
+    : LinearTransition.duration(theme.motion.pill).easing(Easing.out(Easing.cubic));
 
   return (
     <View
@@ -74,29 +85,43 @@ export function FloatingTabBar({ state, descriptors, emitter, navigateToTab, ins
           };
 
           return (
-            <Pressable
+            <Animated.View
               key={route.key}
-              onPress={onPress}
-              onLongPress={onLongPress}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: focused }}
-              accessibilityLabel={title}
-              hitSlop={4}
-              style={({ pressed }) => [
+              layout={pillLayout}
+              style={[
                 styles.item,
-                focused ? styles.itemActive : styles.itemIdle,
+                focused ? null : styles.itemIdle,
                 focused && { backgroundColor: theme.colors.solid },
-                pressed && !focused ? { opacity: 0.55 } : null,
               ]}
             >
-              <TabIcon
-                name={destination?.icon ?? "overview"}
-                color={focused ? theme.colors.solidFg : theme.colors.textTertiary}
-              />
-              {focused ? (
-                <Text style={[theme.text.label, { color: theme.colors.solidFg }]}>{title}</Text>
-              ) : null}
-            </Pressable>
+              <Pressable
+                onPress={onPress}
+                onLongPress={onLongPress}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: focused }}
+                accessibilityLabel={title}
+                hitSlop={4}
+                style={({ pressed }) => [
+                  styles.itemPress,
+                  focused ? styles.itemPressActive : styles.itemPressIdle,
+                  pressed && !focused ? { opacity: 0.55 } : null,
+                ]}
+              >
+                <TabIcon
+                  name={destination?.icon ?? "overview"}
+                  color={focused ? theme.colors.solidFg : theme.colors.textTertiary}
+                />
+                {focused ? (
+                  <Animated.Text
+                    entering={reduceMotion ? undefined : FadeIn.duration(theme.motion.chip)}
+                    exiting={reduceMotion ? undefined : FadeOut.duration(100)}
+                    style={[theme.text.label, { color: theme.colors.solidFg }]}
+                  >
+                    {title}
+                  </Animated.Text>
+                ) : null}
+              </Pressable>
+            </Animated.View>
           );
         })}
       </View>
@@ -124,16 +149,23 @@ const styles = StyleSheet.create({
   },
   item: {
     height: 52,
+    borderRadius: 26,
+    overflow: "hidden",
+  },
+  itemPress: {
+    height: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderRadius: 26,
+  },
+  itemPressActive: {
+    paddingHorizontal: 20,
+  },
+  itemPressIdle: {
+    width: 52,
   },
   itemIdle: {
     width: 52,
-  },
-  itemActive: {
-    paddingHorizontal: 20,
   },
 });

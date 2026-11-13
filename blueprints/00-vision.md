@@ -32,7 +32,7 @@ households with shared budgets, business expense reports.
 
 ### 1. Five-second entry — from intent, never from launch
 
-Tap **+** → the add sheet opens with its keypad ready → type the price → tap a category chip
+Tap **+** → the add sheet opens with its amount field ready → type the price → tap a category chip
 (food, transport, …) → optionally name the item ("chicken shawarma") → Save. Date defaults to
 now, account defaults to last-used, and note/place/tags/receipt live behind one "More" row. No
 field beyond the amount is required to save.
@@ -43,9 +43,9 @@ that was bought plus a short note. That is the unit of data the whole app is bui
 search and budgets are only as good as what was captured here.
 
 The clock starts when the user decides to log something, **not** when the app launches. The app
-never opens into an input: Home is the launch screen, no keyboard or keypad is mounted on start
+never opens into an input: Home is the launch screen, no input is mounted on start
 or resume, and the add sheet appears only after an explicit action (the + button, a
-widget/shortcut, or a deep link). An app that greets you with a keypad feels like a form and
+widget/shortcut, or a deep link). An app that greets you with a keyboard feels like a form and
 invites accidental entries — that is a product flaw, not speed.
 
 ### 2. Safe-to-spend
@@ -80,7 +80,7 @@ Every read is local SQLite. No spinner on the home screen after the first launch
 7. **Boring money handling.** Integer cents, explicit timezone rules, no floats, no cleverness.
 8. **Platform-respectful.** Native navigation, native gestures, haptics on commit, correct
    dark mode, correct safe areas.
-9. **Never open into an input.** No keyboard or keypad on launch or resume; input UI appears only
+9. **Never open into an input.** No keyboard on launch or resume; input UI appears only
    after an explicit add action. Orientation first, typing second.
 10. **One currency at a time.** The user picks a country and currency once; every amount is
     rendered in that currency with its real symbol and decimal rules. The app never adds two

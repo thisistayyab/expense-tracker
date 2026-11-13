@@ -1,4 +1,9 @@
-import { formatMoney, minorToDecimalString, parseMoneyInput } from "../money";
+import {
+  formatMoney,
+  minorToDecimalString,
+  parseMoneyInput,
+  sanitizeMoneyInput,
+} from "../money";
 
 describe("parseMoneyInput", () => {
   test("parses 2-decimal currencies into minor units", () => {
@@ -35,6 +40,30 @@ describe("parseMoneyInput", () => {
     expect(parseMoneyInput("abc", "USD")).toBeNull();
     expect(parseMoneyInput("1.2.3", "USD")).toBeNull();
     expect(parseMoneyInput("-5", "USD")).toBeNull();
+  });
+});
+
+describe("sanitizeMoneyInput", () => {
+  test("clamps USD to two decimals and one separator", () => {
+    expect(sanitizeMoneyInput("12.345", "USD")).toBe("12.34");
+    expect(sanitizeMoneyInput("1.2.3", "USD")).toBe("1.23");
+    expect(sanitizeMoneyInput("0012", "USD")).toBe("12");
+    expect(sanitizeMoneyInput("abc12.5x", "USD")).toBe("12.5");
+  });
+
+  test("accepts a comma decimal separator but treats grouping commas correctly", () => {
+    expect(sanitizeMoneyInput("12,5", "USD")).toBe("12.5");
+    expect(sanitizeMoneyInput("1,250.75", "USD")).toBe("1250.75");
+  });
+
+  test("JPY never keeps a separator or fraction", () => {
+    expect(sanitizeMoneyInput("1200.50", "JPY")).toBe("1200");
+    expect(sanitizeMoneyInput("1,200", "JPY")).toBe("1200");
+    expect(sanitizeMoneyInput(".", "JPY")).toBe("");
+  });
+
+  test("keeps three decimals for KWD", () => {
+    expect(sanitizeMoneyInput("1.2505", "KWD")).toBe("1.250");
   });
 });
 

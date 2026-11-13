@@ -24,7 +24,7 @@ set of categories; opening the app twice does not duplicate seeds.
 ## M1 — Core loop (1–1.5 weeks)
 
 Scope:
-- Add-transaction modal (expense + income + transfer), amount keypad, category chips,
+- Add-transaction modal (expense + income + transfer), native numeric amount field, category chips,
   **item name field with recent-name suggestions**, note/place/tags behind the details row,
   account/date selection, validation, optimistic save, undo.
 - Transactions tab: grouped list, search over item/place/note/category, filters, edit, delete.

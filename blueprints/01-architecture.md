@@ -122,7 +122,7 @@ either later in Settings → Currency & region. Nothing about money is hard-code
 country (settings.country)  ──default──▶  currency (settings.currency)
         │                                          │
         │                                          ├─▶ <Money> symbol + exponent
-        │                                          ├─▶ keypad decimal places
+        │                                          ├─▶ amount field exponent
         │                                          └─▶ every aggregate's WHERE clause
         └──▶ picker ordering (detected country pinned first)
 ```
@@ -141,8 +141,9 @@ country (settings.country)  ──default──▶  currency (settings.currency)
   tested path — never assume `Intl` works.
 - Rounding: parse to minor units with `Math.round(value * 10 ** exponent)` **once**; every
   subsequent operation is integer arithmetic.
-- The amount keypad allows at most `exponent` decimals and hides the `.` key entirely when the
-  exponent is 0 (JPY). Input beyond that is ignored, not rounded silently.
+- The amount field allows at most `exponent` decimals. `sanitizeMoneyInput` drops extra
+  fraction digits and never keeps a separator or fraction for a 0-exponent currency (JPY).
+  Input beyond that is ignored, not rounded silently.
 - Changing currency **does not convert** anything. Existing rows keep their snapshot; the app
   explains this before applying and offers a filtered view of the other-currency rows.
 - Currency and region lists are searchable, grouped (recent / detected / all) and never require

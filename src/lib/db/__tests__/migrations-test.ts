@@ -3,6 +3,7 @@ import type { SQLiteBindParams } from "expo-sqlite";
 
 import { insertFixtureTransactions } from "../fixtures";
 import { LATEST_SCHEMA_VERSION, migrate } from "../migrate";
+import { applyRegionSelection } from "../onboarding";
 import { accountBalance, listAccounts } from "../repos/accounts";
 import { listBudgets, upsertBudget } from "../repos/budgets";
 import { createCategory, listCategories } from "../repos/categories";
@@ -323,5 +324,26 @@ describe("settings", () => {
 
     expect(created.name).toBe("Coffee");
     expect(await listCategories(db, { kind: "expense" })).toHaveLength(13);
+  });
+});
+
+describe("onboarding region step", () => {
+  test("writes the region, creates one matching account and is idempotent", async () => {
+    const { db } = await seededDb();
+
+    await applyRegionSelection(db, { country: "JP", currency: "JPY", locale: "ja-JP" });
+    await applyRegionSelection(db, { country: "JP", currency: "JPY", locale: "ja-JP" });
+
+    expect(await getSetting(db, SETTING_KEYS.onboarded)).toBe("1");
+    expect(await getSetting(db, SETTING_KEYS.currency)).toBe("JPY");
+    expect(await getSetting(db, SETTING_KEYS.country)).toBe("JP");
+
+    const accounts = await listAccounts(db);
+    const yenAccounts = accounts.filter((account) => account.currency === "JPY");
+    expect(yenAccounts).toHaveLength(1);
+    expect(await getSetting(db, SETTING_KEYS.lastAccountId)).toBe(yenAccounts[0].id);
+
+    // The seed's device-currency account is kept, not deleted or relabelled.
+    expect(accounts.filter((account) => account.currency === "USD")).toHaveLength(1);
   });
 });

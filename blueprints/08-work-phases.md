@@ -43,7 +43,7 @@ started early without its inputs; everything else can.
 | Track A (data & logic) | Track B (UI & motion) |
 | --- | --- |
 | P1 repositories, migrations, domain functions | P0 theme, component kit, mockup-to-code parity |
-| P2 save/validation logic, idempotency | P2 keypad, chips, modal transitions |
+| P2 save/validation logic, idempotency | P2 amount field, chips, modal transitions |
 | P3 query builders, filters, indexes | P3 list virtualization, swipe actions, search states |
 | P4 period math, safe-to-spend | P4 hero card, budget sheet, progress states |
 | P5 SQL aggregates | P5 SVG charts, insight cards |
@@ -137,26 +137,81 @@ Goal: the wedge works, single-handed, offline, in under five seconds from `+` �
 never opens into an input.
 
 Tasks:
-- [ ] Add-transaction modal with type segmented control, amount keypad, category chips,
-      **item-name row** (optional, recent-name chips, keyboard-mode layout per ADR-014),
-      account/date pickers, optional place/note/tags behind the details row.
-- [ ] Onboarding: welcome + **country & currency step** (`settings/region.tsx` shared with
+- [x] Add-transaction modal with type segmented control, native numeric amount field, category
+      chips, **item-name row** (optional, recent-name chips, stable keyboard layout per ADR-014),
+      account/date pickers, optional place/note behind the details row. Tags and receipts stay
+      storable but have no UI until 1.1, per 03 §3.
+- [x] Onboarding: welcome + **country & currency step** (`settings/region.tsx` shared with
       Settings) so the first transaction is entered in the right money.
-- [ ] Launch behavior: Home only — no add sheet, keypad, or OS keyboard on start, resume, or
+- [x] Launch behavior: Home only — no add sheet or OS keyboard on start, resume, or
       notification tap (ADR-010).
-- [ ] Validation and idempotency guard (double-tap safe), optimistic insert + undo.
-- [ ] Category suggestion from `category_rules` and recent history.
-- [ ] Transaction detail + edit reusing the same form component.
-- [ ] Haptics wrapper and success feedback.
-- [ ] Empty home state with "Log your first expense" CTA.
+- [x] Validation and idempotency guard (double-tap safe), optimistic insert + undo.
+- [x] Category suggestion from `category_rules` and recent history.
+- [x] Transaction detail + edit reusing the same form component.
+- [x] Haptics wrapper and success feedback.
+- [x] Empty home state with "Log your first expense" CTA.
 
 Demo: stopwatch from tapping `+` to saved entry, once without a name and once with one (app
 launch timed separately); airplane mode on; kill app and verify persistence.
 Gate: five timed attempts of price+category, median ≤ 5 s; five with item name, median ≤ 8 s;
 launching the app 10× never presents a keyboard or the add sheet; the OS keyboard never covers
 the amount or Save; no duplicate rows on rapid taps; undo restores exactly.
-Risk: keypad/keyboard mode switching jank on low-end Android — test on the slowest device
-available, including a hardware-keyboard case where the OS keyboard never appears.
+Risk: keyboard geometry on low-end Android — test on the slowest device available, including a
+hardware-keyboard case where the OS keyboard never appears.
+
+Status at implementation time: the wedge is code-complete — `/add` is a slide-up modal with a
+native numeric amount field (decimal pad; number pad for 0-exponent currencies),
+Expense/Income/Transfer, category chips plus a searchable "More…" sheet, optional item name with
+up to five recent-name chips, place/note behind the details row, and account/date pickers
+restricted to the active currency. The sheet keeps one stable layout: focusing any field lifts
+the whole sheet above the OS keyboard, the body scrolls, and the header plus Save stay pinned;
+amount input is sanitized to the currency exponent. The header X dismisses the keyboard before
+closing. Save guards with a ref so a double tap cannot insert twice, is
+disabled until the amount is positive and (for transfers) the accounts differ, and keeps the
+form with inline error text on failure. A new row is optimistic: the sheet closes and undo
+appears immediately while the insert runs, undo waits for that write before deleting, and a
+failed insert surfaces an alert. The add route also accepts `?amount=…` so a home-screen
+shortcut or widget can prefill the price; edit routes ignore that parameter. Edits commit before the sheet closes because the detail screen
+reloads on focus. Account and destination-account changes persist; the repository checks that
+both accounts exist, use the row's currency, and differ for a transfer. The date row opens a
+month calendar with Today/Yesterday presets, so old rows can be backdated or corrected beyond
+the last two weeks, and the category chips put recently used ones first before falling back to
+sort order. Escape points: `AddTransactionSheet` is shared with edit (`/add?id=…`),
+`/transaction/[id]` renders detail and delete, and a global `UndoProvider` shows a 4 s snackbar
+for new rows and deletes (undo re-inserts the same id via `restoreTransaction`). Category
+suggestion matches `category_rules` by item/place first, then the last category used for the
+same name. Tapping a recent name fills the row and dismisses the OS keyboard. Home shows the CTA
+when empty and the FAB once rows exist.
+
+Onboarding is now real: the root layout reads `settings.onboarded` before it hides the splash, and
+the `(tabs)` / `(onboarding)` layouts each render a `Redirect` for the wrong state, so a returning
+user never sees the welcome screen and an unfinished one cannot reach the tabs. Group layouts are
+used instead of `Stack.Protected` because removing a guarded screen mid-transition left the
+router on an unowned path ("Unmatched Route") on device; explicit redirects are deterministic. Welcome is the ink cover from 07 (skip falls back to the detected region),
+then one region screen renders the shared `RegionEditor` — detected country pinned, search over
+name/ISO/currency, country selection only *suggesting* its currency, an independent currency
+picker, and a no-matches state. Finishing calls `applyRegionSelection`, which writes country,
+currency, locale and `onboarded=1` with a matching account in one transaction; Settings mounts
+the same editor at `/settings/region`, with the currency-change confirmation that says history is
+never converted. The suite covers that write (59 tests across 7 suites), alongside account/transfer
+edit persistence, exact undo restore and recency ordering: two onboarding runs leave exactly one
+JPY account, reuse the seed's USD account and point `last_account_id` at the new one.
+
+Because onboarding is one-time by design, `/dev-data` exposes a dev-only "Replay onboarding"
+action that clears the flag and the Overview dev card offers "Show onboarding"; neither is a
+production control. `EXPO_PUBLIC_FORCE_ONBOARDING=1` additionally starts each dev launch on the
+welcome screen without touching the saved flag, for when the UI reset is unreachable.
+
+Known deviations and gaps: the pager shows two dots because the third step (first budget) is P4,
+and “Restore a backup” is omitted until P6 rather than shown as a dead control. A notification-tap
+launch cannot be exercised until notifications land in P6; there is deliberately no handler yet.
+The stopwatch gates, keyboard geometry, nested sheets (including the new calendar) and the
+10-launch check still need a device; nothing here was timed on hardware. The add-screen mockup
+images still draw the removed custom keypad; the shipped amount field is native. No new
+dependencies were added — the calendar is plain React Native and icons stay text glyphs until the
+icon set lands.
+Checks: `npx tsc --noEmit` (0), `npx expo lint` (0), `npx jest --ci` (59/59),
+`npx expo export --platform android` (0).
 
 ## P3 — Organize (4 days)
 
