@@ -14,7 +14,7 @@ these natively. Diagrams are the spec: if code disagrees with a diagram, one of 
 | 5 | Safe-to-spend | flowchart | `lib/domain/safeToSpend` |
 | 6 | Recurring posting | sequence | `features/recurring` |
 | 7 | Search & filter | flowchart | `features/transactions/list` |
-| 8 | Export / backup / restore | flowchart | `features/settings/data` |
+| 8 | Export / backup / restore | flowchart | `app/settings/data.tsx`, `features/settings/dataIO` |
 | 9 | Module dependencies | flowchart | whole app |
 | 11 | Change currency | flowchart | `features/settings/region` |
 
@@ -202,25 +202,32 @@ sequenceDiagram
   App->>R: processDue()
   R->>DB: SELECT active rules WHERE next_due_at <= today
   DB-->>R: rules + next dates
-  loop each due occurrence
-    R->>DB: SELECT 1 FROM transactions WHERE recurring_id = ? AND local_date = ?
-    alt already posted
-      DB-->>R: exists → skip
-    else not posted
-      R->>DB: BEGIN; INSERT transaction; UPDATE next_due_at; COMMIT
-      DB-->>R: ok
+  loop each missed occurrence still due
+    R->>DB: INSERT OR IGNORE transaction (recurring_id, local_date)
+    alt already posted (unique index)
+      DB-->>R: ignored → skip
+    else inserted
+      DB-->>R: ok, advance next_due_at
     end
   end
-  R->>N: schedule reminders (remind_days before next due)
+  R->>N: replace scheduled reminders (remind_days before next due, 09:00)
   R-->>App: posted count
-  App-->>U: silent (badge/day header updates via live query)
+  App-->>U: silent (Bills due card and live queries update)
 ```
+
+Details:
+- Occurrences are computed from `start_date` + `interval_count`, never from the last posted date.
+- Unique idempotency is a database guarantee: partial unique index on
+  `(recurring_id, local_date)` where `recurring_id IS NOT NULL` (migration 003).
 
 Edge cases:
 - Missed months while the app was closed → post each missed occurrence individually, not a lump.
 - 31st-of-month rule in February → clamp to the last day of that month, then resume the 31st.
-- Turning off a rule stops future posting but keeps already-posted transactions.
-- Notifications are an enhancement; a "Bills due" card on Home exists as the primary reminder.
+- A yearly Feb 29 rule clamps to Feb 28 in non-leap years and resumes Feb 29 when it exists.
+- Turning off a rule stops future posting but keeps already-posted transactions; an end date
+  finishes a rule without deleting its history.
+- Notifications are an enhancement; a "Bills due" card on Home exists as the primary reminder
+  and is also the manual Post control for rules with auto-post off.
 
 ---
 
@@ -257,30 +264,33 @@ currency and the header shows the active-currency total only.
 flowchart TD
   A["Settings → Data"] --> B{"Action?"}
   B -- "Export CSV" --> C["Query all transactions<br/>join category + account"]
-  C --> D["Serialize cents → decimal<br/>ISO dates, UTF-8 BOM"]
-  D --> E["Write to documents dir<br/><taxonomy-export-YYYYMMDD.csv>"]
+  C --> D["Serialize minor units → decimal<br/>row's own exponent, ISO dates, BOM"]
+  D --> E["Write to cache dir<br/>expense-tracker-YYYYMMDD.csv"]
   E --> F["Share sheet (expo-sharing)"]
-  B -- "Backup JSON" --> G["Dump all tables<br/>+ schema_version + app_version"]
-  G --> H["Write file → share/save"]
-  B -- "Restore JSON" --> I["Pick file → parse"]
-  I --> J{"schema_version ≤ current?"}
-  J -- "no" --> K["Refuse: newer backup<br/>explain why"]
-  J -- "yes" --> L["Preview: counts per table"]
+  B -- "Backup JSON" --> G["Dump all ten tables<br/>+ format/schema/app version"]
+  G --> H["Write backup-YYYYMMDD.json → share/save"]
+  B -- "Restore JSON" --> I["DocumentPicker → parse"]
+  I --> J{"valid format and<br/>schema_version ≤ current?"}
+  J -- "no" --> K["Refuse: explain errors<br/>database untouched"]
+  J -- "yes" --> L["Full validation + preview<br/>counts per table"]
   L --> M{"Replace or merge?"}
-  M -- "Replace" --> N["BEGIN; DELETE all; INSERT all; COMMIT"]
-  M -- "Merge" --> O["Insert missing ids<br/>on conflict keep newest updated_at"]
-  N --> P["Recompute views<br/>verify counts match preview"]
+  M -- "Replace" --> N["BEGIN; DELETE all; INSERT in FK order; COMMIT"]
+  M -- "Merge" --> O["Keep local rows; backup row wins<br/>only if updated_at is strictly newer"]
+  N --> P["Reload settings/onboarding<br/>refresh reminders"]
   O --> P
   P --> Q["Reload queries → Home"]
   B -- "Delete all data" --> R["Typed confirmation: DELETE"]
-  R --> S["Drop rows, reseed categories<br/>keep settings"]
+  R --> S["Drop every data row<br/>keep settings; reseed 15 categories + Cash"]
   S --> T["Home empty state"]
 ```
 
 Guarantees:
 - Export includes transfers and income, with a `type` column so totals are reproducible.
 - A restore validates **before** touching the database; a failed parse leaves data untouched.
-- Never offer "delete all" as a swipeable row — typed confirmation only.
+- Replace is transactional and follows foreign-key insert order; merge never deletes a local row.
+- Settings and the onboarding flag travel in the backup; the app reloads both after a restore.
+- Never offer "delete all" as a swipeable row — typed confirmation only. Reset keeps settings and
+  recreates the starter library in the active currency.
 
 ---
 

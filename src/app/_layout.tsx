@@ -1,15 +1,19 @@
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { SQLiteProvider } from "expo-sqlite";
-import { Suspense, useEffect, type ReactNode } from "react";
+import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { AppLockProvider } from "../features/security/AppLockProvider";
+import { RecurringRuntime } from "../features/recurring/RecurringRuntime";
 import { DATABASE_NAME, initDatabase } from "../lib/db/client";
+import { getSetting, SETTING_KEYS } from "../lib/db/repos/settings";
+import type { Db } from "../lib/db/types";
 import { OnboardingProvider, useOnboarding } from "../lib/onboarding";
-import { ThemeProvider, useAppFonts, useTheme } from "../lib/theme";
+import { ThemeProvider, useAppFonts, useTheme, type ThemePreference } from "../lib/theme";
 import { UndoProvider } from "../lib/undo/UndoProvider";
 
 // Keep the native splash up until the font and the database are both ready: a
@@ -93,6 +97,21 @@ function Navigation() {
         name="settings/accounts"
         options={{ ...detailOptions, title: "Accounts" }}
       />
+      <Stack.Screen
+        name="settings/recurring"
+        options={{ ...detailOptions, title: "Recurring" }}
+      />
+      <Stack.Screen name="settings/data" options={{ ...detailOptions, title: "Data" }} />
+      <Stack.Screen
+        name="settings/appearance"
+        options={{ ...detailOptions, title: "Appearance" }}
+      />
+      <Stack.Screen
+        name="settings/security"
+        options={{ ...detailOptions, title: "App lock" }}
+      />
+      <Stack.Screen name="settings/about" options={{ ...detailOptions, title: "About" }} />
+      <Stack.Screen name="settings/privacy" options={{ ...detailOptions, title: "Privacy" }} />
       <Stack.Screen name="dev-data" options={{ ...detailOptions, title: "Data tools" }} />
     </Stack>
   );
@@ -107,7 +126,41 @@ function AppShell({ fontsReady }: { fontsReady: boolean }) {
       <UndoProvider>
         <Navigation />
       </UndoProvider>
+      <RecurringRuntime />
     </BootGate>
+  );
+}
+
+/**
+ * The theme preference lives in SQLite, so the provider cannot mount until the
+ * database is ready. Waiting here means the first painted frame already uses the
+ * stored light/dark choice instead of flashing the system scheme.
+ */
+function ThemeGate({ children }: { children: ReactNode }) {
+  const db: Db = useSQLiteContext();
+  const [preference, setPreference] = useState<ThemePreference | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSetting(db, SETTING_KEYS.theme)
+      .then((stored) => {
+        if (cancelled) return;
+        setPreference(stored === "light" || stored === "dark" ? stored : "system");
+      })
+      .catch(() => {
+        if (!cancelled) setPreference("system");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
+
+  if (preference === null) return null;
+
+  return (
+    <ThemeProvider initialPreference={preference}>
+      <ErrorBoundary>{children}</ErrorBoundary>
+    </ThemeProvider>
   );
 }
 
@@ -122,19 +175,19 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <SafeAreaProvider>
-          <ErrorBoundary>
-            <Suspense fallback={null}>
-              <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase}>
-                <OnboardingProvider>
+      <SafeAreaProvider>
+        <Suspense fallback={null}>
+          <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase}>
+            <ThemeGate>
+              <OnboardingProvider>
+                <AppLockProvider>
                   <AppShell fontsReady={fontsLoaded || Boolean(fontError)} />
-                </OnboardingProvider>
-              </SQLiteProvider>
-            </Suspense>
-          </ErrorBoundary>
-        </SafeAreaProvider>
-      </ThemeProvider>
+                </AppLockProvider>
+              </OnboardingProvider>
+            </ThemeGate>
+          </SQLiteProvider>
+        </Suspense>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

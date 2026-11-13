@@ -13,6 +13,7 @@ import {
   setCategoryArchived,
   updateCategory,
 } from "../repos/categories";
+import { createRecurringRule, setRecurringActive } from "../repos/recurring";
 import { createTransaction } from "../repos/transactions";
 import { seededDb } from "../testDb";
 
@@ -88,6 +89,37 @@ describe("accounts", () => {
         (account) => account.id === savings.id,
       ),
     ).toBe(true);
+  });
+
+  test("an account with an active recurring rule is protected from currency and archive changes", async () => {
+    const { db, savings } = await accountsFixture();
+    const [category] = await listCategories(db, { kind: "expense" });
+    const rule = await createRecurringRule(db, {
+      type: "expense",
+      amountMinor: 1_000,
+      currency: "USD",
+      accountId: savings.id,
+      categoryId: category.id,
+      itemName: "Savings transfer fee",
+      frequency: "monthly",
+      intervalCount: 1,
+      dayOfMonth: 1,
+      startDate: "2026-12-01",
+      nextDueAt: "2026-12-01",
+      autoPost: true,
+    });
+
+    await expect(updateAccount(db, savings.id, { currency: "EUR" })).rejects.toThrow(
+      /recurring rules/,
+    );
+    await expect(setAccountArchived(db, savings.id, true)).rejects.toThrow(/Pause recurring/);
+
+    await setRecurringActive(db, rule.id, false);
+    await setAccountArchived(db, savings.id, true);
+    expect((await listAccounts(db)).some((account) => account.id === savings.id)).toBe(false);
+
+    // Reactivating from the paused list must not bypass the archive check.
+    await expect(setRecurringActive(db, rule.id, true)).rejects.toThrow(/Restore the account/);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   topItemTotals,
   unnamedItemTotals,
 } from "../../lib/db/repos/insights";
+import { listRecurringRules } from "../../lib/db/repos/recurring";
 import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import {
   countSpentInOtherCurrencies,
@@ -76,8 +77,16 @@ export function useInsights(period: InsightPeriod): {
     ]);
     const currency = (settings[SETTING_KEYS.currency] ?? "USD").toUpperCase();
 
-    const [spend, comparisonSpend, monthly, named, unnamed, otherCurrency, monthTotals] =
-      await Promise.all([
+    const [
+      spend,
+      comparisonSpend,
+      monthly,
+      named,
+      unnamed,
+      otherCurrency,
+      monthTotals,
+      recurringRules,
+    ] = await Promise.all([
       sumSpentByCategory(db, {
         currency,
         fromDate: ranges.current.from,
@@ -118,6 +127,9 @@ export function useInsights(period: InsightPeriod): {
         previousTo: monthRanges.comparison.to,
         toDate: today,
       }),
+      // The recurring rules are not transactions yet, but their count is useful
+      // context for the current period and is already currency-scoped.
+      listRecurringRules(db, { currency }),
     ]);
 
     if (request !== requestId.current) return;
@@ -150,6 +162,7 @@ export function useInsights(period: InsightPeriod): {
       categories: categoryComparisons,
       breakdown,
       comparisonLabel: ranges.comparisonLabel,
+      subscriptionCount: recurringRules.filter((rule) => rule.type === "expense").length,
     });
 
     const monthPill = monthDelta(monthTotals.currentMinor, monthTotals.previousMinor);

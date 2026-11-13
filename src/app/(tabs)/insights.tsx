@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TAB_BAR_CLEARANCE } from "../../components/navigation/FloatingTabBar";
@@ -10,14 +11,18 @@ import { InsightCard } from "../../features/insights/InsightCard";
 import { PeriodControl } from "../../features/insights/PeriodControl";
 import { TrendChart } from "../../features/insights/TrendChart";
 import { useInsights } from "../../features/insights/useInsights";
+import { exportCsv } from "../../features/settings/dataIO";
+import type { Db } from "../../lib/db/types";
 import type { BreakdownRow, InsightPeriod } from "../../lib/domain/insights";
 import { formatMoney } from "../../lib/format/money";
 import { useTheme } from "../../lib/theme";
 
 export default function InsightsScreen() {
   const { theme } = useTheme();
+  const db: Db = useSQLiteContext();
   const insets = useSafeAreaInsets();
   const [period, setPeriod] = useState<InsightPeriod>("month");
+  const [exporting, setExporting] = useState(false);
   const { data, loading, error, refresh } = useInsights(period);
   const firstFocus = useRef(true);
 
@@ -52,6 +57,21 @@ export default function InsightsScreen() {
   const otherCurrencies = data?.otherCurrency ?? [];
   const otherTotal = otherCurrencies.reduce((sum, row) => sum + row.count, 0);
 
+  const exportLedger = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const result = await exportCsv(db);
+      if (!result.shared) {
+        Alert.alert("CSV saved", result.uri);
+      }
+    } catch (cause) {
+      Alert.alert("CSV export failed", String(cause));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
@@ -61,9 +81,36 @@ export default function InsightsScreen() {
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
           }}
         >
-          <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
-            {data ? `Insights · ${data.currency}` : "Insights"}
-          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
+              {data ? `Insights · ${data.currency}` : "Insights"}
+            </Text>
+            {data?.hasAnyTransaction ? (
+              <Pressable
+                onPress={() => void exportLedger()}
+                disabled={exporting}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Export transactions as CSV"
+              >
+                <Text
+                  style={[
+                    theme.text.caption,
+                    { color: theme.colors.accent, fontWeight: "600" },
+                  ]}
+                >
+                  {exporting ? "Exporting…" : "Export CSV"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
           <Text style={[theme.text.title1, { color: theme.colors.textPrimary, marginTop: 4 }]}>
             Where it went
           </Text>

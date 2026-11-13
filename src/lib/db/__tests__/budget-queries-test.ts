@@ -1,5 +1,5 @@
 import { applyRegionSelection } from "../onboarding";
-import { listAccounts } from "../repos/accounts";
+import { createAccount, listAccounts } from "../repos/accounts";
 import {
   deactivateBudget,
   listBudgets,
@@ -94,17 +94,27 @@ describe("committed unposted bills", () => {
     await createRecurringRule(db, { ...base, amountMinor: 1_000, nextDueAt: "2026-03-10" });
     // After the window: belongs to a later period.
     await createRecurringRule(db, { ...base, amountMinor: 12_000, nextDueAt: "2026-04-02" });
-    // Another currency: never added to USD.
+    // Another currency: never added to USD, and it must live on a EUR account
+    // because a rule can only post into an account of its own currency.
+    const eurAccount = await createAccount(db, {
+      name: "Euro cash",
+      type: "cash",
+      currency: "EUR",
+    });
     await createRecurringRule(db, {
       ...base,
       amountMinor: 5_000,
       currency: "EUR",
+      accountId: eurAccount.id,
       nextDueAt: "2026-03-15",
     });
-    // Income and inactive rules are not commitments.
+    // Income and inactive rules are not commitments. A rule's category must match
+    // its type, so the income rule needs an income category.
+    const [incomeCategory] = await listCategories(db, { kind: "income" });
     await createRecurringRule(db, {
       ...base,
       type: "income",
+      categoryId: incomeCategory.id,
       amountMinor: 30_000,
       nextDueAt: "2026-03-20",
     });

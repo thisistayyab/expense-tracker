@@ -129,6 +129,15 @@ export async function updateAccount(
   if (nextCurrency !== current.currency && (await accountHasTransactions(db, id))) {
     throw new Error("An account with history cannot change currency");
   }
+  if (nextCurrency !== current.currency) {
+    const rules = await db.getFirstAsync<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM recurring_rules WHERE account_id = ?",
+      [id],
+    );
+    if ((rules?.count ?? 0) > 0) {
+      throw new Error("An account with recurring rules cannot change currency");
+    }
+  }
 
   await db.runAsync(
     `UPDATE accounts
@@ -150,6 +159,17 @@ export async function updateAccount(
 }
 
 export async function setAccountArchived(db: Db, id: string, archived: boolean): Promise<void> {
+  if (archived) {
+    // A rule would otherwise keep posting into an account the UI no longer offers.
+    const rules = await db.getFirstAsync<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM recurring_rules WHERE account_id = ? AND is_active = 1",
+      [id],
+    );
+    if ((rules?.count ?? 0) > 0) {
+      throw new Error("Pause recurring rules before archiving this account");
+    }
+  }
+
   await db.runAsync("UPDATE accounts SET is_archived = ?, updated_at = ? WHERE id = ?", [
     boolToInt(archived),
     new Date().toISOString(),

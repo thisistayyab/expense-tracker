@@ -17,6 +17,7 @@ import {
 } from "../../components/ui";
 import { useBudgetPlan } from "../../features/budgets/useBudgetPlan";
 import { SafeToSpendSheet } from "../../features/overview/SafeToSpendSheet";
+import { BillsDueCard } from "../../features/recurring/BillsDueCard";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
 import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
@@ -447,6 +448,8 @@ export default function OverviewScreen() {
                   } you have not logged — they are set aside from safe to spend.`}
                 </Text>
               ) : null}
+
+              <BillsDueCard currency={currency} />
 
               {count === 0 ? (
                 <Card style={{ marginTop: 18 }}>

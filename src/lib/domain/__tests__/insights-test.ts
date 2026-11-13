@@ -277,7 +277,23 @@ describe("buildInsightCards", () => {
     );
   });
 
-  test("never shows more than two cards", () => {
+  test("reports active recurring bills from the P6 rules", () => {
+    const cards = buildInsightCards({
+      totalMinor: 0,
+      previousTotalMinor: 0,
+      categories: [],
+      breakdown: [],
+      comparisonLabel: "last month",
+      subscriptionCount: 3,
+    });
+
+    expect(cards.map((card) => card.id)).toEqual(["subscriptions"]);
+    expect(cards[0].segments.map((segment) => segment.text).join("")).toBe(
+      "3 recurring bills are set up.",
+    );
+  });
+
+  test("honours the card limit", () => {
     const cards = buildInsightCards({
       totalMinor: 12_000,
       previousTotalMinor: 10_000,

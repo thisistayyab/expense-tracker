@@ -352,10 +352,10 @@ parallel Jest workers cannot distort it; it passes the 50 ms gate here. Device t
 SQLite is not Hermes + expo-sqlite.
 
 Deliberate deviations: 07 draws four segments, but 03 requires five periods, so the control
-keeps the segmented look with compact labels and scrolls only if they do not fit. CSV export is
-not on the screen yet; it belongs to P6's export/backup work rather than a second implementation
-here. The "N subscriptions detected" card example waits for P6: recurring rules do not exist
-yet, so there would be nothing to count. The insight card uses `accentSoft` instead of a
+keeps the segmented look with compact labels and scrolls only if they do not fit. The CSV action
+and the recurring-bill insight card were completed with P6: Insights now calls the shared
+exporter and counts active recurring expenses in the active currency. The insight card uses
+`accentSoft` instead of a
 gradient (no gradient dependency is installed), and the trend is the area chart 07 draws with
 income added as the dashed second series 03 requires.
 
@@ -369,17 +369,70 @@ gate);
 Goal: the app maintains itself and cannot lose data.
 
 Tasks:
-- [ ] Recurring rules UI; foreground posting with idempotency; missed-occurrence backfill.
-- [ ] Local notifications for reminders (permission flow + in-app fallback card).
-- [ ] CSV export, JSON backup, JSON restore with validation and preview, reset-all.
-- [ ] App lock (biometrics) behind a setting.
-- [ ] Settings screens complete: **Currency & region** (change flow with the no-conversion
+- [x] Recurring rules UI; foreground posting with idempotency; missed-occurrence backfill.
+- [x] Local notifications for reminders (permission flow + in-app fallback card).
+- [x] CSV export, JSON backup, JSON restore with validation and preview, reset-all.
+- [x] App lock (biometrics) behind a setting.
+- [x] Settings screens complete: **Currency & region** (change flow with the no-conversion
       confirmation), appearance, about, privacy.
 
 Demo: a 3-month-old rule posts every missed occurrence exactly once; export opens in a
 spreadsheet; restore on a second device reproduces identical totals.
 Gate: `recurring_id + local_date` uniqueness proven by test; export/import round-trip equality;
 biometric lock does not trap the user after a failed scan (PIN/passcode fallback).
+
+Status: **shipped (device checks outstanding)**.
+
+- **Recurring.** `lib/domain/recurrence.ts` is a pure, anchored schedule: occurrences derive from
+  `start_date` + `interval_count` (+ `day_of_month`), never from the last posted date, so a 31st
+  rule clamps to 28/29 February and returns to the 31st in March. `processDueRecurring` runs on
+  launch and every foreground return, backfills each missed occurrence individually, inserts with
+  `INSERT OR IGNORE` into the new partial unique index `(recurring_id, local_date)` (migration 003)
+  and advances `next_due_at` only after the insert. The rule editor supports expense/income only:
+  `recurring_rules` has one account column, so recurring transfers are rejected explicitly rather
+  than posting into an arbitrary destination. `remind_days = 0` disables the reminder; the editor
+  stores whole days before due (default 3).
+- **Reminders.** The "Bills due" card on Overview is the primary, permission-free reminder and is
+  also the manual "Post" control for non-auto rules. The `bills` Android channel is created before
+  the Android 13 permission prompt; when permission is granted, DATE notifications are scheduled
+  at 09:00 local for the next unposted expense occurrence and replaced on every foreground/rule
+  edit. Income rules are never labelled or scheduled as bills. Denied permission shows the
+  in-app fallback and a "Turn on" action, never a dead end.
+- **Data.** CSV export writes every transaction (all currencies, signed `type`, each row's own
+  exponent, UTF-8 BOM, RFC 4180 quoting) to the cache and opens the share sheet. JSON backup dumps
+  all ten tables plus format/schema/app version. Restore picks a file, parses it, validates every
+  column, type, enum, currency, id, foreign key, budget and recurring occurrence **before** any
+  write, then previews per-table counts. Replace deletes and re-inserts in FK order; merge keeps
+  local rows and lets a backup row win only when its `updated_at` is strictly newer. The typed
+  `DELETE` reset keeps settings, reseeds the 15 starter categories and one Cash account, and
+  cancels scheduled reminders. Insights exposes the same CSV exporter and adds the recurring-bill
+  card, closing the two placeholders P5 left for this phase.
+- **App lock.** `app_lock` is opt-in in Settings. Enabling verifies with biometrics or the device
+  passcode; backgrounding locks immediately. A failed or cancelled scan leaves an explicit
+  Unlock button and the OS "Use device passcode" fallback, so a failed scan cannot trap the user.
+  If the device has no screen lock at all, the lock screen offers to turn the feature off instead
+  of demanding an impossible authentication.
+- **Settings.** Grouped Preferences (country, currency, appearance), Library (categories, accounts,
+  recurring) and Data (CSV, backup, restore, app lock), plus About/Privacy and the coral typed
+  reset. The saved theme is read through `ThemeGate` inside `SQLiteProvider`, so the first painted
+  frame already uses the stored scheme. Region, categories and accounts screens from earlier
+  phases remain the entry points; the new appearance/about/privacy/data screens complete the set.
+
+Tests: 160 tests across 23 suites. New coverage: anchored recurrence and month-end clamping
+(8), recurring CRUD/posting/backfill, the unique-occurrence rejection and the bills-due income
+exclusion (10), migrations to version 3 including both indexes, CSV signing/quoting/BOM (4),
+account currency/archive protection around active rules (1), insight recurring-bill card (1), and
+backup full-table replace round trip, merge, newer-row merge, malformed
+schema/currency/account/duplicate rejection, archived-account rejection, reset keeping settings
+and refreshing the remembered account (10). `npx tsc --noEmit` and `npx expo lint` are clean. Device-gated: notification
+delivery and permission prompts, Face ID/Touch ID and the passcode fallback, share sheet and
+DocumentPicker, opening the CSV in a spreadsheet, restore on a second device, and lock behaviour
+across background/foreground.
+
+Deliberate deviations: recurring transfers are unsupported in v1 (single-account schema); the
+bills card is Home's reminder instead of a dedicated inbox; restore merge uses `updated_at`
+recency rather than row-by-row prompts; and `Backup`/`Restore` are separate rows in addition to
+the mockup's shorter Data group.
 
 ## P7 — Launch prep (3 days)
 

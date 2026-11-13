@@ -203,10 +203,10 @@ currency" section with a one-tap "Recreate in <CUR>" action.
 - **Top items** list (top 5 by spend): grouped by case-insensitive `item_name`; rows without a
   name fall back to their category and say so ("Uncategorized items"). This is why naming
   entries matters — the list is useless when the field is always skipped.
-- Insight cards (2–3): "Groceries is 22% above last month", "3 subscriptions detected".
+- Insight cards (2–3): "Groceries is 22% above last month", "3 recurring bills are set up".
 - All figures are for the active currency only; a footnote appears if rows in another currency
 exist.
-- Export button → CSV (ships with P6's export/backup work; P5 has no button yet).
+- Export CSV action in the header calls the shared P6 exporter (all transactions, all currencies).
 
 **States:** < 2 months of data (show only breakdown with a "trend unlocks after next month"
 note), no data, error.
@@ -218,9 +218,11 @@ text summaries accessible to screen readers (a chart must never be the only repr
 ## 8. Settings — `settings/index.tsx` [v1]
 
 Rows, grouped as Preferences (Country, Currency, Appearance), Library (Categories, Accounts,
-Recurring) and Data (Export CSV, Backup, App lock [1.1]): Country shows the country name and
-Currency the symbol + code; each row leads with a tinted icon tile. A quiet version line sits
-below, and a destructive "Delete all data" behind a typed confirmation at the bottom.
+Recurring), Data (Export CSV, Backup, Restore, App lock) and About (About, Privacy): Country shows
+the country name; Currency the symbol + code; each row leads with a tinted icon tile. A quiet
+version line sits below, and a destructive "Delete all data" behind a typed confirmation at the
+bottom. The saved theme is applied before the first frame; the Appearance screen writes
+`settings.theme` and re-themes immediately.
 **Acceptance:** any setting change persists immediately and is reflected without app restart;
 changing the currency re-renders every amount in the app with the new symbol and decimals
 (without converting any stored value).
@@ -261,31 +263,48 @@ List with computed balances, account type and color. Add/edit: name, type, openi
 currency. New accounts default to the active currency; an account's currency is shown as a
 `CurrencyTag` whenever it differs from the active one.
 
-**Currency rule:** an account's currency is fixed once it has transactions. It can be changed
-only when its history is empty, and the picker explains that. The add sheet only offers accounts
-in the active currency, plus a "＋ New <CUR> account" row so a currency switch never blocks
-entry. Archive requires zero balance or explicit confirmation ("history stays viewable").
-Transfer action creates a `transfer` transaction between two accounts **in the same currency**.
+**Currency rule:** an account's currency is fixed once it has transactions or recurring rules. It
+can be changed only when both are absent, and the picker explains that. The add sheet only offers
+accounts in the active currency, plus a "＋ New <CUR> account" row so a currency switch never
+blocks entry. Archive requires zero balance or explicit confirmation ("history stays viewable"),
+and an account with active recurring rules must have them paused first so nothing keeps posting
+into a hidden account. Transfer action creates a `transfer` transaction between two accounts **in
+the same currency**.
 
 ## 12. Recurring — `settings/recurring.tsx` [v1]
 
 List of rules with next due date and amount (each in the rule's own currency); toggle active;
-add/edit: amount, currency, category, item name, place, note, account, frequency, interval, day
-of month, start/end, "auto-post", "remind N days before ". Rules in a currency other than the
-active one keep posting in it and are marked with a `CurrencyTag`.
-**Behavior:** on app foreground, post anything with `auto_post=1` and `next_due_at <= today`
-once (idempotent via `recurring_id` + `local_date` uniqueness check), then advance
-`next_due_at`. Reminders are scheduled local notifications at 9:00 local time.
-**Edge cases:** Feb 29 yearly births month-end clamping; missed months while the app was
-closed post all missed occurrences (each once), not one lump sum.
+add/edit: amount, account, category, item name, place, note, frequency, interval, day of month,
+start/end, "auto-post", and "remind N days before" (0 = no reminder, default 3). The account is
+restricted to the rule's currency, so the currency choice and account move together. Rules in a
+currency other than the active one keep posting in it and are marked with a `CurrencyTag`.
+**Behavior:** on launch and every foreground return, post anything with `auto_post=1` whose next
+occurrence is due, backfilling every missed occurrence once. Idempotency is enforced in SQL by the
+partial unique index on `(recurring_id, local_date)`, and `next_due_at` only advances after the
+insert. Non-auto rules show a "Post" action on Home's Bills due card. Reminders are scheduled
+local notifications at 9:00 local time, replaced on every foreground and rule edit; denied
+permission falls back to the in-app card.
+**Edge cases:** schedules are anchored to `start_date`, so a 31st rule clamps to the last day of a
+shorter month and resumes the 31st afterwards; yearly Feb 29 rules clamp in non-leap years;
+missed months while the app was closed post all missed occurrences (each once), not one lump sum;
+ending a rule stops future occurrences without deleting posted history. **Recurring transfers
+are not supported in v1** — the rule has a single account column, so the editor rejects the
+transfer type with an explanation rather than guessing a destination.
 
 ## 13. Data — `settings/data.tsx` [v1]
 
-Export CSV (transactions), export full JSON backup, import JSON (validate schema version,
-preview counts, then replace or merge), reset all data.
-**Acceptance:** exported CSV re-imports into a spreadsheet with correct signs, dates and a
-`currency` column, amounts serialized with each row's own exponent (JPY `1200`, not `12.00`);
-JSON restore round-trips byte-equal data for all tables, including country/currency settings.
+Export CSV (transactions), export full JSON backup, restore JSON (validate the whole file,
+preview per-table counts, then replace or merge), reset all data behind a typed `DELETE`.
+Every file is written to the app cache and handed to the system share sheet; nothing is uploaded.
+**Behavior:** validation covers columns, types, enums, currencies, unique ids, foreign keys,
+account/currency and category-kind consistency, duplicate budgets and duplicate recurring
+occurrences. Replace clears and re-inserts in FK order in one transaction; merge keeps local rows
+and lets a backup row win only when its `updated_at` is strictly newer. A rejected file changes
+nothing. Reset keeps settings and reseeds the starter library + one Cash account.
+**Acceptance:** exported CSV opens in a spreadsheet with correct signs, dates and a `currency`
+column, amounts serialized with each row's own exponent (JPY `1200`, not `12.00`); JSON replace
+round-trips every table's values, including country/currency settings, while merge preserves
+local-only rows.
 
 ---
 
@@ -297,7 +316,7 @@ JSON restore round-trips byte-equal data for all tables, including country/curre
 | Goals | 1.1 | target amount, deadline, contributions table |
 | Subscription manager | 1.1 | derived from recurring rules + recurring item-name/place patterns |
 | Top places leaderboard | 1.1 | only meaningful once `place` coverage is high |
-| App lock | 1.1 | `expo-local-authentication`, settings toggle |
+| App lock (advanced options) | 1.1 | shipped in v1 as a simple toggle; 1.1 adds a timeout choice |
 | Natural-language entry | later | "coffee 4.50" parser first, LLM optional |
 | Bank sync | later | provider + per-user cost + compliance review |
 | Household sharing | later | needs auth + backend + conflict strategy |

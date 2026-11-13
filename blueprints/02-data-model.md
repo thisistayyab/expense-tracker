@@ -87,6 +87,8 @@ CREATE TABLE recurring_rules (
   updated_at     TEXT NOT NULL
 );
 CREATE INDEX idx_recurring_due ON recurring_rules(is_active, next_due_at);
+-- The type CHECK keeps 'transfer' for schema compatibility, but v1 rejects recurring
+-- transfers: a rule names one account and therefore has no destination account.
 
 CREATE TABLE transactions (
   id                  TEXT PRIMARY KEY,
@@ -116,6 +118,11 @@ CREATE INDEX idx_tx_place        ON transactions(lower(place));
 
 -- Added by migration 002 (P5): index-only aggregates for the insights screen.
 CREATE INDEX idx_tx_insight      ON transactions(currency, local_date, type, category_id, amount_minor, item_name);
+
+-- Added by migration 003 (P6): one posted transaction per recurring occurrence.
+-- Partial, because manually entered rows have recurring_id IS NULL.
+CREATE UNIQUE INDEX idx_tx_recurring_date
+  ON transactions(recurring_id, local_date) WHERE recurring_id IS NOT NULL;
 
 CREATE TABLE tags (
   id         TEXT PRIMARY KEY,
@@ -187,6 +194,7 @@ Documented settings keys (all values are strings; booleans are `'0'`/`'1'`):
 | `currency` | `'USD'` | ISO 4217, the **active** currency for new entries |
 | `locale` | `'en-US'` | BCP 47 tag used for number/date formatting (from `expo-localization`, overridable) |
 | `theme` | `'system'` | `system` \| `light` \| `dark` |
+| `app_lock` | `'0'` | `'1'` enables the biometric/device-passcode lock (P6) |
 | `last_account_id` | uuid | Default account on the add sheet |
 | `currency_changed_at` | ISO date | Used to explain "entries before this date are in another currency" |
 | `budget_period` | `'monthly'` | `weekly` \| `monthly` \| `yearly`; the period Overview and Budgets measure by, written by onboarding and the Budgets period pill |
@@ -216,6 +224,8 @@ Future tables (documented, **not** created in v1): `goals`, `goal_contributions`
   `user_version`.
 - Every migration is append-only and idempotent-safe when re-run against an already-migrated DB.
 - Never edit an applied migration; add a new one.
+- Applied so far: **001** initial schema, **002** insights covering index (P5), **003** the
+  partial unique index `idx_tx_recurring_date` on `(recurring_id, local_date)` (P6).
 - Before shipping a release, test: fresh install, upgrade from previous release,
   and upgrade with a non-empty database.
 
@@ -268,10 +278,20 @@ Rules:
 
 ## Backup & portability
 
-- **v1**: CSV export of transactions (all columns, ISO dates, decimal amounts, ISO currency
-  code per row) written to the cache/documents dir and shared via the OS share sheet. Amounts are
-  serialized with the row's own currency exponent, so a JPY row exports `1200`, not `12.00`. Also
-  a full JSON dump of all tables (schema version included) for lossless backup.
-- **Tier 2**: automatic backup to the user's cloud drive folder; import/restore of the JSON dump
-  with validation before applying.
+- **v1 (shipped in P6)**: CSV export of transactions (all columns, ISO dates, decimal amounts,
+  ISO currency code per row, signed `type`, UTF-8 BOM, RFC 4180 quoting) written to the app cache
+  and shared via the OS share sheet. Amounts are serialized with the row's own currency exponent,
+  so a JPY row exports `1200`, not `12.00`. A JSON backup dumps every table plus
+  `format`/`formatVersion`/`schemaVersion`/`appVersion`/`exportedAt`.
+- **Restore (shipped in P6)**: the picked file is parsed and fully validated before any write —
+  columns, SQL types, enums, ISO currencies, unique ids, foreign keys, account/currency and
+  category-kind consistency, duplicate budgets and duplicate recurring occurrences. A preview
+  shows per-table counts. **Replace** clears and re-inserts in FK order inside one transaction;
+  **merge** keeps local rows and lets a backup row win only when its `updated_at` is strictly
+  newer. A rejected file leaves the database untouched.
+- **Reset (shipped in P6)**: typed `DELETE` clears every data table but keeps settings
+  (country, currency, locale, theme, onboarding), then reseeds the starter category library and
+  one Cash account in the active currency. Scheduled reminders are cancelled.
+- **Tier 2**: automatic backup to the user's cloud drive folder. Restore is already local-only in
+  v1; nothing is uploaded.
 - Never make the app's core loop depend on a backup having happened.

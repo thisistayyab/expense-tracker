@@ -289,6 +289,8 @@ export type InsightInput = {
   categories: readonly CategoryComparison[];
   breakdown: readonly BreakdownRow[];
   comparisonLabel: string;
+  /** Active expense rules in the active currency, for the P6 reminder card. */
+  subscriptionCount?: number;
   maxCards?: number;
 };
 
@@ -300,12 +302,13 @@ const MIN_CATEGORY_CHANGE_MINOR = 500;
 
 /**
  * Deterministic insight cards (no AI, no random ordering). Priority:
- * overall change → biggest category change → concentration. Two at most, matching
- * the design, and every sentence is assembled from the numbers shown above it.
+ * overall change → biggest category change → concentration → recurring bills.
+ * Up to three, matching the design's 2–3 cards, and every sentence is assembled
+ * from the numbers shown above it.
  */
 export function buildInsightCards(input: InsightInput): InsightCardData[] {
   const cards: InsightCardData[] = [];
-  const maxCards = Math.max(0, Math.trunc(input.maxCards ?? 2));
+  const maxCards = Math.max(0, Math.trunc(input.maxCards ?? 3));
 
   if (input.previousTotalMinor > 0) {
     const delta = monthDelta(input.totalMinor, input.previousTotalMinor);
@@ -364,6 +367,17 @@ export function buildInsightCards(input: InsightInput): InsightCardData[] {
         { text: " took " },
         { text: `${Math.round(top.share * 100)}%`, strong: true },
         { text: " of your spending." },
+      ],
+    });
+  }
+
+  const subscriptionCount = Math.max(0, Math.trunc(input.subscriptionCount ?? 0));
+  if (subscriptionCount > 0) {
+    cards.push({
+      id: "subscriptions",
+      segments: [
+        { text: String(subscriptionCount), strong: true },
+        { text: subscriptionCount === 1 ? " recurring bill is set up." : " recurring bills are set up." },
       ],
     });
   }

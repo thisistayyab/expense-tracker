@@ -96,7 +96,7 @@ describe("migrations", () => {
     const result = await migrate(db);
 
     expect(result.to).toBe(LATEST_SCHEMA_VERSION);
-    expect(result.applied).toEqual([1, 2]);
+    expect(result.applied).toEqual([1, 2, 3]);
 
     const tables = await db.getAllAsync<{ name: string }>(
       `SELECT name FROM sqlite_master
@@ -122,6 +122,12 @@ describe("migrations", () => {
       "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_tx_insight'",
     );
     expect(insightIndex).toHaveLength(1);
+
+    // Migration 003 proves recurring posting can never double-post an occurrence.
+    const recurringIndex = await db.getAllAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_tx_recurring_date'",
+    );
+    expect(recurringIndex).toHaveLength(1);
   });
 
   test("running migrations again is a no-op", async () => {

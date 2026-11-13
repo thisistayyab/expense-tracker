@@ -11,6 +11,8 @@ export const SETTING_KEYS = {
   currencyChangedAt: "currency_changed_at",
   /** weekly | monthly | yearly — the period Overview and Budgets both honour. */
   budgetPeriod: "budget_period",
+  /** '1' when the biometric / device-passcode lock is enabled. */
+  appLock: "app_lock",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

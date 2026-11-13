@@ -292,10 +292,14 @@ coral `Delete all data` text button → version line.
    15/500, value 14 `text2` + 15 pt chevron. Hairlines inset to the label.
 3. `Country` and `Currency` both open the same **Currency & region** screen (§1b), with a back
    chevron instead of pager dots. Currency shows `USD $`, never a flag alone.
-4. Data rows: `Export CSV` (Share), `Backup (JSON)` (Save file), `App lock` (Off ›).
+4. Data rows: `Export CSV` (Share), `Backup (JSON)` (Save file), `Restore from backup`, `App
+   lock` (Off ›). A fourth group, `ABOUT`, holds `About Expense Tracker` (version) and `Privacy`
+   (Local only).
 5. `Delete all data` is a 46 pt coral text button, separated from the cards, typed confirmation
-   (`DELETE`) only.
-6. Version sits as a quiet 11.5 `text3` line, not a row — it is not a destination.
+   (`DELETE`) only. It opens a bottom sheet; it is never a swipeable row.
+6. Version also sits as a quiet 11.5 `text3` line, not a row — it is not a destination.
+7. Appearance uses three selectable rows (System, Light, Dark) with a check on the active one;
+   the change persists immediately and survives a restart.
 
 ---
 

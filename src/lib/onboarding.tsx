@@ -31,12 +31,15 @@ type OnboardingContextValue = {
   finish: (region: RegionSelection, budget?: FirstBudget | null) => Promise<void>;
   /** Dev-only: clear the flag so the welcome screen can be replayed in-session. */
   reset: () => Promise<void>;
+  /** Re-read the persisted flag after a restore or reset changed it. */
+  reload: () => Promise<void>;
 };
 
 const OnboardingContext = createContext<OnboardingContextValue>({
   onboarded: null,
   finish: async () => {},
   reset: async () => {},
+  reload: async () => {},
 });
 
 export function useOnboarding(): OnboardingContextValue {
@@ -79,9 +82,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setOnboarded(false);
   }, [db]);
 
+  const reload = useCallback(async () => {
+    const value = await getSetting(db, SETTING_KEYS.onboarded);
+    setOnboarded(FORCE_ONBOARDING ? false : value === "1");
+  }, [db]);
+
   const value = useMemo(
-    () => ({ onboarded, finish, reset }),
-    [onboarded, finish, reset],
+    () => ({ onboarded, finish, reset, reload }),
+    [onboarded, finish, reset, reload],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
