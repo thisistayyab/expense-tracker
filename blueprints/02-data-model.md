@@ -114,6 +114,9 @@ CREATE INDEX idx_tx_account      ON transactions(account_id, local_date);
 CREATE INDEX idx_tx_item         ON transactions(lower(item_name));
 CREATE INDEX idx_tx_place        ON transactions(lower(place));
 
+-- Added by migration 002 (P5): index-only aggregates for the insights screen.
+CREATE INDEX idx_tx_insight      ON transactions(currency, local_date, type, category_id, amount_minor, item_name);
+
 CREATE TABLE tags (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL UNIQUE,

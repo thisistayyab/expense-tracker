@@ -90,13 +90,13 @@ function expense(amountMinor: number, currency: string, accountId: string, categ
   };
 }
 
-describe("migration 001", () => {
-  test("creates the full v1 schema and records user_version", async () => {
+describe("migrations", () => {
+  test("creates the full schema and records user_version", async () => {
     const db = createTestDb();
     const result = await migrate(db);
 
     expect(result.to).toBe(LATEST_SCHEMA_VERSION);
-    expect(result.applied).toEqual([1]);
+    expect(result.applied).toEqual([1, 2]);
 
     const tables = await db.getAllAsync<{ name: string }>(
       `SELECT name FROM sqlite_master
@@ -115,6 +115,13 @@ describe("migration 001", () => {
       "transaction_tags",
       "transactions",
     ]);
+
+    // Migration 002 exists for the P5 report queries; losing it is a silent
+    // regression in aggregate speed, so assert it is really there.
+    const insightIndex = await db.getAllAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_tx_insight'",
+    );
+    expect(insightIndex).toHaveLength(1);
   });
 
   test("running migrations again is a no-op", async () => {

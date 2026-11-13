@@ -314,15 +314,55 @@ hardware, and the 60 fps/stopwatch checks remain unmeasured.
 Goal: the past is legible without reading a spreadsheet.
 
 Tasks:
-- [ ] SQL aggregates (all filtered by active currency): category breakdown, monthly trend, top
+- [x] SQL aggregates (all filtered by active currency): category breakdown, monthly trend, top
       items, month-over-month deltas.
-- [ ] `BreakdownBars`, `TrendChart` SVG components with accessible text summaries.
-- [ ] Insight card generation (deterministic thresholds, not AI).
-- [ ] Period segmented control; drill-through to filtered transactions.
-- [ ] Empty/insufficient-data states.
+- [x] `BreakdownBars`, `TrendChart` SVG components with accessible text summaries.
+- [x] Insight card generation (deterministic thresholds, not AI).
+- [x] Period segmented control; drill-through to filtered transactions.
+- [x] Empty/insufficient-data states.
 
 Demo: switch periods, tap a category, land on the matching filtered list.
 Gate: 16k-row fixture aggregates < 50 ms; charts have text equivalents; no pie charts.
+
+Status: P5 is implemented. `db/repos/insights.ts` owns `monthlyTotals`, `topItemTotals` and
+`unnamedItemTotals`; the breakdown and totals reuse `sumSpentByCategory`, so currency and
+transfer rules match every other screen. `domain/insights.ts` is pure: five period ranges with
+equal-length comparison windows (month-to-date against the same days last month, 3M/6M against
+an equal-length window immediately before, year against the same dates last year), a six-row
+breakdown that
+folds the rest into "Other", a six-month trend with zero-filled gaps, case-insensitive top items
+with category fallbacks, and deterministic insight cards (overall change ≥10%, biggest category
+change ≥15% and ≥5.00, concentration ≥40%, two cards at most). `useInsights` composes all of it
+once, so the total, the bars and the cards cannot disagree. Tapping a category opens Activity
+with the currency, category and exact period range; Activity maps `categoryId`/`from`/`to`
+params onto its filters and clears them when a badge is removed.
+
+The screen shows the period control, breakdown, an SVG area trend (expenses solid, income
+dashed) with a spoken text summary, top items and up to two pattern cards, plus distinct states
+for no data, no spending in the period, fewer than two months of trend, and query errors. The
+trend's delta pill reuses the month-to-date comparison, so it cannot disagree with the total
+insight card, and the other-currency footnote groups several currencies instead of naming one
+while counting all of them.
+
+Performance: migration 002 adds `idx_tx_insight(currency, local_date, type, category_id,
+amount_minor, item_name)` so the aggregates are index-only. `insights-performance-test.ts`
+inserts 16,000 rows and times the seven queries the screen runs (trend, two breakdowns, top
+items, unnamed items, the other-currency count and the month-to-date delta) with CPU time, so
+parallel Jest workers cannot distort it; it passes the 50 ms gate here. Device timing is still outstanding — Node's
+SQLite is not Hermes + expo-sqlite.
+
+Deliberate deviations: 07 draws four segments, but 03 requires five periods, so the control
+keeps the segmented look with compact labels and scrolls only if they do not fit. CSV export is
+not on the screen yet; it belongs to P6's export/backup work rather than a second implementation
+here. The "N subscriptions detected" card example waits for P6: recurring rules do not exist
+yet, so there would be nothing to count. The insight card uses `accentSoft` instead of a
+gradient (no gradient dependency is installed), and the trend is the area chart 07 draws with
+income added as the dashed second series 03 requires.
+
+Tests: 125 tests across 19 suites (period ranges, breakdown folding/shares, trend fill, top-item
+merging, card thresholds, aggregate SQL grouping/exclusions, comparison sums, and the 16k-row
+gate);
+`npx tsc --noEmit` and `npx expo lint` are clean.
 
 ## P6 — Habit (3 days)
 

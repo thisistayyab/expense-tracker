@@ -206,7 +206,7 @@ currency" section with a one-tap "Recreate in <CUR>" action.
 - Insight cards (2–3): "Groceries is 22% above last month", "3 subscriptions detected".
 - All figures are for the active currency only; a footnote appears if rows in another currency
 exist.
-- Export button → CSV.
+- Export button → CSV (ships with P6's export/backup work; P5 has no button yet).
 
 **States:** < 2 months of data (show only breakdown with a "trend unlocks after next month"
 note), no data, error.

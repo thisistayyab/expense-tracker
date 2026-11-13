@@ -337,6 +337,41 @@ export async function sumSpent(
   return row?.total ?? 0;
 }
 
+/**
+ * Two expense sums from one scan: a current window and an earlier window that ends
+ * before it. Used for month-to-date deltas, where both sides must cover the same
+ * calendar days or the percentage only measures how much of the month has passed.
+ */
+export async function sumSpentForComparison(
+  db: Db,
+  options: {
+    currency: string;
+    currentFrom: string;
+    previousFrom: string;
+    previousTo: string;
+    toDate: string;
+  },
+): Promise<{ currentMinor: number; previousMinor: number }> {
+  const row = await db.getFirstAsync<{ current_minor: number; previous_minor: number }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN local_date >= ? THEN amount_minor ELSE 0 END), 0) AS current_minor,
+       COALESCE(SUM(CASE WHEN local_date <= ? THEN amount_minor ELSE 0 END), 0) AS previous_minor
+       FROM transactions
+      WHERE type = 'expense' AND currency = ? AND local_date BETWEEN ? AND ?`,
+    [
+      options.currentFrom,
+      options.previousTo,
+      options.currency.toUpperCase(),
+      options.previousFrom,
+      options.toDate,
+    ],
+  );
+  return {
+    currentMinor: row?.current_minor ?? 0,
+    previousMinor: row?.previous_minor ?? 0,
+  };
+}
+
 export async function countTransactions(db: Db): Promise<number> {
   const row = await db.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM transactions");
   return row?.count ?? 0;

@@ -194,7 +194,9 @@ export default function OverviewScreen() {
     if (otherCurrencies.length === 1) {
       router.push({
         pathname: "/(tabs)/transactions",
-        params: { currency: otherCurrency },
+        // The other params are cleared explicitly: a previous Insights drill-through
+        // must not keep filtering the list after a footnote tap.
+        params: { currency: otherCurrency, categoryId: "", from: "", to: "" },
       });
       return;
     }

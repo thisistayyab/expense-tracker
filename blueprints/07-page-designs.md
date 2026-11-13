@@ -263,8 +263,9 @@ Thresholds: primary (or category color) < 80%, `warning` 80–99%, `danger` ≥ 
 
 **Composition:** eyebrow + title → segmented pill → breakdown card → trend card → insight card.
 
-1. Segmented control 36 tall, full radius, `surfaceMuted` track, ink selected thumb, 4 equal
-   segments (Month / 3M / 6M / Year).
+1. Segmented control, full radius, `surfaceMuted` track, ink selected thumb. The drawing shows
+   four equal segments (Month / 3M / 6M / Year); 03 §7 needs a fifth (Last month), so P5 ships
+   five compact segments at 32 pt and the track scrolls only when the labels do not fit.
 2. Breakdown card: eyebrow `WHERE IT WENT` with the period total right-aligned. Each category is
    label 13.5/600 + amount + percent (`text3`), then an **8 px rounded bar** at 100% of the
    category color on a `surfaceMuted` track. Max 6 categories, remainder collapsed into `Other`.

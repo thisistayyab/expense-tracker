@@ -31,7 +31,7 @@ import {
 } from "../../lib/db/repos/transactions";
 import type { Account, Category, Db, Transaction } from "../../lib/db/types";
 import { isCurrencyCode } from "../../constants/currencies";
-import { addDays, toIsoDate } from "../../lib/domain/dates";
+import { addDays, isIsoDate, toIsoDate } from "../../lib/domain/dates";
 import { groupTransactionsByDay, type TransactionDaySection } from "../../lib/domain/transaction-groups";
 import { formatMoney } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
@@ -184,20 +184,40 @@ export default function ActivityScreen() {
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  // Overview's "other currency" footnote deep-links here filtered to that currency.
-  const params = useLocalSearchParams<{ currency?: string }>();
+  // Deep links from Overview (currency) and Insights (category + period) land here
+  // already filtered. The URL wins while it is present, so no filter is copied into
+  // state and no effect is needed; clearing a filter clears its param.
+  const params = useLocalSearchParams<{
+    currency?: string;
+    categoryId?: string;
+    from?: string;
+    to?: string;
+  }>();
   const paramCurrency =
     typeof params.currency === "string" && isCurrencyCode(params.currency)
       ? params.currency.toUpperCase()
       : null;
+  const paramCategoryId =
+    typeof params.categoryId === "string" && params.categoryId ? params.categoryId : null;
+  const paramFrom = typeof params.from === "string" && isIsoDate(params.from) ? params.from : null;
+  const paramTo = typeof params.to === "string" && isIsoDate(params.to) ? params.to : null;
+
   const [baseFilters, setFilters] = useState<TransactionFilters>(EMPTY_FILTERS);
-  // The URL wins while it is present: tapping Overview's other-currency footnote
-  // filters Activity without copying the param into state (and without an effect).
-  // Removing the filter clears the param, so the two can never disagree.
-  const filters = useMemo(
-    () => (paramCurrency ? { ...baseFilters, currency: paramCurrency } : baseFilters),
-    [baseFilters, paramCurrency],
-  );
+  const filters = useMemo(() => {
+    let next = baseFilters;
+    if (paramCurrency) next = { ...next, currency: paramCurrency };
+    if (paramCategoryId) next = { ...next, categoryId: paramCategoryId };
+    if (paramFrom || paramTo) {
+      next = { ...next, datePreset: "custom", fromDate: paramFrom, toDate: paramTo };
+    }
+    return next;
+  }, [baseFilters, paramCategoryId, paramCurrency, paramFrom, paramTo]);
+
+  const clearRouteFilters = useCallback(() => {
+    if (paramCurrency || paramCategoryId || paramFrom || paramTo) {
+      router.setParams({ currency: "", categoryId: "", from: "", to: "" });
+    }
+  }, [paramCategoryId, paramCurrency, paramFrom, paramTo]);
   const [rows, setRows] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -298,9 +318,9 @@ export default function ActivityScreen() {
   const clearAll = useCallback(() => {
     setQuery("");
     setFilters(EMPTY_FILTERS);
-    if (paramCurrency) router.setParams({ currency: "" });
+    clearRouteFilters();
     Keyboard.dismiss();
-  }, [paramCurrency]);
+  }, [clearRouteFilters]);
 
   const openDetail = useCallback((row: Transaction) => {
     router.push(`/transaction/${row.id}`);
@@ -395,13 +415,14 @@ export default function ActivityScreen() {
   }, []);
 
   const removeDateFilter = useCallback(() => {
+    if (paramFrom || paramTo) router.setParams({ from: "", to: "" });
     setFilters((current) => ({
       ...current,
       datePreset: "all",
       fromDate: null,
       toDate: null,
     }));
-  }, []);
+  }, [paramFrom, paramTo]);
 
   const badges = useMemo(() => {
     const result: { key: string; label: string; clear: () => void }[] = [];
@@ -427,7 +448,10 @@ export default function ActivityScreen() {
       result.push({
         key: "category",
         label: categoryById.get(filters.categoryId)?.name ?? "Category",
-        clear: () => setFilters((current) => ({ ...current, categoryId: null })),
+        clear: () => {
+          if (paramCategoryId) router.setParams({ categoryId: "" });
+          setFilters((current) => ({ ...current, categoryId: null }));
+        },
       });
     }
     if (filters.currency) {
@@ -448,7 +472,7 @@ export default function ActivityScreen() {
       });
     }
     return result;
-  }, [accountById, categoryById, filters, paramCurrency, removeDateFilter]);
+  }, [accountById, categoryById, filters, paramCategoryId, paramCurrency, removeDateFilter]);
 
   const categoryOptions = useMemo(() => {
     if (!categoryTarget || categoryTarget.type === "transfer") return [];
@@ -635,7 +659,7 @@ export default function ActivityScreen() {
           categories={categories}
           currencies={currencies}
           onApply={(next) => {
-            if (paramCurrency) router.setParams({ currency: "" });
+            clearRouteFilters();
             setFilters(next);
             setFilterOpen(false);
           }}
