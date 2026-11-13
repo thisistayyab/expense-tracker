@@ -87,19 +87,59 @@ export async function createAccount(db: Db, input: NewAccount): Promise<Account>
   return (await getAccount(db, id))!;
 }
 
+export type AccountPatch = {
+  name?: string;
+  type?: AccountType;
+  currency?: string;
+  openingBalanceMinor?: number;
+  color?: string | null;
+  icon?: string | null;
+  sortOrder?: number;
+};
+
+const ACCOUNT_TYPES: readonly AccountType[] = ["cash", "bank", "card", "wallet", "savings"];
+
+/** True for both the source and destination side of a transfer. */
+export async function accountHasTransactions(db: Db, id: string): Promise<boolean> {
+  const row = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) AS count FROM transactions
+      WHERE account_id = ? OR transfer_account_id = ?`,
+    [id, id],
+  );
+  return (row?.count ?? 0) > 0;
+}
+
 export async function updateAccount(
   db: Db,
   id: string,
-  patch: { name?: string; color?: string | null; icon?: string | null; sortOrder?: number },
+  patch: AccountPatch,
 ): Promise<void> {
   const current = await getAccount(db, id);
   if (!current) throw new Error(`Account not found: ${id}`);
+
+  if (patch.name !== undefined && !patch.name.trim()) {
+    throw new Error("An account needs a name");
+  }
+  if (patch.type !== undefined && !ACCOUNT_TYPES.includes(patch.type)) {
+    throw new Error(`Unknown account type: ${patch.type}`);
+  }
+
+  const nextCurrency = patch.currency?.trim().toUpperCase() ?? current.currency;
+  if (!isCurrencyCode(nextCurrency)) throw new Error(`Unknown currency: ${nextCurrency}`);
+  if (nextCurrency !== current.currency && (await accountHasTransactions(db, id))) {
+    throw new Error("An account with history cannot change currency");
+  }
+
   await db.runAsync(
     `UPDATE accounts
-        SET name = ?, color = ?, icon = ?, sort_order = ?, updated_at = ?
+        SET name = ?, type = ?, currency = ?, opening_balance_minor = ?, color = ?, icon = ?,
+            sort_order = ?, updated_at = ?
       WHERE id = ?`,
     [
       patch.name?.trim() || current.name,
+      patch.type ?? current.type,
+      nextCurrency,
+      Math.trunc(patch.openingBalanceMinor ?? current.openingBalanceMinor),
       patch.color === undefined ? current.color : nullable(patch.color),
       patch.icon === undefined ? current.icon : nullable(patch.icon),
       patch.sortOrder ?? current.sortOrder,
@@ -115,6 +155,47 @@ export async function setAccountArchived(db: Db, id: string, archived: boolean):
     new Date().toISOString(),
     id,
   ]);
+}
+
+export type AccountWithBalance = Account & {
+  balanceMinor: number;
+  transactionCount: number;
+};
+
+/**
+ * Every account with its computed balance in one query. The join matches a
+ * transfer once on either side; the CASE decides whether it adds or subtracts.
+ * Currency is never converted.
+ */
+export async function listAccountBalances(
+  db: Db,
+  options: { includeArchived?: boolean } = {},
+): Promise<AccountWithBalance[]> {
+  const rows = await db.getAllAsync<
+    AccountRow & { balance_minor: number; transaction_count: number }
+  >(
+    `SELECT a.id, a.name, a.type, a.currency, a.opening_balance_minor, a.color, a.icon,
+            a.is_archived, a.sort_order, a.created_at, a.updated_at,
+            a.opening_balance_minor + COALESCE(SUM(CASE
+              WHEN t.type = 'income' AND t.account_id = a.id THEN t.amount_minor
+              WHEN t.type = 'expense' AND t.account_id = a.id THEN -t.amount_minor
+              WHEN t.type = 'transfer' AND t.account_id = a.id THEN -t.amount_minor
+              WHEN t.type = 'transfer' AND t.transfer_account_id = a.id THEN t.amount_minor
+              ELSE 0 END), 0) AS balance_minor,
+            COUNT(t.id) AS transaction_count
+       FROM accounts a
+       LEFT JOIN transactions t
+         ON t.account_id = a.id OR t.transfer_account_id = a.id
+      ${options.includeArchived ? "" : "WHERE a.is_archived = 0"}
+      GROUP BY a.id
+      ORDER BY a.sort_order, a.name`,
+  );
+
+  return rows.map((row) => ({
+    ...mapAccount(row),
+    balanceMinor: row.balance_minor ?? 0,
+    transactionCount: row.transaction_count ?? 0,
+  }));
 }
 
 /**

@@ -73,11 +73,17 @@ export type NewTransaction = {
 export type TransactionFilter = {
   currency?: string;
   type?: TransactionType;
+  /** Rows where this account is the source or the destination of a transfer. */
   accountId?: string;
   categoryId?: string;
   fromDate?: string;
   toDate?: string;
-  /** Case-insensitive search over item name, place, note and category name. */
+  /** Only rows with a non-empty note. */
+  notePresent?: boolean;
+  /**
+   * Case-insensitive search over item name, place, note, category name and the
+   * amount as the user sees it (12.50, 1.250, 1200).
+   */
   text?: string;
   limit?: number;
   offset?: number;
@@ -102,8 +108,10 @@ function buildFilter(filter: TransactionFilter): { where: string; params: (strin
     params.push(filter.type);
   }
   if (filter.accountId) {
-    clauses.push("t.account_id = ?");
-    params.push(filter.accountId);
+    // An account filter is a ledger view: a transfer out of and into the account
+    // both belong to its history.
+    clauses.push("(t.account_id = ? OR t.transfer_account_id = ?)");
+    params.push(filter.accountId, filter.accountId);
   }
   if (filter.categoryId) {
     clauses.push("t.category_id = ?");
@@ -117,13 +125,38 @@ function buildFilter(filter: TransactionFilter): { where: string; params: (strin
     clauses.push("t.local_date <= ?");
     params.push(filter.toDate);
   }
+  if (filter.notePresent) {
+    clauses.push("(t.note IS NOT NULL AND trim(t.note) <> '')");
+  }
   if (filter.text?.trim()) {
-    const like = `%${filter.text.trim().toLowerCase()}%`;
-    clauses.push(
-      `(lower(t.item_name) LIKE ? OR lower(t.place) LIKE ? OR lower(t.note) LIKE ?
-        OR lower(c.name) LIKE ?)`,
-    );
-    params.push(like, like, like, like);
+    const needle = filter.text.trim().toLowerCase();
+    const like = `%${needle}%`;
+    const parts = [
+      "lower(t.item_name) LIKE ?",
+      "lower(t.place) LIKE ?",
+      "lower(t.note) LIKE ?",
+      "lower(c.name) LIKE ?",
+    ];
+    const textParams: (string | number)[] = [like, like, like, like];
+
+    // Amounts are stored as minor units, but people search what they read:
+    // "12.50" for USD, "1.250" for KWD and "1200" for JPY. Match both the raw
+    // minor integer and the common 0/2/3-decimal renderings rather than picking
+    // one exponent from the query. Grouping commas are ignored.
+    const amountNeedle = filter.text.replace(/[^\d.-]/g, "").replace(/,/g, "");
+    if (/\d/.test(amountNeedle)) {
+      const amountLike = `%${amountNeedle}%`;
+      parts.push(
+        "CAST(t.amount_minor AS TEXT) LIKE ?",
+        "printf('%.0f', t.amount_minor) LIKE ?",
+        "printf('%.2f', t.amount_minor / 100.0) LIKE ?",
+        "printf('%.3f', t.amount_minor / 1000.0) LIKE ?",
+      );
+      textParams.push(amountLike, amountLike, amountLike, amountLike);
+    }
+
+    clauses.push(`(${parts.join(" OR ")})`);
+    params.push(...textParams);
   }
 
   return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
@@ -134,7 +167,7 @@ export async function listTransactions(
   filter: TransactionFilter = {},
 ): Promise<Transaction[]> {
   const { where, params } = buildFilter(filter);
-  const limit = Math.max(1, Math.min(500, Math.trunc(filter.limit ?? 100)));
+  const limit = Math.max(1, Math.min(5_000, Math.trunc(filter.limit ?? 100)));
   const offset = Math.max(0, Math.trunc(filter.offset ?? 0));
 
   const rows = await db.getAllAsync<TransactionRow>(

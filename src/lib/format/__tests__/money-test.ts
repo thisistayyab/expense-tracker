@@ -2,6 +2,8 @@ import {
   formatMoney,
   minorToDecimalString,
   parseMoneyInput,
+  parseSignedMoneyInput,
+  sanitizeSignedMoneyInput,
   sanitizeMoneyInput,
 } from "../money";
 
@@ -64,6 +66,20 @@ describe("sanitizeMoneyInput", () => {
 
   test("keeps three decimals for KWD", () => {
     expect(sanitizeMoneyInput("1.2505", "KWD")).toBe("1.250");
+  });
+});
+
+describe("signed account balances", () => {
+  test("keeps a leading minus while typing an opening balance", () => {
+    expect(sanitizeSignedMoneyInput("-12.345", "USD")).toBe("-12.34");
+    expect(sanitizeSignedMoneyInput("-1200.50", "JPY")).toBe("-1200");
+    expect(sanitizeSignedMoneyInput("-", "USD")).toBe("");
+  });
+
+  test("parses a negative opening balance", () => {
+    expect(parseSignedMoneyInput("-12.50", "USD")).toBe(-1250);
+    expect(parseSignedMoneyInput("1.250", "KWD")).toBe(1250);
+    expect(parseSignedMoneyInput("-bad", "USD")).toBeNull();
   });
 });
 

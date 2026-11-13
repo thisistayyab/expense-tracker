@@ -218,17 +218,46 @@ Checks: `npx tsc --noEmit` (0), `npx expo lint` (0), `npx jest --ci` (59/59),
 Goal: anything logged can be found, fixed, and structured.
 
 Tasks:
-- [ ] Transactions list grouped by day with sticky headers and day totals.
-- [ ] Search (debounced) over item name, place, note, category and amount; filter sheet
+- [x] Transactions list grouped by day with sticky headers and day totals.
+- [x] Search (debounced) over item name, place, note, category and amount; filter sheet
       (date/type/account/category/currency/note), active filter badges.
-- [ ] Swipe actions: edit right, delete left, undo snackbar.
-- [ ] Accounts CRUD with computed balances; transfers.
-- [ ] Categories CRUD: reorder, rename, recolor, archive, one level of nesting.
-- [ ] List performance: fixed row heights, memoized rows, `keyExtractor`.
+- [x] Swipe actions: edit right, delete left, undo snackbar.
+- [x] Accounts CRUD with computed balances; transfers.
+- [x] Categories CRUD: reorder, rename, recolor, archive, one level of nesting.
+- [x] List performance: fixed row heights, memoized rows, `keyExtractor`.
 
 Demo: 5,000-row fixture — search, filter, edit, delete, undo, transfer, archive a category.
 Gate: steady 60 fps scroll on mid-range Android; archived category disappears from pickers but
 history keeps rendering; no orphaned rows (`foreign_key_check` clean).
+
+Status at implementation time: Activity now loads up to 5,000 matching rows, groups them by
+`local_date`, and renders fixed 64 pt rows in a sticky-header SectionList with memoized rows,
+stable key extraction and the usual virtualization knobs. Search is debounced at 150 ms and
+matches item/place/note/category name plus the displayed amount forms (0/2/3 decimals); the
+filter sheet applies date presets or a custom range, type, either side of an account (including
+transfers), category, currency and note presence. Active filters appear as removable chips and
+the filter bar carries a count. A row swipes right for edit and left for delete; the delete is
+optimistic, removes an empty day header immediately and offers the global 4 s undo. Long-press
+offers duplicate and change-category, and tapping opens detail. Day totals stay per currency
+(income − expenses, transfers excluded) and show `+N other` instead of summing currencies.
+
+Accounts now have a management screen with balances computed in one query from opening balance
+plus income/expense/transfer legs, archive/restore, opening-balance editing, and a currency field
+that is locked once the account has history. The account type and current balance are visible;
+"Transfer" opens the shared add sheet prefilled as a transfer. Category management has Expense
+and Income tabs, one-level subcategories, rename, color/icon selection, archive/restore, and
+accessible up/down reorder controls (a deliberate button-based reorder rather than drag so it
+works with screen readers and without a new dependency). Archived parents and their children
+disappear from the add picker but remain searchable and visible in history; archived rows are
+tagged in management. The dev fixture button now inserts 5,000 rows across 12 months.
+
+Known gaps: the 60 fps scroll gate, the 5,000-row demo on a mid-range Android device, and the
+`foreign_key_check`/archive walkthrough are still hardware verification. Reorder is button-based,
+not drag; it is deterministic and accessible but should be compared with the design before a
+final polish pass. The all-rows query is capped at 5,000 (P3 target) rather than paginated; P5
+aggregates can add a server-side page once the 16k fixture lands. No new dependencies were added;
+swipe uses the already-installed `react-native-gesture-handler`/Reanimated stack.
+Checks: `npx tsc --noEmit` (0), `npx expo lint` (0), `npx jest --ci` (80/80 across 13 suites, including a 5,000-row fixture), Android export (0).
 
 ## P4 — Meaning (4 days)
 

@@ -6,6 +6,8 @@ import { ScrollView, Text } from "react-native";
 
 import { Card, FieldRow, SectionHeader } from "../../components/ui";
 import { getCountry } from "../../constants/countries";
+import { listAccounts } from "../../lib/db/repos/accounts";
+import { listCategories } from "../../lib/db/repos/categories";
 import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import type { Db } from "../../lib/db/types";
 import { useTheme } from "../../lib/theme";
@@ -14,17 +16,23 @@ export default function SettingsScreen() {
   const { theme } = useTheme();
   const db: Db = useSQLiteContext();
   const [region, setRegion] = useState<{ country: string; currency: string } | null>(null);
+  const [counts, setCounts] = useState({ accounts: 0, categories: 0 });
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      getAllSettings(db)
-        .then((settings) => {
+      Promise.all([
+        getAllSettings(db),
+        listAccounts(db),
+        listCategories(db),
+      ])
+        .then(([settings, accounts, categories]) => {
           if (cancelled) return;
           setRegion({
             country: settings[SETTING_KEYS.country] ?? "US",
             currency: settings[SETTING_KEYS.currency] ?? "USD",
           });
+          setCounts({ accounts: accounts.length, categories: categories.length });
         })
         .catch(() => {});
       return () => {
@@ -49,6 +57,21 @@ export default function SettingsScreen() {
             region ? `${country?.name ?? region.country} · ${region.currency}` : "Loading…"
           }
           onPress={() => router.push("/settings/region")}
+        />
+      </Card>
+
+      <SectionHeader title="Library" />
+      <Card>
+        <FieldRow
+          label="Categories"
+          value={String(counts.categories)}
+          onPress={() => router.push("/settings/categories")}
+        />
+        <FieldRow
+          label="Accounts"
+          value={String(counts.accounts)}
+          showDivider
+          onPress={() => router.push("/settings/accounts")}
         />
       </Card>
 

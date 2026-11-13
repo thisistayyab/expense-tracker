@@ -18,7 +18,12 @@ const SAVED_MESSAGE: Record<Transaction["type"], string> = {
 export default function AddScreen() {
   const db: Db = useSQLiteContext();
   const showUndo = useUndo();
-  const { id, amount } = useLocalSearchParams<{ id?: string; amount?: string }>();
+  const { id, amount, type, accountId } = useLocalSearchParams<{
+    id?: string;
+    amount?: string;
+    type?: string;
+    accountId?: string;
+  }>();
   const [existing, setExisting] = useState<Transaction | null | undefined>(undefined);
 
   useEffect(() => {
@@ -44,6 +49,10 @@ export default function AddScreen() {
     <AddTransactionSheet
       existing={existing}
       initialAmount={id ? undefined : amount}
+      initialType={
+        type === "expense" || type === "income" || type === "transfer" ? type : undefined
+      }
+      initialAccountId={id ? undefined : accountId}
       onClose={() => router.back()}
       onSaved={(transaction, isNew, persisted) => {
         router.back();

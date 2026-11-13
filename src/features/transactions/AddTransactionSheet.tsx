@@ -68,6 +68,9 @@ export type AddTransactionSheetProps = {
   existing?: Transaction | null;
   /** Decimal amount from a widget/shortcut deep link; ignored when editing. */
   initialAmount?: string;
+  /** Route params used by the Accounts screen for a transfer or a prefilled source. */
+  initialType?: TransactionType;
+  initialAccountId?: string;
   onClose: () => void;
   /**
    * Called as soon as a new row can be shown (optimistic), with the in-flight write
@@ -85,6 +88,8 @@ export type AddTransactionSheetProps = {
 export function AddTransactionSheet({
   existing = null,
   initialAmount,
+  initialType,
+  initialAccountId,
   onClose,
   onSaved,
 }: AddTransactionSheetProps) {
@@ -92,7 +97,9 @@ export function AddTransactionSheet({
   const db: Db = useSQLiteContext();
   const today = useMemo(() => toIsoDate(new Date()), []);
 
-  const [type, setType] = useState<TransactionType>(existing?.type ?? "expense");
+  const [type, setType] = useState<TransactionType>(
+    existing?.type ?? initialType ?? "expense",
+  );
   const [currency, setCurrency] = useState(existing?.currency ?? "USD");
   const [amountText, setAmountText] = useState(
     existing
@@ -104,7 +111,9 @@ export function AddTransactionSheet({
   const [recentNames, setRecentNames] = useState<string[]>([]);
   const [recentCategoryIds, setRecentCategoryIds] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(existing?.categoryId ?? null);
-  const [accountId, setAccountId] = useState<string | null>(existing?.accountId ?? null);
+  const [accountId, setAccountId] = useState<string | null>(
+    existing?.accountId ?? initialAccountId ?? null,
+  );
   const [transferAccountId, setTransferAccountId] = useState<string | null>(
     existing?.transferAccountId ?? null,
   );
@@ -129,7 +138,7 @@ export function AddTransactionSheet({
         const active = existing?.currency ?? settings[SETTING_KEYS.currency] ?? "USD";
         const [allAccounts, kindCategories, recent, recentCategories] = await Promise.all([
           listAccounts(db, { includeArchived: Boolean(existing) }),
-          listCategories(db, { kind: categoryKind }),
+          listCategories(db, { kind: categoryKind, includeArchived: Boolean(existing) }),
           listRecentItemNames(db, {
             currency: active,
             sinceIso: addDays(today, -30),
@@ -179,10 +188,15 @@ export function AddTransactionSheet({
 
   // Recently used categories move to the front; unused ones keep their sort order
   // underneath. Array.prototype.sort is stable, so equal ranks do not reshuffle.
+  const selectableCategories = useMemo(
+    () => categories.filter((category) => !category.isArchived || category.id === categoryId),
+    [categories, categoryId],
+  );
+
   const orderedCategories = useMemo(() => {
-    if (!recentCategoryIds.length) return categories;
+    if (!recentCategoryIds.length) return selectableCategories;
     const rank = new Map(recentCategoryIds.map((id, index) => [id, index]));
-    return [...categories].sort((left, right) => {
+    return [...selectableCategories].sort((left, right) => {
       const leftRank = rank.get(left.id);
       const rightRank = rank.get(right.id);
       if (leftRank !== undefined && rightRank !== undefined) return leftRank - rightRank;
@@ -190,7 +204,7 @@ export function AddTransactionSheet({
       if (rightRank !== undefined) return 1;
       return 0;
     });
-  }, [categories, recentCategoryIds]);
+  }, [recentCategoryIds, selectableCategories]);
 
   const visibleCategories = useMemo(() => {
     const base = orderedCategories.slice(0, 4);
@@ -729,7 +743,10 @@ export function AddTransactionSheet({
       <PickerSheet
         visible={picker === "category"}
         title="Category"
-        options={categories.map((category) => ({ value: category.id, label: category.name }))}
+        options={selectableCategories.map((category) => ({
+          value: category.id,
+          label: category.isArchived ? `${category.name} (archived)` : category.name,
+        }))}
         selected={categoryId ?? undefined}
         searchable
         searchPlaceholder="Search categories"

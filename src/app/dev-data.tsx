@@ -119,7 +119,7 @@ export default function DevDataScreen() {
         accountId: account.id,
         currency: snapshot.currency,
         months: 12,
-        count: 2000,
+        count: 5000,
       });
       return `Inserted ${result.inserted} rows across ${result.categoriesUsed} categories in ${snapshot.currency}.`;
     });
@@ -216,7 +216,7 @@ export default function DevDataScreen() {
           <SectionHeader title="Actions" />
           <View style={{ gap: 10 }}>
             <Button
-              label="Insert 12 months · 2,000 rows"
+              label="Insert 12 months · 5,000 rows"
               onPress={insertFixtures}
               disabled={busy}
             />

@@ -56,6 +56,11 @@ export async function listCategories(
   }
   if (!options.includeArchived) {
     clauses.push("is_archived = 0");
+    // Archiving a parent hides its children from pickers too. The children are
+    // still returned by includeArchived so history and management can show them.
+    clauses.push(
+      "(parent_id IS NULL OR parent_id IN (SELECT id FROM categories WHERE is_archived = 0))",
+    );
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
@@ -71,8 +76,27 @@ export async function getCategory(db: Db, id: string): Promise<Category | null> 
   return row ? mapCategory(row) : null;
 }
 
+async function validParentId(
+  db: Db,
+  input: { id?: string; parentId?: string | null; kind: CategoryKind },
+): Promise<string | null> {
+  const parentId = input.parentId ?? null;
+  if (!parentId) return null;
+  if (input.id && parentId === input.id) throw new Error("A category cannot parent itself");
+
+  const parent = await getCategory(db, parentId);
+  if (!parent) throw new Error("Parent category not found");
+  if (parent.kind !== input.kind) throw new Error("A parent must have the same kind");
+  if (parent.parentId) throw new Error("Categories support only one level of nesting");
+  return parentId;
+}
+
 export async function createCategory(db: Db, input: NewCategory): Promise<Category> {
   if (!input.name.trim()) throw new Error("A category needs a name");
+  const parentId = await validParentId(db, {
+    parentId: input.parentId,
+    kind: input.kind,
+  });
   const now = new Date().toISOString();
   const id = newId();
 
@@ -81,7 +105,7 @@ export async function createCategory(db: Db, input: NewCategory): Promise<Catego
      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
     [
       id,
-      input.parentId ?? null,
+      parentId,
       input.name.trim(),
       input.kind,
       nullable(input.icon ?? null),
@@ -95,18 +119,44 @@ export async function createCategory(db: Db, input: NewCategory): Promise<Catego
   return (await getCategory(db, id))!;
 }
 
+export type CategoryPatch = {
+  name?: string;
+  parentId?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  sortOrder?: number;
+};
+
 export async function updateCategory(
   db: Db,
   id: string,
-  patch: { name?: string; icon?: string | null; color?: string | null; sortOrder?: number },
+  patch: CategoryPatch,
 ): Promise<void> {
   const current = await getCategory(db, id);
   if (!current) throw new Error(`Category not found: ${id}`);
+  if (patch.name !== undefined && !patch.name.trim()) {
+    throw new Error("A category needs a name");
+  }
+
+  const nextParentId =
+    patch.parentId === undefined
+      ? current.parentId
+      : await validParentId(db, { id, parentId: patch.parentId, kind: current.kind });
+
+  if (nextParentId) {
+    const child = await db.getFirstAsync<{ id: string }>(
+      "SELECT id FROM categories WHERE parent_id = ? LIMIT 1",
+      [id],
+    );
+    if (child) throw new Error("Move its subcategories out before nesting this category");
+  }
 
   await db.runAsync(
-    `UPDATE categories SET name = ?, icon = ?, color = ?, sort_order = ?, updated_at = ?
+    `UPDATE categories SET parent_id = ?, name = ?, icon = ?, color = ?, sort_order = ?,
+            updated_at = ?
       WHERE id = ?`,
     [
+      nextParentId,
       patch.name?.trim() || current.name,
       patch.icon === undefined ? current.icon : nullable(patch.icon),
       patch.color === undefined ? current.color : nullable(patch.color),
@@ -115,6 +165,20 @@ export async function updateCategory(
       id,
     ],
   );
+}
+
+/** Persist a sibling order in one transaction; used by the reorder controls. */
+export async function reorderCategories(db: Db, orderedIds: string[]): Promise<void> {
+  if (!orderedIds.length) return;
+  const now = new Date().toISOString();
+  await db.withTransactionAsync(async () => {
+    for (const [index, id] of orderedIds.entries()) {
+      await db.runAsync(
+        "UPDATE categories SET sort_order = ?, updated_at = ? WHERE id = ?",
+        [index, now, id],
+      );
+    }
+  });
 }
 
 /** Archive, never delete: history keeps rendering and rows stay valid (02 rule 5). */

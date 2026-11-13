@@ -3,6 +3,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { SQLiteProvider } from "expo-sqlite";
 import { Suspense, useEffect, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -84,6 +85,14 @@ function Navigation() {
         name="settings/region"
         options={{ ...detailOptions, title: "Currency & region" }}
       />
+      <Stack.Screen
+        name="settings/categories"
+        options={{ ...detailOptions, title: "Categories" }}
+      />
+      <Stack.Screen
+        name="settings/accounts"
+        options={{ ...detailOptions, title: "Accounts" }}
+      />
       <Stack.Screen name="dev-data" options={{ ...detailOptions, title: "Data tools" }} />
     </Stack>
   );
@@ -112,19 +121,21 @@ export default function RootLayout() {
   }, [fontError]);
 
   return (
-    <ThemeProvider>
-      <SafeAreaProvider>
-        <ErrorBoundary>
-          <Suspense fallback={null}>
-            <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase}>
-              <OnboardingProvider>
-                <AppShell fontsReady={fontsLoaded || Boolean(fontError)} />
-              </OnboardingProvider>
-            </SQLiteProvider>
-          </Suspense>
-        </ErrorBoundary>
-      </SafeAreaProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase}>
+                <OnboardingProvider>
+                  <AppShell fontsReady={fontsLoaded || Boolean(fontError)} />
+                </OnboardingProvider>
+              </SQLiteProvider>
+            </Suspense>
+          </ErrorBoundary>
+        </SafeAreaProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 

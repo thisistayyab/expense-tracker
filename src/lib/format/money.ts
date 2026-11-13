@@ -112,6 +112,17 @@ export function sanitizeMoneyInput(input: string, code: string): string {
   return `${whole || "0"}.${fractions.join("").slice(0, exponent)}`;
 }
 
+/**
+ * Same as `sanitizeMoneyInput`, but keeps an optional leading minus for an
+ * opening balance (a card can start in debt). A lone minus is just empty input.
+ */
+export function sanitizeSignedMoneyInput(input: string, code: string): string {
+  const negative = input.trim().startsWith("-");
+  const positive = sanitizeMoneyInput(input.replace(/^\s*-/, ""), code);
+  if (!positive || positive === "0") return positive;
+  return negative ? `-${positive}` : positive;
+}
+
 /** 1250 USD → "12.50"; 1200 JPY → "1200"; 1250 KWD → "1.250". */
 export function minorToDecimalString(minor: number, code: string): string {
   const { exponent } = getCurrency(code);
@@ -129,6 +140,17 @@ export function minorToDecimalString(minor: number, code: string): string {
  * has (12.555 USD is a typo, not a rounding opportunity) and anything that is not
  * a plain decimal number. Returns null when the input is not valid.
  */
+export function parseSignedMoneyInput(
+  input: string,
+  code: string,
+  decimalSeparator = ".",
+): number | null {
+  const negative = input.trim().startsWith("-");
+  const value = parseMoneyInput(input.replace(/^\s*-/, ""), code, decimalSeparator);
+  if (value === null) return null;
+  return negative ? -value : value;
+}
+
 export function parseMoneyInput(
   input: string,
   code: string,
