@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { FlatList, Keyboard, Pressable, Text, TextInput, View } from "react-native";
 
-import { Button, FieldRow, PickerSheet } from "../../components/ui";
+import { AppIcon, Button, FieldRow, PickerSheet } from "../../components/ui";
 import {
   countryOptions,
   currencyForCountry,
@@ -140,7 +140,7 @@ export function RegionEditor({
               {currencyLabel(selectedCurrency)} · {selectedCurrency.name}
             </Text>
           </View>
-          <Text style={[theme.text.title3, { color: theme.colors.accent }]}>✓</Text>
+          <AppIcon name="check" color={theme.colors.accent} size={16} />
         </View>
 
         <TextInput
@@ -159,10 +159,10 @@ export function RegionEditor({
               height: 46,
               borderRadius: 23,
               paddingHorizontal: 16,
-              backgroundColor: theme.colors.surface,
+              backgroundColor: theme.colors.glassThin,
               color: theme.colors.textPrimary,
               borderWidth: 1,
-              borderColor: theme.colors.border,
+              borderColor: theme.colors.glassBorder,
             },
           ]}
         />
@@ -183,8 +183,10 @@ export function RegionEditor({
         keyboardShouldPersistTaps="handled"
         style={{ flex: 1, marginHorizontal: 20 }}
         contentContainerStyle={{
-          backgroundColor: theme.colors.surface,
-          borderRadius: 24,
+          backgroundColor: theme.colors.glassThick,
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: theme.colors.glassBorder,
           paddingHorizontal: 16,
           overflow: "hidden",
         }}
@@ -235,7 +237,7 @@ export function RegionEditor({
                 {currencyLabel(getCurrency(item.currency))}
               </Text>
               {isSelected ? (
-                <Text style={[theme.text.body, { color: theme.colors.accent }]}>✓</Text>
+                <AppIcon name="check" color={theme.colors.accent} size={16} />
               ) : null}
             </Pressable>
           );
@@ -257,7 +259,9 @@ export function RegionEditor({
 
         <View
           style={{
-            backgroundColor: theme.colors.surface,
+            backgroundColor: theme.colors.glassThin,
+            borderWidth: 1,
+            borderColor: theme.colors.glassBorder,
             borderRadius: 22,
             paddingHorizontal: 16,
           }}

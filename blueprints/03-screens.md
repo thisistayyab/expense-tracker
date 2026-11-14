@@ -43,25 +43,34 @@ with a cross-platform fallback set; each gets a color from the palette ramp.
 **Purpose:** the five-second answer.
 
 **Layout (top → bottom):**
-1. Header: month selector (`November 2026` with a chevron) and a circular settings button. No
-   account filter here — accounts are filtered in Activity.
+1. Header: month selector — one bordered white pill carrying `‹ November 2026 ›`, so the
+   control is a single object rather than free-floating arrows — and a circular white settings
+   button. No account filter here — accounts are filtered in Activity.
 2. **Safe-to-spend hero:** an ink card carrying the large amount, the share of budget used, a
    progress track of period spend vs total budget, and the days-left line. Tapping it opens a
    breakdown sheet (spent, committed bills, remaining days, formula in plain words).
 3. One 11 pt "excludes N bills you haven't logged" truth line under the hero — outside the card,
    so it never competes with the number.
-4. Budget cards: up to 3 categories closest to their limit in a peeking horizontal row with
-   progress bars and overspend state; "See all" → Budgets tab.
-5. Recent transactions: 3 rows in one grouped card. Title is `item_name`, falling back to
+4. **Analytics (added 14 Nov 2026):** `This month` — total spent in the displayed month, the
+   change versus the same number of days last month, seven-day spend bars with a dashed average
+   line, then `Where it went`: the top three categories plus `Other`, each with amount and share
+   and a thin bar, linking to Insights. Both read the same currency and month as the hero, so
+   browsing a past month moves them together. A month with no spend still shows the card with
+   `Nothing logged … yet`; a failed read shows a one-line error instead of dropping the section.
+5. Bills due card, when a recurring bill falls in the next seven days (hidden otherwise).
+6. Budget rows: up to 3 categories closest to their limit, each with a progress bar and
+   overspend state; "See all" → Budgets tab.
+7. Recent transactions: 3 rows in one grouped card. Title is `item_name`, falling back to
    `place`, then the category name; subtitle is `category · relative day`.
-6. If transactions exist in a currency other than the active one, a 12 pt tertiary footnote
+8. If transactions exist in a currency other than the active one, a 12 pt tertiary footnote
    sits under the hero: "12 entries in USD are not included" → opens Activity filtered to that
    currency. Never merge them into the number, never convert.
-7. Floating **+** button (bottom-right, above the floating tab bar) → `add` modal.
-8. Empty state (no transactions yet): centered gradient icon, "Start with one", one sentence, and
-   a primary "Log your first expense" button plus two setup rows. **No FAB** in this state — the
-   CTA is the only entry point. No keyboard is shown until that button is tapped, so
-   the home screen never mounts an input.
+9. Floating **+** button (bottom-right, above the floating tab bar) → `add` modal.
+10. Empty state (no transactions yet): leading-aligned "Start with one", one sentence, and a
+   compact primary "Log your first expense" button in a card. Left-aligned and compact on purpose:
+   a centred heading over centred grey copy with a full-width button is the most template-like
+   block in mobile UI, and the compact button keeps the floating add button from covering it. No
+   keyboard is shown until that button is tapped, so the home screen never mounts an input.
 
 **States:** loading (skeleton matching layout, not a spinner), empty, populated, error
 (retry + "your data is on this device" reassurance).

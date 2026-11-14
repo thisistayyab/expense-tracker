@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { Pressable, Text, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 
 import { useTheme } from "../../lib/theme";
+import { TactilePressable } from "./TactilePressable";
 
 export type ChoiceChipProps = {
   label: string;
@@ -26,30 +27,40 @@ export function ChoiceChip({
   accessibilityLabel,
 }: ChoiceChipProps) {
   const { theme } = useTheme();
-  const selectedBackground =
-    tone === "accent" ? theme.colors.accentSoft : theme.colors.solid;
+
+  // Segmented look: idle chips are outlines on the surface, the chosen one is a
+  // solid ink capsule. Every chip is the same height and has the same spring, so a
+  // filter row behaves like one instrument.
+  const selectedBackground = tone === "accent" ? theme.colors.accentSoft : theme.colors.solid;
   const selectedForeground = tone === "accent" ? theme.colors.accent : theme.colors.solidFg;
+  const idleForeground = theme.colors.textSecondary;
 
   return (
-    <Pressable
+    <TactilePressable
       onPress={onPress}
       disabled={disabled || !onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected, disabled }}
-      style={({ pressed }) => [
+      scaleTo={0.95}
+      haptic="selection"
+      flashColor={selected ? "rgba(255,255,255,0.16)" : "rgba(16,18,23,0.05)"}
+      style={[
         {
           minHeight: 34,
           minWidth: 34,
           paddingVertical: 6,
           paddingHorizontal: 14,
-          borderRadius: 17,
+          borderRadius: theme.radius.chip,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
           gap: 6,
-          backgroundColor: selected ? selectedBackground : theme.colors.surfaceSunken,
-          opacity: disabled ? 0.4 : pressed ? 0.65 : 1,
+          overflow: "hidden",
+          backgroundColor: selected ? selectedBackground : theme.colors.surface,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: selected ? "transparent" : theme.colors.cardBorder,
+          opacity: disabled ? 0.4 : 1,
         },
         style,
       ]}
@@ -57,16 +68,15 @@ export function ChoiceChip({
       {leading}
       <Text
         style={[
-          theme.text.caption,
+          theme.text.label,
           {
-            fontWeight: "600",
-            color: selected ? selectedForeground : theme.colors.textSecondary,
+            color: selected ? selectedForeground : idleForeground,
           },
         ]}
         numberOfLines={1}
       >
         {label}
       </Text>
-    </Pressable>
+    </TactilePressable>
   );
 }

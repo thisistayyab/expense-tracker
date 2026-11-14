@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 
 import { useTheme } from "../../lib/theme";
+import { AppIcon } from "./AppIcon";
 
 export type FieldRowProps = {
   label: string;
@@ -47,7 +48,7 @@ export function FieldRow({ label, value, onPress, muted = false, showDivider = f
           </Text>
         ) : null}
         {interactive ? (
-          <Text style={[theme.text.title3, { color: theme.colors.textTertiary }]}>›</Text>
+          <AppIcon name="chevronRight" color={theme.colors.textTertiary} size={15} />
         ) : null}
       </View>
     </Pressable>

@@ -1,11 +1,12 @@
 import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { TAB_BAR_CLEARANCE } from "../../components/navigation/FloatingTabBar";
+import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
 import {
+  AppIcon,
   Button,
   Card,
   CategoryTile,
@@ -13,6 +14,7 @@ import {
   PickerSheet,
   ProgressBar,
   ProgressRing,
+  ScreenBackground,
   SectionHeader,
 } from "../../components/ui";
 import { BudgetEditorSheet } from "../../features/budgets/BudgetEditorSheet";
@@ -139,10 +141,11 @@ export default function BudgetsScreen() {
       ? theme.colors.expense
       : plan?.state === "warning"
         ? theme.colors.warning
-        : theme.colors.accentAlt;
+        : theme.colors.accent;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <ScreenBackground />
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={{
@@ -150,7 +153,7 @@ export default function BudgetsScreen() {
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
           }}
         >
-          <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
+          <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary, marginTop: 8 }]}>
             {data ? `${PERIOD_LABELS[data.period]} · ${data.currency}` : "Budgets"}
           </Text>
           <View
@@ -173,18 +176,21 @@ export default function BudgetsScreen() {
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 6,
-                height: 36,
+                height: 34,
                 paddingHorizontal: 14,
-                borderRadius: 18,
+                borderRadius: 17,
+                // Hairline surface, like the month pill on Overview: a muted fill
+                // on the paper canvas washed out to nothing.
                 backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                opacity: pressed ? 0.7 : 1,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: theme.colors.cardBorder,
+                opacity: pressed ? 0.65 : 1,
               })}
             >
               <Text style={[theme.text.label, { color: theme.colors.textSecondary }]}>
-                {`${PERIOD_LABELS[data?.period ?? "monthly"]} ⌄`}
+                {PERIOD_LABELS[data?.period ?? "monthly"]}
               </Text>
+              <AppIcon name="chevronDown" color={theme.colors.textTertiary} size={14} />
             </Pressable>
           </View>
 
@@ -200,10 +206,7 @@ export default function BudgetsScreen() {
             </View>
           ) : (
             <>
-              <Card
-                variant="ink"
-                style={{ marginTop: 14, borderRadius: theme.radius.hero, padding: 20 }}
-              >
+              <Card style={{ marginTop: 16, padding: 18 }}>
                 {plan?.overallLimitMinor != null ? (
                   <>
                     <View
@@ -211,18 +214,18 @@ export default function BudgetsScreen() {
                     >
                       <View style={{ flex: 1, gap: 6 }}>
                         <Text
-                          style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}
+                          style={[theme.text.eyebrow, { color: theme.colors.textSecondary }]}
                         >
                           Overall budget
                         </Text>
                         <Money
                           minor={plan.overallLimitMinor}
                           currency={data.currency}
-                          tone="onInk"
+                          tone="default"
                           size="total"
                         />
                         <Text
-                          style={[theme.text.caption, { color: theme.colors.onInkMuted }]}
+                          style={[theme.text.caption, { color: theme.colors.textSecondary }]}
                         >
                           {`${formatMoney(plan.spentMinor, data.currency)} spent · ${formatMoney(
                             plan.remainingMinor ?? 0,
@@ -231,7 +234,7 @@ export default function BudgetsScreen() {
                         </Text>
                       </View>
                       <ProgressRing value={plan.progress} color={ringColor}>
-                        <Text style={[theme.text.label, { color: theme.colors.onInk }]}>
+                        <Text style={[theme.text.label, { color: theme.colors.textPrimary }]}>
                           {`${pct}%`}
                         </Text>
                       </ProgressRing>
@@ -241,7 +244,7 @@ export default function BudgetsScreen() {
                         value={plan.progress}
                         state={plan.state === "ok" ? "normal" : plan.state}
                         color={ringColor}
-                        trackColor={theme.colors.inkTrack}
+                        trackColor={theme.colors.surfaceSunken}
                       />
                     </View>
                     <Pressable
@@ -255,35 +258,35 @@ export default function BudgetsScreen() {
                         opacity: pressed ? 0.6 : 1,
                       })}
                     >
-                      <Text style={[theme.text.label, { color: theme.colors.accentAlt }]}>
+                      <Text style={[theme.text.label, { color: theme.colors.accent }]}>
                         Edit overall limit
                       </Text>
                     </Pressable>
                   </>
                 ) : (
                   <>
-                    <Text style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}>
+                    <Text style={[theme.text.eyebrow, { color: theme.colors.textSecondary }]}>
                       Overall budget
                     </Text>
                     <Text
-                      style={[theme.text.title2, { color: theme.colors.onInk, marginTop: 6 }]}
+                      style={[theme.text.title2, { color: theme.colors.textPrimary, marginTop: 6 }]}
                     >
                       No overall limit yet
                     </Text>
                     <Text
                       style={[
                         theme.text.body,
-                        { color: theme.colors.onInkMuted, marginTop: 6, maxWidth: 280 },
+                        { color: theme.colors.textSecondary, marginTop: 6, maxWidth: 280 },
                       ]}
                     >
                       One number for everything you spend. Overview turns it into what is
                       safe to spend today.
                     </Text>
-                    <View style={{ marginTop: 14 }}>
+                    <View style={{ marginTop: 16, alignSelf: "flex-start" }}>
                       <Button
                         label="Set overall limit"
-                        variant="accent"
                         size="sm"
+                        fullWidth={false}
                         onPress={openOverall}
                       />
                     </View>
@@ -382,28 +385,37 @@ export default function BudgetsScreen() {
                   })}
                 </Card>
               ) : (
-                <Text
-                  style={[
-                    theme.text.body,
-                    {
-                      color: theme.colors.textSecondary,
-                      paddingVertical: 6,
-                      paddingHorizontal: 4,
-                    },
-                  ]}
-                >
-                  No category limits yet. Add one and it appears on Overview.
-                </Text>
+                // Body copy sitting bare on the canvas, with the action floating
+                // underneath it, was the one block on this screen that did not
+                // match the card language everywhere else.
+                <Card style={{ padding: 16 }}>
+                  <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+                    No category limits yet. Add one and it appears on Overview.
+                  </Text>
+                  <View style={{ marginTop: 12, alignSelf: "flex-start" }}>
+                    <Button
+                      label="Add a category limit"
+                      variant="ghost"
+                      size="sm"
+                      fullWidth={false}
+                      disabled={availableCategories.length === 0}
+                      onPress={() => setPicking(true)}
+                    />
+                  </View>
+                </Card>
               )}
 
-              <Button
-                label="Set a category limit"
-                variant="ghost"
-                size="sm"
-                disabled={availableCategories.length === 0}
-                onPress={() => setPicking(true)}
-                style={{ marginTop: 10 }}
-              />
+              {rows.length ? (
+                <Button
+                  label="Set a category limit"
+                  variant="ghost"
+                  size="sm"
+                  fullWidth={false}
+                  disabled={availableCategories.length === 0}
+                  onPress={() => setPicking(true)}
+                  style={{ marginTop: 10, alignSelf: "flex-start" }}
+                />
+              ) : null}
 
               {plan?.previousCurrencyBudgets.length ? (
                 <>

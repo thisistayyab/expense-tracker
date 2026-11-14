@@ -88,14 +88,14 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Country"
             value={country.name}
-            glyph="◎"
+            icon="globe"
             tone="sky"
             onPress={() => router.push("/settings/region")}
           />
           <SettingsRow
             label="Currency"
             value={currencyLabel(currency)}
-            glyph="$"
+            icon="currency"
             tone="mint"
             showDivider
             onPress={() => router.push("/settings/region")}
@@ -103,7 +103,7 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Appearance"
             value={appearance}
-            glyph="◐"
+            icon="appearance"
             tone="iris"
             showDivider
             onPress={() => router.push("/settings/appearance")}
@@ -115,14 +115,14 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Categories"
             value={String(data.categories)}
-            glyph="▤"
+            icon="categories"
             tone="amber"
             onPress={() => router.push("/settings/categories")}
           />
           <SettingsRow
             label="Accounts"
             value={String(data.accounts)}
-            glyph="◫"
+            icon="accounts"
             tone="sky"
             showDivider
             onPress={() => router.push("/settings/accounts")}
@@ -130,7 +130,7 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Recurring"
             value={String(data.recurring)}
-            glyph="↻"
+            icon="recurring"
             tone="mint"
             showDivider
             onPress={() => router.push("/settings/recurring")}
@@ -142,21 +142,21 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Export CSV"
             value="Share"
-            glyph="↗"
+            icon="export"
             tone="iris"
             onPress={() => router.push({ pathname: "/settings/data", params: { action: "csv" } })}
           />
           <SettingsRow
             label="Backup (JSON)"
             value="Save file"
-            glyph="↓"
+            icon="download"
             tone="sky"
             showDivider
             onPress={() => router.push({ pathname: "/settings/data", params: { action: "backup" } })}
           />
           <SettingsRow
             label="Restore from backup"
-            glyph="↑"
+            icon="upload"
             tone="slate"
             showDivider
             onPress={() => router.push({ pathname: "/settings/data", params: { action: "restore" } })}
@@ -164,7 +164,7 @@ export default function SettingsScreen() {
           <SettingsRow
             label="App lock"
             value={data.appLock ? "On" : "Off"}
-            glyph="⌾"
+            icon="lock"
             tone="coral"
             showDivider
             onPress={() => router.push("/settings/security")}
@@ -191,14 +191,14 @@ export default function SettingsScreen() {
           <SettingsRow
             label="About Suffice"
             value={`v${version}`}
-            glyph="i"
+            icon="info"
             tone="slate"
             onPress={() => router.push("/settings/about")}
           />
           <SettingsRow
             label="Privacy"
             value="Local only"
-            glyph="◈"
+            icon="shield"
             tone="slate"
             showDivider
             onPress={() => router.push("/settings/privacy")}

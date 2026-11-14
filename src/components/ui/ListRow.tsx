@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useTheme } from "../../lib/theme";
+import { AppIcon } from "./AppIcon";
 
 export type ListRowProps = {
   title: string;
@@ -10,6 +11,7 @@ export type ListRowProps = {
   trailing?: ReactNode;
   onPress?: () => void;
   showDivider?: boolean;
+  showChevron?: boolean;
   accessibilityLabel?: string;
 };
 
@@ -20,9 +22,11 @@ export function ListRow({
   trailing,
   onPress,
   showDivider = false,
+  showChevron,
   accessibilityLabel,
 }: ListRowProps) {
   const { theme } = useTheme();
+  const chevron = showChevron ?? Boolean(onPress);
 
   return (
     <Pressable
@@ -35,17 +39,20 @@ export function ListRow({
         showDivider
           ? { borderTopWidth: StyleSheet.hairlineWidth * 2, borderTopColor: theme.colors.border }
           : null,
-        pressed && onPress ? { opacity: 0.62 } : null,
+        pressed && onPress ? { backgroundColor: theme.colors.surfaceMuted } : null,
       ]}
     >
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.content}>
-        <Text style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+        <Text
+          style={[theme.text.body, { color: theme.colors.textPrimary, fontWeight: "500" }]}
+          numberOfLines={1}
+        >
           {title}
         </Text>
         {subtitle ? (
           <Text
-            style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}
+            style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 1 }]}
             numberOfLines={1}
           >
             {subtitle}
@@ -53,17 +60,23 @@ export function ListRow({
         ) : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
+      {chevron ? (
+        <View style={{ marginLeft: trailing ? 2 : 4 }}>
+          <AppIcon name="chevronRight" color={theme.colors.textTertiary} size={15} />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 52,
+    minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   leading: {
     flexShrink: 0,

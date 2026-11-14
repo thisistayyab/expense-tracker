@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { FlatList, Text, View } from "react-native";
 
 import { useTheme } from "../../lib/theme";
+import { AppIcon } from "./AppIcon";
 import { ListRow } from "./ListRow";
 import { Sheet } from "./Sheet";
 import { TextField } from "./TextField";
@@ -89,7 +90,7 @@ export function PickerSheet({
               }
               trailing={
                 item.value === selected ? (
-                  <Text style={[theme.text.title3, { color: theme.colors.accent }]}>✓</Text>
+                  <AppIcon name="check" color={theme.colors.accent} size={16} />
                 ) : undefined
               }
             />

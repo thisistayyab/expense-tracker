@@ -1,12 +1,14 @@
 import { Pressable, Text, View } from "react-native";
 
-import { CategoryTile } from "../../components/ui";
+import { AppIcon } from "../../components/ui/AppIcon";
+import { SettingsIcon, type SettingsIconName } from "../../components/ui/SettingsIcon";
 import { useTheme, type ToneName } from "../../lib/theme";
 
 export type SettingsRowProps = {
   label: string;
   value?: string;
-  glyph: string;
+  glyph?: string;
+  icon?: SettingsIconName;
   tone?: ToneName;
   onPress?: () => void;
   showDivider?: boolean;
@@ -18,6 +20,7 @@ export function SettingsRow({
   label,
   value,
   glyph,
+  icon,
   tone = "slate",
   onPress,
   showDivider = false,
@@ -32,17 +35,32 @@ export function SettingsRow({
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={value ? `${label}, ${value}` : label}
       style={({ pressed }) => ({
-        minHeight: 56,
+        minHeight: 54,
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
         paddingHorizontal: 16,
         borderTopWidth: showDivider ? 1 : 0,
         borderTopColor: theme.colors.border,
-        opacity: pressed && onPress ? 0.62 : 1,
+        backgroundColor: pressed && onPress ? theme.colors.surfaceMuted : "transparent",
       })}
     >
-      <CategoryTile glyph={glyph} color={theme.tones[tone].foreground} size={30} />
+      <View
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 9,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: theme.tones[tone].foreground,
+        }}
+      >
+        {icon ? (
+          <SettingsIcon name={icon} color="#FFFFFF" size={17} />
+        ) : (
+          <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "600" }}>{glyph}</Text>
+        )}
+      </View>
       <Text
         style={[
           theme.text.body,
@@ -54,14 +72,14 @@ export function SettingsRow({
       </Text>
       {value ? (
         <Text
-          style={[theme.text.caption, { color: theme.colors.textSecondary }]}
+          style={[theme.text.label, { color: theme.colors.textSecondary, fontWeight: "400" }]}
           numberOfLines={1}
         >
           {value}
         </Text>
       ) : null}
       {onPress ? (
-        <Text style={[theme.text.body, { color: theme.colors.textTertiary }]}>›</Text>
+        <AppIcon name="chevronRight" color={theme.colors.textTertiary} size={15} />
       ) : (
         <View style={{ width: 6 }} />
       )}

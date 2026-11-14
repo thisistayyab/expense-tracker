@@ -12,7 +12,8 @@
     "ios": {
       "bundleIdentifier": "com.suffice.money",
       "buildNumber": "1",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {}
     },
     "android": {
       "package": "com.suffice.money",
@@ -22,7 +23,11 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "output": "server",
@@ -60,6 +65,17 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "d8f9c677-b58a-446c-a95d-c26d01dac708"
+      }
+    },
+    "owner": "thisistayyabs-team"
   }
 }

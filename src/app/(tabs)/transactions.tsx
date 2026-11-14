@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
-  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -15,8 +14,14 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { TAB_BAR_CLEARANCE } from "../../components/navigation/FloatingTabBar";
-import { ChoiceChip, EmptyState, PickerSheet } from "../../components/ui";
+import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
+import {
+  AppIcon,
+  ChoiceChip,
+  EmptyState,
+  PickerSheet,
+  ScreenBackground,
+} from "../../components/ui";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
 import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
@@ -84,7 +89,7 @@ function DayHeader({
     <View
       style={{
         backgroundColor: theme.colors.bg,
-        paddingHorizontal: 24,
+        paddingHorizontal: 36,
         paddingTop: 16,
         paddingBottom: 6,
         flexDirection: "row",
@@ -126,17 +131,15 @@ function SearchBar({
           height: 46,
           borderRadius: 23,
           backgroundColor: theme.colors.surface,
-          borderWidth: 1,
-          borderColor: theme.colors.cardBorder === "transparent" ? theme.colors.border : theme.colors.cardBorder,
           flexDirection: "row",
           alignItems: "center",
-          paddingHorizontal: 15,
+          paddingHorizontal: 16,
           gap: 9,
         },
-        theme.shadow.card,
+        theme.shadow.chip,
       ]}
     >
-      <Text style={[theme.text.body, { color: theme.colors.textTertiary, fontSize: 19 }]}>⌕</Text>
+      <AppIcon name="search" color={theme.colors.textTertiary} size={18} />
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -155,16 +158,16 @@ function SearchBar({
           accessibilityLabel="Clear search"
           hitSlop={8}
           style={({ pressed }) => ({
-            width: 30,
-            height: 30,
-            borderRadius: 15,
+            width: 22,
+            height: 22,
+            borderRadius: 11,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: theme.colors.surfaceSunken,
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>✕</Text>
+          <AppIcon name="close" color={theme.colors.textSecondary} size={13} />
         </Pressable>
       ) : null}
     </View>
@@ -512,8 +515,9 @@ export default function ActivityScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <ScreenBackground />
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
-        <View style={{ paddingHorizontal: 20, paddingTop: 4 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
           <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
             {monthLabel}
           </Text>
@@ -529,6 +533,9 @@ export default function ActivityScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            // A ScrollView grows in the cross axis by default; without this the
+            // chip strip eats the height the transaction list needs.
+            style={{ flexGrow: 0 }}
             contentContainerStyle={{ gap: 8, paddingVertical: 12, paddingRight: 4 }}
           >
             <ChoiceChip
@@ -553,9 +560,11 @@ export default function ActivityScreen() {
               tone="accent"
               onPress={openFilters}
               leading={
-                <Text style={{ color: filterCount ? theme.colors.accent : theme.colors.textSecondary }}>
-                  ⚙
-                </Text>
+                <AppIcon
+                  name="settings"
+                  color={filterCount ? theme.colors.accent : theme.colors.textSecondary}
+                  size={15}
+                />
               }
             />
           </ScrollView>
@@ -577,7 +586,9 @@ export default function ActivityScreen() {
           maxToRenderPerBatch={24}
           updateCellsBatchingPeriod={40}
           windowSize={9}
-          removeClippedSubviews={Platform.OS === "android"}
+          // Keep every cell mounted on Android: clipped swipeable cells can paint
+          // as empty rows after an edit or a scroll.
+          removeClippedSubviews={false}
           contentContainerStyle={{
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
             flexGrow: 1,
@@ -624,33 +635,6 @@ export default function ActivityScreen() {
           }
         />
       </SafeAreaView>
-
-      {hasAny ? (
-        <Pressable
-          onPress={() => router.push("/add")}
-          accessibilityRole="button"
-          accessibilityLabel="Add transaction"
-          style={({ pressed }) => [
-            {
-              position: "absolute",
-              right: 20,
-              bottom: insets.bottom + TAB_BAR_CLEARANCE,
-              width: 60,
-              height: 60,
-              borderRadius: 30,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: theme.colors.accent,
-              opacity: pressed ? 0.85 : 1,
-            },
-            theme.shadow.fab,
-          ]}
-        >
-          <Text style={{ color: theme.colors.accentFg, fontSize: 32, lineHeight: 34, fontWeight: "300" }}>
-            +
-          </Text>
-        </Pressable>
-      ) : null}
 
       {filterOpen ? (
         <FiltersSheet

@@ -3,6 +3,12 @@
 Visual specification for every v1 screen. Behavior and acceptance criteria live in
 `03-screens.md`; this file is about **composition, hierarchy and exact visual values**.
 
+> **Superseded visuals (14 November 2026).** The rendered mockups and the gradient / ink-glow
+> values below describe the P1–P6 look. The current interface follows `04-design-system.md`:
+> opaque system surfaces for content, translucent material only for the tab bar and sheets, the
+> iOS system palette, and no content gradients. Composition and hierarchy below still apply;
+> colour, radius and material values do not.
+
 ## Rendered mockups
 
 Source and output live in `designs/`:
@@ -243,7 +249,8 @@ grouped detail card → iris `Edit transaction` → coral text `Delete transacti
 **Composition:** title row with a `Nov 2026` soft pill → ink overall card with a **progress ring**
 → `CATEGORIES` card → ghost `Copy last month's budgets`.
 
-1. Title `Budgets` 31/700; month pill 32 tall, `surfaceMuted`, 12.5/600, opens the period picker.
+1. Title `Budgets` 31/700; period pill 34 tall, `surface` with a hairline `cardBorder` (a muted
+   fill washed out against the paper canvas), opens the period picker.
 2. Overall card (ink): eyebrow `SPENT THIS MONTH`, total 34/700 (−1.3), `of $3,200 · $770 left`
    at 13 in 55% white, and a 78 pt ring on the right — 7 px stroke, track at 14% white, progress in
    `accentAlt`, percentage centered at 15/700. Foot line `18 days left in November` at 12 in 50%
@@ -252,7 +259,9 @@ grouped detail card → iris `Edit transaction` → coral text `Delete transacti
    right-aligned (`danger` at ≥100%), 6 px bar in the category/threshold color, `$412 of $600`
    11.5 `text3` beneath. Rows without a budget show `Set limit` in accent with a dashed track.
 4. The card is one surface — rows are separated by hairlines, not individual cards.
-5. Ghost action 46 tall in accent; enabled only when last month has budgets.
+5. Overall budget with no limit: a filled glass `Set overall limit` pill at `size="sm"`, leading
+   aligned. Category limits with none set: the copy and a ghost `Add a category limit` live inside
+   one card, so no action floats bare on the canvas.
 
 Thresholds: primary (or category color) < 80%, `warning` 80–99%, `danger` ≥ 100% with a full bar.
 

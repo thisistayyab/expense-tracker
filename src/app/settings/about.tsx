@@ -42,7 +42,9 @@ export default function AboutScreen() {
 
       <SectionHeader title="Credits" />
       <Card style={{ gap: 6 }}>
-        <Text style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]}>Geist</Text>
+        <Text style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]}>
+          Urbanist
+        </Text>
         <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
           Typeface by Vercel, licensed under the SIL Open Font License 1.1. The licence ships in
           assets/fonts/OFL.txt.

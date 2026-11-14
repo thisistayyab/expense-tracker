@@ -1,17 +1,24 @@
 import { Redirect, Tabs } from "expo-router";
-import { Easing } from "react-native";
-import { useReducedMotion } from "react-native-reanimated";
+import { View } from "react-native";
 
 import { FloatingTabBar } from "../../components/navigation/FloatingTabBar";
 import { useOnboarding } from "../../lib/onboarding";
 
-/**
- * Four destinations, no more (01 navigation map). Headers are off: each screen
- * owns its own header so the floating bar can sit over the content.
- */
+const DESTINATIONS = [
+  { name: "overview", label: "Overview" },
+  { name: "transactions", label: "Activity" },
+  { name: "budget", label: "Budgets" },
+  { name: "insights", label: "Insights" },
+] as const;
+
+// Tab switches are deliberately instant, the way iOS tab bars behave. Each screen
+// paints its own full-bleed gradient canvas, so any page-level slide or fade moves
+// the background along with the content and reads as a panel sliding over the app —
+// and re-compositing that gradient every frame is exactly what made it stutter.
+// Motion lives in the chrome and the controls instead: the capsule, the selection
+// pill, the add button and every press.
 export default function TabsLayout() {
   const { onboarded } = useOnboarding();
-  const reduceMotion = useReducedMotion();
 
   // The flag can flip while this group is mounted (the dev reset), so the check
   // lives here rather than only at the entry route.
@@ -19,24 +26,23 @@ export default function TabsLayout() {
   if (onboarded === null) return null;
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: "transparent" },
-        // Cross-fade the scenes instead of swapping them in one frame. The
-        // floating bar stays put, so only the content changes.
-        animation: reduceMotion ? "none" : "fade",
-        transitionSpec: {
-          animation: "timing",
-          config: { duration: 180, easing: Easing.out(Easing.cubic) },
-        },
-      }}
-      tabBar={(props) => <FloatingTabBar {...props} />}
-    >
-      <Tabs.Screen name="overview" options={{ title: "Overview" }} />
-      <Tabs.Screen name="transactions" options={{ title: "Activity" }} />
-      <Tabs.Screen name="budget" options={{ title: "Budgets" }} />
-      <Tabs.Screen name="insights" options={{ title: "Insights" }} />
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      <Tabs
+        tabBar={() => null}
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: "transparent" },
+        }}
+      >
+        {DESTINATIONS.map((destination) => (
+          <Tabs.Screen
+            key={destination.name}
+            name={destination.name}
+            options={{ title: destination.label }}
+          />
+        ))}
+      </Tabs>
+      <FloatingTabBar />
+    </View>
   );
 }

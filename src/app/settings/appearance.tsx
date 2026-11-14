@@ -2,7 +2,7 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
-import { Card, SectionHeader } from "../../components/ui";
+import { AppIcon, Card, SectionHeader } from "../../components/ui";
 import { setSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import type { Db } from "../../lib/db/types";
 import { haptics } from "../../lib/haptics";
@@ -10,8 +10,8 @@ import { useTheme, type ThemePreference } from "../../lib/theme";
 
 const OPTIONS: { value: ThemePreference; label: string; body: string }[] = [
   { value: "system", label: "System", body: "Follow the device's light or dark setting." },
-  { value: "light", label: "Light", body: "Warm paper canvas, white cards." },
-  { value: "dark", label: "Dark", body: "Deep ink canvas, outlined cards." },
+  { value: "light", label: "Light", body: "System grey background with white cards." },
+  { value: "dark", label: "Dark", body: "True black background with dark cards." },
 ];
 
 export default function AppearanceScreen() {
@@ -74,7 +74,7 @@ export default function AppearanceScreen() {
                 </Text>
               </View>
               {selected ? (
-                <Text style={[theme.text.title3, { color: theme.colors.accent }]}>✓</Text>
+                <AppIcon name="check" color={theme.colors.accent} size={17} />
               ) : null}
             </Pressable>
           );

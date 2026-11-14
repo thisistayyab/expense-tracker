@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 import { useTheme } from "../../lib/theme";
 
@@ -26,6 +28,19 @@ export function ProgressBar({ value, height = 6, state, color, trackColor }: Pro
   const resolvedState = state ?? progressStateFor(value);
   const clamped = Math.max(0, Math.min(value, 1));
 
+  const track = useSharedValue(0);
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    // Spring, not a timed ease: the fill arrives with a little momentum, so a
+    // budget that just changed feels like it moved rather than faded in.
+    progress.value = withSpring(clamped, { damping: 26, stiffness: 210, mass: 0.9 });
+  }, [clamped, progress]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: Math.max(0, progress.value * track.value),
+  }));
+
   const fill =
     color ??
     (resolvedState === "over"
@@ -38,6 +53,9 @@ export function ProgressBar({ value, height = 6, state, color, trackColor }: Pro
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}
+      onLayout={(event) => {
+        track.value = event.nativeEvent.layout.width;
+      }}
       style={{
         height,
         borderRadius: height,
@@ -45,13 +63,11 @@ export function ProgressBar({ value, height = 6, state, color, trackColor }: Pro
         overflow: "hidden",
       }}
     >
-      <View
-        style={{
-          width: `${clamped * 100}%`,
-          height: "100%",
-          borderRadius: height,
-          backgroundColor: fill,
-        }}
+      <Animated.View
+        style={[
+          { height: "100%", borderRadius: height, backgroundColor: fill },
+          fillStyle,
+        ]}
       />
     </View>
   );

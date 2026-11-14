@@ -4,8 +4,8 @@ import { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { TAB_BAR_CLEARANCE } from "../../components/navigation/FloatingTabBar";
-import { Card, EmptyState, Money, SectionHeader } from "../../components/ui";
+import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
+import { Card, EmptyState, Money, ScreenBackground, SectionHeader } from "../../components/ui";
 import { BreakdownBars } from "../../features/insights/BreakdownBars";
 import { InsightCard } from "../../features/insights/InsightCard";
 import { PeriodControl } from "../../features/insights/PeriodControl";
@@ -74,10 +74,12 @@ export default function InsightsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <ScreenBackground />
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={{
             padding: 20,
+            paddingTop: 10,
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
           }}
         >

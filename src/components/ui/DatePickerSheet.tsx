@@ -10,6 +10,7 @@ import {
   toIsoDate,
 } from "../../lib/domain/dates";
 import { useTheme } from "../../lib/theme";
+import { AppIcon } from "./AppIcon";
 import { Sheet } from "./Sheet";
 
 export type DatePickerSheetProps = {
@@ -144,11 +145,13 @@ export function DatePickerSheet({
               borderRadius: 18,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: theme.colors.surfaceSunken,
-              opacity: pressed ? 0.6 : 1,
+              borderWidth: 1,
+              borderColor: theme.colors.glassBorder,
+              backgroundColor: theme.colors.glassThin,
+              opacity: pressed ? 0.55 : 1,
             })}
           >
-            <Text style={[theme.text.title3, { color: theme.colors.textPrimary }]}>‹</Text>
+            <AppIcon name="chevronLeft" color={theme.colors.textPrimary} size={17} />
           </Pressable>
 
           <Text
@@ -169,11 +172,13 @@ export function DatePickerSheet({
               borderRadius: 18,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: theme.colors.surfaceSunken,
-              opacity: pressed ? 0.6 : 1,
+              borderWidth: 1,
+              borderColor: theme.colors.glassBorder,
+              backgroundColor: theme.colors.glassThin,
+              opacity: pressed ? 0.55 : 1,
             })}
           >
-            <Text style={[theme.text.title3, { color: theme.colors.textPrimary }]}>›</Text>
+            <AppIcon name="chevronRight" color={theme.colors.textPrimary} size={17} />
           </Pressable>
         </View>
 

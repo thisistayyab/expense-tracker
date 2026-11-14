@@ -181,11 +181,6 @@ export const TransactionRow = memo(function TransactionRow({
       containerStyle={{
         marginHorizontal: 20,
         backgroundColor: theme.colors.surface,
-        borderColor: theme.colors.border,
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
-        borderTopWidth: isFirst ? 1 : 0,
-        borderBottomWidth: isLast ? 1 : 0,
         borderTopLeftRadius: isFirst ? theme.radius.card : 0,
         borderTopRightRadius: isFirst ? theme.radius.card : 0,
         borderBottomLeftRadius: isLast ? theme.radius.card : 0,
@@ -207,13 +202,12 @@ export const TransactionRow = memo(function TransactionRow({
           gap: 12,
           borderTopWidth: isFirst ? 0 : 1,
           borderTopColor: theme.colors.border,
-          backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
+          backgroundColor: pressed ? theme.colors.surfaceMuted : "transparent",
         })}
       >
         <CategoryTile
-          icon={transaction.type === "transfer" ? "ellipsis" : category?.icon}
+          icon={transaction.type === "transfer" ? "transfer" : category?.icon}
           color={transaction.type === "transfer" ? theme.colors.transfer : category?.color}
-          glyph={transaction.type === "transfer" ? "⇄" : undefined}
         />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
@@ -226,7 +220,7 @@ export const TransactionRow = memo(function TransactionRow({
             numberOfLines={1}
             style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}
           >
-            {hasNote ? "✎ " : null}
+            {hasNote ? "Note · " : null}
             {subtitle}
           </Text>
         </View>

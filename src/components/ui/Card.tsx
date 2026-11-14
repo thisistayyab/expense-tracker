@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { View, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { useTheme } from "../../lib/theme";
 
@@ -11,8 +11,10 @@ export type CardProps = {
 };
 
 /**
- * One card surface. In dark mode shadows vanish into the canvas, so every card
- * also carries the 1 px `cardBorder` outline (transparent in light mode).
+ * A flat block with a hairline edge: no drop shadow at all. A shadow on every
+ * white card is what makes a screen read as a template — depth here comes from the
+ * warm canvas around the card and from glass chrome above it, so the only lift in
+ * the app is the floating bar, the sheets and the hero.
  */
 export function Card({ children, variant = "surface", padded = true, style }: CardProps) {
   const { theme } = useTheme();
@@ -30,12 +32,11 @@ export function Card({ children, variant = "surface", padded = true, style }: Ca
         {
           backgroundColor,
           borderRadius: theme.radius.card,
-          borderWidth: 1,
-          borderColor: theme.colors.cardBorder,
-          padding: padded ? 18 : 0,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: variant === "ink" ? "rgba(255,255,255,0.10)" : theme.colors.cardBorder,
+          padding: padded ? 16 : 0,
           overflow: "hidden",
         },
-        variant === "ink" ? theme.shadow.lift : theme.shadow.card,
         style,
       ]}
     >

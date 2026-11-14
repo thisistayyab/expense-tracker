@@ -3,7 +3,7 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
-import { CategoryTile, EmptyState, Money, SectionHeader } from "../../components/ui";
+import { AppIcon, CategoryTile, EmptyState, Money, SectionHeader } from "../../components/ui";
 import { AccountEditorSheet } from "../../features/accounts/AccountEditorSheet";
 import {
   accountGlyph,
@@ -185,7 +185,7 @@ export default function AccountsScreen() {
                     currency={account.currency}
                     tone={account.balanceMinor < 0 ? "danger" : "default"}
                   />
-                  <Text style={{ color: theme.colors.textTertiary }}>›</Text>
+                  <AppIcon name="chevronRight" color={theme.colors.textTertiary} size={15} />
                 </Pressable>
               ))}
             </View>

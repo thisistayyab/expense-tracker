@@ -94,7 +94,7 @@ export function Sheet({
     320,
     keyboardVisible
       ? windowHeight - keyboardHeight - insets.top - 8
-      : windowHeight * 0.86,
+      : windowHeight * 0.88,
   );
 
   const sheet = (
@@ -103,21 +103,24 @@ export function Sheet({
         styles.sheet,
         {
           maxHeight: availableHeight,
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.cardBorder,
+          backgroundColor: theme.colors.sheet,
           paddingBottom: keyboardVisible ? 16 : insets.bottom + 16,
         },
         animatedStyle,
       ]}
     >
       <View style={styles.grabberRow}>
-        <View style={[styles.grabber, { backgroundColor: theme.colors.surfaceSunken }]} />
+        <View style={[styles.grabber, { backgroundColor: theme.colors.textTertiary }]} />
       </View>
       {title ? (
         <Text
           style={[
             theme.text.title2,
-            { color: theme.colors.textPrimary, paddingHorizontal: 20, paddingBottom: 12 },
+            {
+              color: theme.colors.textPrimary,
+              paddingHorizontal: 22,
+              paddingBottom: 14,
+            },
           ]}
         >
           {title}
@@ -160,18 +163,24 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    borderWidth: 1,
-    paddingTop: 8,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    borderWidth: 0,
+    paddingTop: 6,
+    shadowColor: "#000000",
+    shadowOpacity: 0.14,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 16,
   },
   grabberRow: {
     alignItems: "center",
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
   grabber: {
     width: 36,
     height: 5,
     borderRadius: 3,
+    opacity: 0.35,
   },
 });

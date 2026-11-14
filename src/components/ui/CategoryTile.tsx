@@ -1,10 +1,11 @@
 import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { useTheme } from "../../lib/theme";
+import { CategoryIcon } from "./CategoryIcon";
 
 /**
- * Semantic icon keys live in the category table. Until the v1 icon set lands,
- * these are text glyphs in a tinted tile (the same shortcut the P2 docs note).
+ * Semantic icon keys live in the category table. The tile draws the stroke set
+ * in `CategoryIcon`; `glyph` remains for the few callers that pass a symbol.
  */
 export const CATEGORY_ICON_KEYS = [
   "utensils",
@@ -24,26 +25,8 @@ export const CATEGORY_ICON_KEYS = [
   "plus",
 ] as const;
 
-const GLYPHS: Record<string, string> = {
-  utensils: "🍴",
-  cart: "🛒",
-  car: "🚗",
-  home: "⌂",
-  bag: "🛍",
-  receipt: "▤",
-  heart: "♥",
-  sparkles: "✦",
-  book: "▭",
-  plane: "✈",
-  gift: "🎁",
-  wallet: "◫",
-  briefcase: "▣",
-  ellipsis: "⋯",
-  plus: "＋",
-};
-
 export function categoryGlyph(icon: string | null | undefined): string {
-  return icon ? (GLYPHS[icon] ?? "•") : "•";
+  return icon ?? "•";
 }
 
 function tint(color: string | null | undefined, fallback: string): string {
@@ -79,15 +62,19 @@ export function CategoryTile({ icon, color, size = 42, glyph, style }: CategoryT
         style,
       ]}
     >
-      <Text
-        style={{
-          color: foreground,
-          fontSize: Math.round(size * 0.43),
-          lineHeight: Math.round(size * 0.55),
-        }}
-      >
-        {glyph ?? categoryGlyph(icon)}
-      </Text>
+      {glyph ? (
+        <Text
+          style={{
+            color: foreground,
+            fontSize: Math.round(size * 0.43),
+            lineHeight: Math.round(size * 0.55),
+          }}
+        >
+          {glyph}
+        </Text>
+      ) : (
+        <CategoryIcon name={icon} color={foreground} size={Math.round(size * 0.5)} />
+      )}
     </View>
   );
 }

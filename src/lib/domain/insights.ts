@@ -140,6 +140,7 @@ export function buildBreakdown(
   spend: readonly SpendRow[],
   categories: readonly Category[],
   totalMinor: number,
+  limit = MAX_BREAKDOWN_ROWS,
 ): BreakdownRow[] {
   const byId = new Map(categories.map((category) => [category.id, category]));
   const total = Math.max(0, totalMinor);
@@ -163,10 +164,13 @@ export function buildBreakdown(
       return left.name.localeCompare(right.name);
     });
 
+  // Overview asks for a shorter list than Insights; both collapse the tail into
+  // "Other" rather than dropping it, so the bars always add up to the total.
+  const maxRows = Math.max(2, Math.trunc(limit));
   let visible = rows;
-  if (rows.length > MAX_BREAKDOWN_ROWS) {
-    const head = rows.slice(0, MAX_BREAKDOWN_ROWS - 1);
-    const tail = rows.slice(MAX_BREAKDOWN_ROWS - 1);
+  if (rows.length > maxRows) {
+    const head = rows.slice(0, maxRows - 1);
+    const tail = rows.slice(maxRows - 1);
     visible = [
       ...head,
       {

@@ -169,7 +169,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontError) {
-      console.warn("[fonts] Geist failed to load, continuing with the system face", fontError);
+      console.warn(
+        "[fonts] Urbanist failed to load, continuing with the system face",
+        fontError,
+      );
     }
   }, [fontError]);
 

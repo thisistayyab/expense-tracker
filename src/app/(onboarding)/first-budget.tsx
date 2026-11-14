@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Button } from "../../components/ui";
+import { AppIcon, Button } from "../../components/ui";
 import { getCurrency, isCurrencyCode } from "../../constants/currencies";
 import { toIsoDate } from "../../lib/domain/dates";
 import {
@@ -97,7 +97,7 @@ export default function FirstBudgetScreen() {
                 hitSlop={12}
                 style={{ width: 34, height: 34, justifyContent: "center" }}
               >
-                <Text style={[theme.text.title2, { color: theme.colors.textTertiary }]}>‹</Text>
+                <AppIcon name="chevronLeft" color={theme.colors.textTertiary} size={22} />
               </Pressable>
               <View style={{ flex: 1 }}>
                 <Pager active={2} total={3} />

@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 
-import { Button, DatePickerSheet, FieldRow, PickerSheet, Sheet } from "../../components/ui";
+import { AppIcon, Button, DatePickerSheet, FieldRow, PickerSheet, Sheet } from "../../components/ui";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
 import { getAllSettings, SETTING_KEYS, setSettings } from "../../lib/db/repos/settings";
@@ -98,7 +98,7 @@ export function AddTransactionSheet({
   const { fontScale } = useWindowDimensions();
   const db: Db = useSQLiteContext();
   const today = useMemo(() => toIsoDate(new Date()), []);
-  const amountLineHeight = Math.ceil(58 * Math.min(fontScale, 1.3));
+  const amountLineHeight = Math.ceil(52 * Math.min(fontScale, 1.3));
 
   const [type, setType] = useState<TransactionType>(
     existing?.type ?? initialType ?? "expense",
@@ -379,14 +379,15 @@ export function AddTransactionSheet({
         minHeight: 50,
         paddingVertical: 6,
         borderRadius: 18,
-        backgroundColor: theme.colors.surfaceSunken,
+        backgroundColor: theme.colors.glassThin,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
         flexDirection: "row",
         alignItems: "center",
         gap: 9,
         paddingHorizontal: 14,
       }}
     >
-      <Text style={[theme.text.body, { color: theme.colors.textTertiary }]}>✎</Text>
       <TextInput
         value={itemName}
         onChangeText={(value) => setItemName(value.slice(0, MAX_NAME))}
@@ -409,7 +410,7 @@ export function AddTransactionSheet({
           accessibilityLabel="Clear item name"
           style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
         >
-          <Text style={[theme.text.body, { color: theme.colors.textTertiary }]}>✕</Text>
+          <AppIcon name="close" color={theme.colors.textTertiary} size={14} />
         </Pressable>
       ) : null}
     </View>
@@ -432,18 +433,22 @@ export function AddTransactionSheet({
                 borderRadius: 19,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: theme.colors.surfaceSunken,
-                opacity: pressed ? 0.6 : 1,
+                borderWidth: 1,
+                borderColor: theme.colors.glassBorder,
+                backgroundColor: theme.colors.glassThin,
+                opacity: pressed ? 0.55 : 1,
               })}
             >
-              <Text style={[theme.text.body, { color: theme.colors.textPrimary }]}>✕</Text>
+              <AppIcon name="close" color={theme.colors.textPrimary} size={16} />
             </Pressable>
 
             <View
               style={{
                 flex: 1,
                 flexDirection: "row",
-                backgroundColor: theme.colors.surfaceSunken,
+                backgroundColor: theme.colors.glassThin,
+                borderWidth: 1,
+                borderColor: theme.colors.glassBorder,
                 borderRadius: 19,
                 padding: 3,
                 opacity: existing ? 0.55 : 1,
@@ -467,7 +472,7 @@ export function AddTransactionSheet({
                       borderRadius: 16,
                       alignItems: "center",
                       justifyContent: "center",
-                      backgroundColor: active ? theme.colors.solid : "transparent",
+                      backgroundColor: active ? theme.colors.accentSoft : "transparent",
                     }}
                   >
                     <Text
@@ -476,7 +481,7 @@ export function AddTransactionSheet({
                       style={[
                         theme.text.caption,
                         {
-                          color: active ? theme.colors.solidFg : theme.colors.textSecondary,
+                          color: active ? theme.colors.accent : theme.colors.textSecondary,
                           fontWeight: "600",
                         },
                       ]}
@@ -526,10 +531,10 @@ export function AddTransactionSheet({
             style={{
               width: "100%",
               textAlign: "center",
-              fontSize: 54,
+              fontSize: 48,
               lineHeight: amountLineHeight,
               fontWeight: "700",
-              letterSpacing: -2.2,
+              letterSpacing: -1.6,
               fontVariant: ["tabular-nums"],
               paddingVertical: 0,
               color:
@@ -571,7 +576,9 @@ export function AddTransactionSheet({
                       paddingHorizontal: 14,
                       borderRadius: 17,
                       justifyContent: "center",
-                      backgroundColor: active ? theme.colors.solid : theme.colors.surfaceSunken,
+                      borderWidth: 1,
+                      borderColor: active ? "transparent" : theme.colors.glassBorder,
+                      backgroundColor: active ? theme.colors.accentSoft : theme.colors.glassThin,
                     }}
                   >
                     <Text
@@ -579,7 +586,7 @@ export function AddTransactionSheet({
                         theme.text.caption,
                         {
                           fontWeight: "600",
-                          color: active ? theme.colors.solidFg : theme.colors.textSecondary,
+                          color: active ? theme.colors.accent : theme.colors.textSecondary,
                         },
                       ]}
                     >
@@ -599,7 +606,9 @@ export function AddTransactionSheet({
                   paddingHorizontal: 14,
                   borderRadius: 17,
                   justifyContent: "center",
-                  backgroundColor: theme.colors.surfaceSunken,
+                  borderWidth: 1,
+                  borderColor: theme.colors.glassBorder,
+                  backgroundColor: theme.colors.glassThin,
                 }}
               >
                 <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>

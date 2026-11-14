@@ -20,9 +20,9 @@ export function PeriodControl({
   return (
     <View
       style={{
-        marginTop: 14,
-        padding: 3,
-        borderRadius: 18,
+        marginTop: 16,
+        padding: 2,
+        borderRadius: 9,
         backgroundColor: theme.colors.surfaceMuted,
       }}
     >
@@ -45,11 +45,12 @@ export function PeriodControl({
                 minHeight: 32,
                 paddingVertical: 4,
                 paddingHorizontal: 10,
-                borderRadius: 15,
+                borderRadius: 7,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: selected ? theme.colors.solid : "transparent",
-                opacity: pressed && !selected ? 0.6 : 1,
+                backgroundColor: selected ? theme.colors.surface : "transparent",
+                ...(selected ? theme.shadow.glass : null),
+                opacity: pressed && !selected ? 0.55 : 1,
               })}
             >
               <Text
@@ -58,7 +59,7 @@ export function PeriodControl({
                   theme.text.caption,
                   {
                     fontWeight: "600",
-                    color: selected ? theme.colors.solidFg : theme.colors.textSecondary,
+                    color: selected ? theme.colors.textPrimary : theme.colors.textSecondary,
                   },
                 ]}
               >

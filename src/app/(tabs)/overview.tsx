@@ -1,11 +1,12 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { TAB_BAR_CLEARANCE } from "../../components/navigation/FloatingTabBar";
+import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
 import {
+  AppIcon,
   Button,
   Card,
   CategoryTile,
@@ -13,10 +14,14 @@ import {
   Money,
   MonthSelector,
   ProgressBar,
+  ScreenBackground,
   SectionHeader,
 } from "../../components/ui";
+import { TactilePressable } from "../../components/ui/TactilePressable";
 import { useBudgetPlan } from "../../features/budgets/useBudgetPlan";
 import { SafeToSpendSheet } from "../../features/overview/SafeToSpendSheet";
+import { SpendBars } from "../../features/overview/SpendBars";
+import { useOverviewAnalytics } from "../../features/overview/useOverviewAnalytics";
 import { BillsDueCard } from "../../features/recurring/BillsDueCard";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
@@ -114,6 +119,11 @@ export default function OverviewScreen() {
   const today = toIsoDate(new Date());
   const [monthOffset, setMonthOffset] = useState(0);
   const { data, loading, error, refresh } = useBudgetPlan({ monthOffset });
+  const {
+    data: analytics,
+    error: analyticsError,
+    refresh: refreshAnalytics,
+  } = useOverviewAnalytics(data?.currency ?? null, monthOffset);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [count, setCount] = useState<number | null>(null);
@@ -129,8 +139,9 @@ export default function OverviewScreen() {
         return undefined;
       }
       refresh();
+      refreshAnalytics();
       return undefined;
-    }, [refresh]),
+    }, [refresh, refreshAnalytics]),
   );
 
   useEffect(() => {
@@ -170,7 +181,7 @@ export default function OverviewScreen() {
       ? theme.colors.expense
       : plan?.state === "warning"
         ? theme.colors.warning
-        : theme.colors.accentAlt;
+        : theme.colors.accent;
 
   const otherCurrencies = data?.otherCurrency ?? [];
   const otherTotal = otherCurrencies.reduce((sum, row) => sum + row.count, 0);
@@ -211,6 +222,7 @@ export default function OverviewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <ScreenBackground />
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={{
@@ -235,29 +247,43 @@ export default function OverviewScreen() {
                 canGoPrevious={data.canGoPrevious}
                 canGoNext={data.canGoNext}
               />
-            ) : (
+            ) : data ? (
+              // While the plan is loading there is nothing meaningful to label, and
+              // printing "Overview" here duplicated the page title underneath it.
               <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
-                {data?.label ?? "Overview"}
+                {data.label}
               </Text>
-            )}
-            <Pressable
+            ) : null}
+            <TactilePressable
               onPress={() => router.push("/settings")}
               accessibilityRole="button"
               accessibilityLabel="Settings"
               hitSlop={8}
-              style={({ pressed }) => ({
-                width: 38,
-                height: 38,
-                borderRadius: 19,
+              haptic="selection"
+              scaleTo={0.9}
+              radius={18}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
                 alignItems: "center",
                 justifyContent: "center",
+                marginRight: -4,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: theme.colors.cardBorder,
                 backgroundColor: theme.colors.surface,
-                opacity: pressed ? 0.6 : 1,
-              })}
+              }}
             >
-              <Text style={[theme.text.title3, { color: theme.colors.textPrimary }]}>⚙</Text>
-            </Pressable>
+              <AppIcon name="settings" color={theme.colors.textPrimary} size={18} />
+            </TactilePressable>
           </View>
+
+          <Text
+            accessibilityRole="header"
+            style={[theme.text.title1, { color: theme.colors.textPrimary, marginTop: 16 }]}
+          >
+            Overview
+          </Text>
 
           {error ? (
             <Text style={[theme.text.caption, { color: theme.colors.danger, marginTop: 10 }]}>
@@ -290,14 +316,7 @@ export default function OverviewScreen() {
                 }
                 style={({ pressed }) => ({ opacity: pressed ? 0.94 : 1 })}
               >
-                <Card
-                  variant="ink"
-                  style={{
-                    marginTop: 14,
-                    borderRadius: theme.radius.hero,
-                    padding: 20,
-                  }}
-                >
+                <Card variant="ink" style={{ marginTop: 16, padding: 18 }}>
                   {plan.overallLimitMinor === null ? (
                     <>
                       <Text style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}>
@@ -317,9 +336,22 @@ export default function OverviewScreen() {
                         One limit turns everything you spend into a daily number you can act
                         on.
                       </Text>
-                      <View style={{ marginTop: 14, alignSelf: "flex-start" }}>
-                        <Text style={[theme.text.label, { color: theme.colors.accentAlt }]}>
-                          Set a budget →
+                      {/* A bare text label on the hero read as a link, not an action.
+                          On ink, a translucent pill is the button. */}
+                      <View
+                        style={{
+                          marginTop: 16,
+                          alignSelf: "flex-start",
+                          paddingHorizontal: 18,
+                          paddingVertical: 10,
+                          borderRadius: 999,
+                          backgroundColor: "rgba(255,255,255,0.12)",
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: "rgba(255,255,255,0.24)",
+                        }}
+                      >
+                        <Text style={[theme.text.label, { color: theme.colors.onInk }]}>
+                          Set a budget
                         </Text>
                       </View>
                     </>
@@ -336,18 +368,9 @@ export default function OverviewScreen() {
                         <Text style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}>
                           {data.isCurrentPeriod ? "Safe to spend" : "Left over"}
                         </Text>
-                        <View
-                          style={{
-                            paddingHorizontal: 10,
-                            paddingVertical: 4,
-                            borderRadius: 999,
-                            backgroundColor: theme.colors.inkTrack,
-                          }}
-                        >
-                          <Text style={[theme.text.caption, { color: theme.colors.onInk }]}>
-                            {`${pct}% used`}
-                          </Text>
-                        </View>
+                        <Text style={[theme.text.caption, { color: theme.colors.onInkMuted }]}>
+                          {`${pct}% of budget`}
+                        </Text>
                       </View>
                       <View
                         style={{
@@ -367,11 +390,11 @@ export default function OverviewScreen() {
                         {data.isCurrentPeriod ? (
                           <Text
                             style={[
-                              theme.text.title3,
-                              { color: theme.colors.onInkMuted, paddingBottom: 6 },
+                              theme.text.caption,
+                              { color: theme.colors.onInkMuted, paddingBottom: 7 },
                             ]}
                           >
-                            / day
+                            per day
                           </Text>
                         ) : null}
                       </View>
@@ -449,6 +472,200 @@ export default function OverviewScreen() {
                 </Text>
               ) : null}
 
+              {!analytics ? (
+                <Card style={{ marginTop: 18, minHeight: 88, justifyContent: "center" }}>
+                  {analyticsError ? (
+                    <Text style={[theme.text.caption, { color: theme.colors.danger }]}>
+                      {__DEV__
+                        ? `Spending summary unavailable. ${analyticsError}`
+                        : "Spending summary unavailable right now."}
+                    </Text>
+                  ) : (
+                    <ActivityIndicator color={theme.colors.accent} />
+                  )}
+                </Card>
+              ) : null}
+
+              {analytics ? (
+                <>
+                  <SectionHeader
+                    title={analytics.window.isCurrent ? "This month" : analytics.monthLabel}
+                  />
+                  <Card>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "baseline",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      }}
+                    >
+                      <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
+                        Total spent
+                      </Text>
+                      {analytics.delta && analytics.delta.direction !== "flat" ? (
+                        <Text
+                          style={[
+                            theme.text.caption,
+                            {
+                              fontVariant: ["tabular-nums"],
+                              color:
+                                analytics.delta.direction === "up"
+                                  ? theme.colors.expense
+                                  : theme.colors.income,
+                            },
+                          ]}
+                        >
+                          {`${Math.abs(analytics.delta.pct)}% ${
+                            analytics.delta.direction === "up" ? "more" : "less"
+                          } than ${analytics.previousMonthLabel}`}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={{ marginTop: 6 }}>
+                      <Money minor={analytics.spentMinor} currency={currency} size="total" />
+                    </View>
+                    {analytics.spentMinor > 0 ? (
+                      <>
+                        <SpendBars
+                          buckets={analytics.buckets}
+                          currency={currency}
+                          averageMinor={analytics.averageMinor}
+                        />
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            marginTop: 10,
+                          }}
+                        >
+                          <Text
+                            style={[theme.text.caption, { color: theme.colors.textTertiary }]}
+                          >
+                            Weekly average
+                          </Text>
+                          <Money
+                            minor={analytics.averageMinor}
+                            currency={currency}
+                            size="caption"
+                            tone="muted"
+                          />
+                        </View>
+                      </>
+                    ) : (
+                      <Text
+                        style={[
+                          theme.text.body,
+                          { color: theme.colors.textSecondary, marginTop: 12 },
+                        ]}
+                      >
+                        {`Nothing logged in ${analytics.monthLabel} yet.`}
+                      </Text>
+                    )}
+                  </Card>
+
+                  {analytics.categories.length ? (
+                    <>
+                      <SectionHeader
+                        title="Where it went"
+                        actionLabel="Insights"
+                        onAction={() => router.push("/(tabs)/insights")}
+                      />
+                      <Card padded={false}>
+                        {analytics.categories.map((row, index) => (
+                          <Fragment key={row.key}>
+                            {index > 0 ? (
+                              <View
+                                style={{
+                                  marginLeft: 36,
+                                  height: StyleSheet.hairlineWidth,
+                                  backgroundColor: theme.colors.border,
+                                }}
+                              />
+                            ) : null}
+                            <View
+                              accessible
+                              accessibilityLabel={`${row.name}, ${formatMoney(
+                                row.amountMinor,
+                                currency,
+                              )}, ${Math.round(row.share * 100)}% of spending`}
+                              style={{ paddingHorizontal: 16, paddingVertical: 12 }}
+                            >
+                              <View
+                                style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+                              >
+                                <View
+                                  style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: 4,
+                                    backgroundColor: row.color ?? theme.colors.textTertiary,
+                                  }}
+                                />
+                                <Text
+                                  numberOfLines={1}
+                                  style={[
+                                    theme.text.body,
+                                    { flex: 1, color: theme.colors.textPrimary },
+                                  ]}
+                                >
+                                  {row.name}
+                                </Text>
+                                <Text
+                                  style={[
+                                    theme.text.label,
+                                    {
+                                      color: theme.colors.textPrimary,
+                                      fontVariant: ["tabular-nums"],
+                                    },
+                                  ]}
+                                >
+                                  {formatMoney(row.amountMinor, currency)}
+                                </Text>
+                                <Text
+                                  style={[
+                                    theme.text.caption,
+                                    {
+                                      width: 36,
+                                      textAlign: "right",
+                                      color: theme.colors.textSecondary,
+                                      fontVariant: ["tabular-nums"],
+                                    },
+                                  ]}
+                                >
+                                  {`${Math.round(row.share * 100)}%`}
+                                </Text>
+                              </View>
+                              <View
+                                style={{
+                                  marginTop: 8,
+                                  marginLeft: 20,
+                                  height: 4,
+                                  borderRadius: 2,
+                                  backgroundColor: theme.colors.surfaceMuted,
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <View
+                                  style={{
+                                    width: `${Math.max(2, Math.round(row.share * 100))}%`,
+                                    height: "100%",
+                                    borderRadius: 2,
+                                    backgroundColor: row.color ?? theme.colors.textTertiary,
+                                  }}
+                                />
+                              </View>
+                            </View>
+                          </Fragment>
+                        ))}
+                      </Card>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+
               <BillsDueCard currency={currency} />
 
               {count === 0 ? (
@@ -469,70 +686,76 @@ export default function OverviewScreen() {
                   />
 
                   {rows.length ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 10, paddingRight: 4 }}
-                    >
-                      {rows.map((row) => (
-                        <Pressable
-                          key={row.budgetId}
-                          onPress={openBudgets}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${row.name} budget, ${Math.round(
-                            row.progress * 100,
-                          )}% used`}
-                          style={({ pressed }) => ({ width: 158, opacity: pressed ? 0.75 : 1 })}
-                        >
-                          <Card padded={false} style={{ padding: 14, gap: 8 }}>
+                    <Card padded={false}>
+                      {rows.map((row, index) => (
+                        <Fragment key={row.budgetId}>
+                          {index > 0 ? (
                             <View
                               style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "space-between",
+                                marginLeft: 64,
+                                height: StyleSheet.hairlineWidth,
+                                backgroundColor: theme.colors.border,
                               }}
-                            >
-                              <CategoryTile icon={row.icon} color={row.color} size={34} />
-                              {row.state !== "ok" ? (
-                                <Text
-                                  style={[
-                                    theme.text.caption,
-                                    {
-                                      color:
-                                        row.state === "over"
-                                          ? theme.colors.danger
-                                          : theme.colors.warning,
-                                    },
-                                  ]}
-                                >
-                                  {row.state === "over" ? "Over" : `${Math.round(row.progress * 100)}%`}
-                                </Text>
-                              ) : null}
-                            </View>
-                            <Text
-                              style={[theme.text.label, { color: theme.colors.textPrimary }]}
-                              numberOfLines={1}
-                            >
-                              {row.name}
-                            </Text>
-                            <ProgressBar
-                              value={row.progress}
-                              height={5}
-                              state={row.state === "ok" ? "normal" : row.state}
                             />
-                            <Text
-                              style={[theme.text.caption, { color: theme.colors.textSecondary }]}
-                              numberOfLines={1}
-                            >
-                              {`${formatMoney(row.spentMinor, currency)} of ${formatMoney(
-                                row.limitMinor,
-                                currency,
-                              )}`}
-                            </Text>
-                          </Card>
-                        </Pressable>
+                          ) : null}
+                          <Pressable
+                            onPress={openBudgets}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${row.name} budget, ${Math.round(
+                              row.progress * 100,
+                            )}% used`}
+                            style={({ pressed }) => ({
+                              paddingHorizontal: 16,
+                              paddingVertical: 12,
+                              opacity: pressed ? 0.7 : 1,
+                            })}
+                          >
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                            <CategoryTile icon={row.icon} color={row.color} size={36} />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text
+                                style={[theme.text.body, { color: theme.colors.textPrimary }]}
+                                numberOfLines={1}
+                              >
+                                {row.name}
+                              </Text>
+                              <Text
+                                style={[theme.text.caption, { color: theme.colors.textSecondary }]}
+                                numberOfLines={1}
+                              >
+                                {`${formatMoney(row.spentMinor, currency)} of ${formatMoney(
+                                  row.limitMinor,
+                                  currency,
+                                )}`}
+                              </Text>
+                            </View>
+                            {row.state !== "ok" ? (
+                              <Text
+                                style={[
+                                  theme.text.caption,
+                                  {
+                                    color:
+                                      row.state === "over"
+                                        ? theme.colors.danger
+                                        : theme.colors.warning,
+                                  },
+                                ]}
+                              >
+                                {row.state === "over" ? "Over" : `${Math.round(row.progress * 100)}%`}
+                              </Text>
+                            ) : null}
+                          </View>
+                            <View style={{ marginTop: 8 }}>
+                              <ProgressBar
+                                value={row.progress}
+                                height={4}
+                                state={row.state === "ok" ? "normal" : row.state}
+                              />
+                            </View>
+                          </Pressable>
+                        </Fragment>
                       ))}
-                    </ScrollView>
+                    </Card>
                   ) : (
                     <Card style={{ padding: 16, gap: 10 }}>
                       <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
@@ -571,25 +794,32 @@ export default function OverviewScreen() {
                           : (category?.name ?? "Uncategorized")
                       } · ${dayLabel(transaction.localDate, today)}`;
                       return (
-                        <Pressable
-                          key={transaction.id}
-                          onPress={() => router.push(`/transaction/${transaction.id}`)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${title}, ${formatMoneySpoken(
-                            transaction.amountMinor,
-                            transaction.currency,
-                          )}, ${subtitle}`}
-                          style={({ pressed }) => ({
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 12,
-                            paddingHorizontal: 16,
-                            paddingVertical: 12,
-                            borderTopWidth: index === 0 ? 0 : 1,
-                            borderTopColor: theme.colors.border,
-                            opacity: pressed ? 0.7 : 1,
-                          })}
-                        >
+                        <Fragment key={transaction.id}>
+                          {index > 0 ? (
+                            <View
+                              style={{
+                                marginLeft: 64,
+                                height: StyleSheet.hairlineWidth,
+                                backgroundColor: theme.colors.border,
+                              }}
+                            />
+                          ) : null}
+                          <Pressable
+                            onPress={() => router.push(`/transaction/${transaction.id}`)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${title}, ${formatMoneySpoken(
+                              transaction.amountMinor,
+                              transaction.currency,
+                            )}, ${subtitle}`}
+                            style={({ pressed }) => ({
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 12,
+                              paddingHorizontal: 16,
+                              paddingVertical: 12,
+                              opacity: pressed ? 0.7 : 1,
+                            })}
+                          >
                           <CategoryTile
                             icon={
                               transaction.type === "transfer"
@@ -616,12 +846,13 @@ export default function OverviewScreen() {
                               {subtitle}
                             </Text>
                           </View>
-                          <Money
-                            minor={transaction.amountMinor}
-                            currency={transaction.currency}
-                            tone={transaction.type === "income" ? "income" : "default"}
-                          />
-                        </Pressable>
+                            <Money
+                              minor={transaction.amountMinor}
+                              currency={transaction.currency}
+                              tone={transaction.type === "income" ? "income" : "default"}
+                            />
+                          </Pressable>
+                        </Fragment>
                       );
                     })}
                   </Card>
@@ -645,39 +876,6 @@ export default function OverviewScreen() {
         />
       ) : null}
 
-      {count !== null && count > 0 ? (
-        <Pressable
-          onPress={() => router.push("/add")}
-          accessibilityRole="button"
-          accessibilityLabel="Add transaction"
-          style={({ pressed }) => [
-            {
-              position: "absolute",
-              right: 20,
-              bottom: insets.bottom + TAB_BAR_CLEARANCE,
-              width: 60,
-              height: 60,
-              borderRadius: 30,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: theme.colors.accent,
-              opacity: pressed ? 0.85 : 1,
-            },
-            theme.shadow.fab,
-          ]}
-        >
-          <Text
-            style={{
-              color: theme.colors.accentFg,
-              fontSize: 32,
-              lineHeight: 34,
-              fontWeight: "300",
-            }}
-          >
-            +
-          </Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }

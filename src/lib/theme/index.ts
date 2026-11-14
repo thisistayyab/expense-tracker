@@ -17,4 +17,4 @@ export {
   type Scheme,
   type ThemePreference,
 } from "./ThemeProvider";
-export { FONT_FAMILY, useAppFonts } from "./fonts";
+export { FONT_FAMILIES, useAppFonts } from "./fonts";

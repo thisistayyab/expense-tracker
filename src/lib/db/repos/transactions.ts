@@ -372,6 +372,31 @@ export async function sumSpentForComparison(
   };
 }
 
+export type DailySpendRow = { localDate: string; spentMinor: number };
+
+/**
+ * Expense totals per day for one currency and window, ordered oldest first. Feeds
+ * the month trend on Overview: the chart sums these into week-sized buckets here
+ * rather than asking SQLite to format dates.
+ */
+export async function sumSpentByDay(
+  db: Db,
+  options: { currency: string; fromDate: string; toDate: string },
+): Promise<DailySpendRow[]> {
+  const rows = await db.getAllAsync<{ local_date: string; spent_minor: number }>(
+    `SELECT local_date, COALESCE(SUM(amount_minor), 0) AS spent_minor
+       FROM transactions
+      WHERE type = 'expense' AND currency = ? AND local_date BETWEEN ? AND ?
+      GROUP BY local_date
+      ORDER BY local_date`,
+    [options.currency.toUpperCase(), options.fromDate, options.toDate],
+  );
+  return rows.map((row) => ({
+    localDate: row.local_date,
+    spentMinor: row.spent_minor ?? 0,
+  }));
+}
+
 export async function countTransactions(db: Db): Promise<number> {
   const row = await db.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM transactions");
   return row?.count ?? 0;

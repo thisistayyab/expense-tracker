@@ -1,172 +1,251 @@
-import type { BottomTabBarProps } from "expo-router/build/layouts/Tabs";
-import { Pressable, StyleSheet, View } from "react-native";
-import Animated, {
-  Easing,
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-  useReducedMotion,
-} from "react-native-reanimated";
+import { GlassView, isGlassEffectAPIAvailable } from "expo-glass-effect";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
+import { router, usePathname } from "expo-router";
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { haptics } from "../../lib/haptics";
 import { useTheme } from "../../lib/theme";
+import { AppIcon } from "../ui/AppIcon";
 import { TabIcon, type TabIconName } from "./TabIcon";
+import { TAB_BAR_BOTTOM_GAP, TAB_BAR_HEIGHT, TAB_BAR_SIDE } from "./tabBar";
 
-/**
- * Route name → label and glyph. Kept here rather than in the layout so the bar
- * and the navigator cannot disagree about the four destinations.
- */
-const DESTINATIONS: Record<string, { label: string; icon: TabIconName }> = {
-  overview: { label: "Overview", icon: "overview" },
-  transactions: { label: "Activity", icon: "activity" },
-  budget: { label: "Budgets", icon: "budget" },
-  insights: { label: "Insights", icon: "insights" },
+type Tab = {
+  href: "/overview" | "/transactions" | "/budget" | "/insights";
+  label: string;
+  icon: TabIconName;
 };
 
-const BAR_HEIGHT = 64;
-const BAR_INSET = 16;
+const TABS: Tab[] = [
+  { href: "/overview", label: "Overview", icon: "overview" },
+  { href: "/transactions", label: "Activity", icon: "activity" },
+  { href: "/budget", label: "Budgets", icon: "budget" },
+  { href: "/insights", label: "Insights", icon: "insights" },
+];
 
-/**
- * How much padding a scrolling screen needs so its last row clears the bar:
- * the pill, its bottom inset and the gap above the home indicator.
- */
-export const TAB_BAR_CLEARANCE = BAR_HEIGHT + BAR_INSET * 2;
-
-/**
- * 64 px floating pill, inset 16 from the edges, sitting over the scene. The
- * active destination expands into an ink pill with its label; inactive ones stay
- * icon-only, but every tab keeps its label in the accessibility tree.
- *
- * Content clears the bar with `BAR_HEIGHT + BAR_INSET * 2` of padding.
- */
-export function FloatingTabBar({ state, descriptors, emitter, navigateToTab, insets }: BottomTabBarProps) {
+function TabButton({ tab, active }: { tab: Tab; active: boolean }) {
   const { theme } = useTheme();
-  const reduceMotion = useReducedMotion();
-  const pillLayout = reduceMotion
-    ? undefined
-    : LinearTransition.duration(theme.motion.pill).easing(Easing.out(Easing.cubic));
+  const color = active ? theme.colors.accent : theme.colors.textSecondary;
+
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityLabel={tab.label}
+      accessibilityState={{ selected: active }}
+      onPress={() => {
+        void Haptics.selectionAsync();
+        if (!active) router.navigate(tab.href);
+      }}
+      style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.55 : 1 }]}
+    >
+      <TabIcon name={tab.icon} color={color} size={22} />
+      <Text numberOfLines={1} style={[theme.text.eyebrow, styles.label, { color }]}>
+        {tab.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * A floating capsule above the content: the shape iOS 26's system tab bar took
+ * (Liquid Glass, detached from the edge), with YouTube's arrangement of tabs.
+ * The add action stays a separate circular button above the trailing end, like
+ * Apple News, so it never competes with the four destinations.
+ */
+export function FloatingTabBar() {
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const liquid = isGlassEffectAPIAvailable();
+
+  const [rowWidth, setRowWidth] = useState(0);
+  const activeIndex = TABS.findIndex((tab) => tab.href === pathname);
+
+  const mount = useSharedValue(0);
+  const pill = useSharedValue(Math.max(activeIndex, 0));
+  const fabIn = useSharedValue(0.4);
+  const fabPress = useSharedValue(1);
+
+  useEffect(() => {
+    mount.value = withSpring(1, { damping: 21, stiffness: 200, mass: 0.9 });
+    fabIn.value = withSpring(1, { damping: 15, stiffness: 220 });
+  }, [mount, fabIn]);
+
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    pill.value = withSpring(activeIndex, { damping: 17, stiffness: 190, mass: 0.8 });
+  }, [activeIndex, pill]);
+
+  const shellStyle = useAnimatedStyle(() => ({
+    opacity: mount.value,
+    transform: [{ translateY: (1 - mount.value) * 10 }],
+  }));
+
+  const pillStyle = useAnimatedStyle(() => {
+    const width = rowWidth / TABS.length;
+    return { width, transform: [{ translateX: pill.value * width }] };
+  });
+
+  const fabStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: fabIn.value * fabPress.value }],
+  }));
+
+  const items = (
+    <View
+      style={styles.row}
+      onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}
+    >
+      {rowWidth > 0 && activeIndex >= 0 ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.pill, { backgroundColor: theme.colors.accentSoft }, pillStyle]}
+        />
+      ) : null}
+      {TABS.map((tab) => (
+        <TabButton key={tab.href} tab={tab} active={pathname === tab.href} />
+      ))}
+    </View>
+  );
 
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.wrapper, { paddingBottom: insets.bottom + BAR_INSET }]}
+      style={[styles.root, { marginBottom: insets.bottom + TAB_BAR_BOTTOM_GAP }]}
     >
-      <View
-        style={[
-          styles.bar,
-          theme.shadow.card,
-          {
-            backgroundColor: theme.colors.tabBar,
-            borderColor: theme.colors.cardBorder,
-          },
-        ]}
-      >
-        {state.routes.map((route, index) => {
-          const focused = state.index === index;
-          const destination = DESTINATIONS[route.name];
-          const title =
-            destination?.label ?? descriptors[route.key]?.options.title ?? route.name;
+      <Animated.View pointerEvents="box-none" style={[styles.shell, shellStyle]}>
+        {liquid ? (
+          <GlassView
+            colorScheme={theme.scheme}
+            glassEffectStyle="regular"
+            style={styles.capsule}
+          >
+            {items}
+          </GlassView>
+        ) : (
+          <View
+            style={[
+              styles.capsule,
+              theme.shadow.glass,
+              {
+                backgroundColor: theme.colors.tabBar,
+                borderColor: theme.colors.glassBorder,
+              },
+            ]}
+          >
+            {/* Without native glass this capsule was an opaque white pill with a
+                hairline edge — a plain div. The sheen gives it the same material
+                language as the buttons on every platform. */}
+            <LinearGradient
+              pointerEvents="none"
+              colors={[theme.colors.specular, "rgba(255,255,255,0)"]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            {items}
+          </View>
+        )}
+      </Animated.View>
 
-          const onPress = () => {
-            const event = emitter.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!focused && !event.defaultPrevented) {
-              haptics.selection();
-              navigateToTab(route.key);
-            }
-          };
-
-          const onLongPress = () => {
-            emitter.emit({ type: "tabLongPress", target: route.key });
-          };
-
-          return (
-            <Animated.View
-              key={route.key}
-              layout={pillLayout}
-              style={[
-                styles.item,
-                focused ? null : styles.itemIdle,
-                focused && { backgroundColor: theme.colors.solid },
-              ]}
-            >
-              <Pressable
-                onPress={onPress}
-                onLongPress={onLongPress}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: focused }}
-                accessibilityLabel={title}
-                hitSlop={4}
-                style={({ pressed }) => [
-                  styles.itemPress,
-                  focused ? styles.itemPressActive : styles.itemPressIdle,
-                  pressed && !focused ? { opacity: 0.55 } : null,
-                ]}
-              >
-                <TabIcon
-                  name={destination?.icon ?? "overview"}
-                  color={focused ? theme.colors.solidFg : theme.colors.textTertiary}
-                />
-                {focused ? (
-                  <Animated.Text
-                    entering={reduceMotion ? undefined : FadeIn.duration(theme.motion.chip)}
-                    exiting={reduceMotion ? undefined : FadeOut.duration(100)}
-                    maxFontSizeMultiplier={1.4}
-                    style={[theme.text.label, { color: theme.colors.solidFg }]}
-                  >
-                    {title}
-                  </Animated.Text>
-                ) : null}
-              </Pressable>
-            </Animated.View>
-          );
-        })}
-      </View>
+      <Animated.View pointerEvents="box-none" style={[styles.fabWrap, fabStyle]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add transaction"
+          onPress={() => {
+            void Haptics.selectionAsync();
+            router.push("/add");
+          }}
+          onPressIn={() => {
+            fabPress.value = withSpring(0.92, { damping: 20, stiffness: 320 });
+          }}
+          onPressOut={() => {
+            fabPress.value = withSpring(1, { damping: 18, stiffness: 260 });
+          }}
+          style={[
+            styles.fab,
+            theme.shadow.fab,
+            {
+              backgroundColor: theme.colors.accentFill,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: theme.colors.accentRim,
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={[theme.colors.accentTop, theme.colors.accentBottom]}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={["rgba(255,255,255,0.26)", "rgba(255,255,255,0)"]}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <AppIcon name="plus" color={theme.colors.accentFg} size={24} />
+        </Pressable>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  root: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: TAB_BAR_SIDE,
+    right: TAB_BAR_SIDE,
     bottom: 0,
-    paddingHorizontal: BAR_INSET,
-    alignItems: "stretch",
   },
-  bar: {
-    height: BAR_HEIGHT,
-    borderRadius: BAR_HEIGHT / 2,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  shell: {
+    height: TAB_BAR_HEIGHT,
+  },
+  capsule: {
+    flex: 1,
+    height: TAB_BAR_HEIGHT,
+    borderRadius: TAB_BAR_HEIGHT / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "transparent",
     paddingHorizontal: 6,
-  },
-  item: {
-    height: 52,
-    borderRadius: 26,
     overflow: "hidden",
   },
-  itemPress: {
-    height: "100%",
+  row: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+  },
+  pill: {
+    position: "absolute",
+    left: 0,
+    top: 8,
+    height: TAB_BAR_HEIGHT - 16,
+    borderRadius: (TAB_BAR_HEIGHT - 16) / 2,
+  },
+  tab: {
+    flex: 1,
+    height: TAB_BAR_HEIGHT - 8,
+    alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 2,
   },
-  itemPressActive: {
-    paddingHorizontal: 20,
+  label: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: "500",
   },
-  itemPressIdle: {
+  fabWrap: {
+    position: "absolute",
+    right: 8,
+    bottom: TAB_BAR_HEIGHT + 12,
+  },
+  fab: {
     width: 52,
-  },
-  itemIdle: {
-    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
 });
