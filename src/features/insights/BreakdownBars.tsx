@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 
 import type { BreakdownRow } from "../../lib/domain/insights";
-import { formatMoney } from "../../lib/format/money";
+import { formatMoney, formatMoneySpoken } from "../../lib/format/money";
 import { useTheme } from "../../lib/theme";
 
 /**
@@ -34,7 +34,7 @@ export function BreakdownBars({
             disabled={!interactive}
             onPress={() => onPressCategory?.(row)}
             accessibilityRole={interactive ? "button" : undefined}
-            accessibilityLabel={`${row.name}, ${formatMoney(row.amountMinor, currency)}, ${percent}% of spending${
+            accessibilityLabel={`${row.name}, ${formatMoneySpoken(row.amountMinor, currency)}, ${percent}% of spending${
               interactive ? ". Show matching transactions" : ""
             }`}
             style={({ pressed }) => ({

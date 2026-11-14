@@ -439,17 +439,59 @@ the mockup's shorter Data group.
 Goal: shippable, store-ready, documented.
 
 Tasks:
-- [ ] Name, icon, splash, screenshots, listing copy, privacy policy (local-only claim).
-- [ ] Accessibility pass (VoiceOver/TalkBack end-to-end add flow, incl. naming an item),
-      reduce-motion.
-- [ ] Currency matrix check: USD (2 decimals), JPY (0, no `.` key), KWD (3), CHF symbol width.
-- [ ] Dark mode and 200 % text-scale sweep on both platforms.
-- [ ] EAS `production` build + internal track; crash reporting decision; `eas.json`.
-- [ ] Release checklist from `06-decisions-and-risks.md` executed.
-- [ ] Blueprint/code parity review; ADRs updated.
+- [x] Name, icon, splash, listing copy, privacy policy (local-only claim).
+- [ ] Screenshots captured from a clean device and prepared at store sizes.
+- [x] Accessibility code pass: currency-name announcements, formatted transaction labels,
+      scalable add-sheet controls and existing reduce-motion handling.
+- [ ] VoiceOver/TalkBack end-to-end add flow on a device, including naming an item.
+- [x] Currency matrix: USD (2 decimals), JPY (0, no decimal key), KWD (3), CHF symbol width —
+      parser, formatter and spoken-money tests, plus number-pad selection in add, onboarding
+      budget and budget editor.
+- [x] Static 200% text-scale audit of the add sheet, activity rows and tab pill.
+- [ ] Dark mode and 200% text-scale visual sweep on both platforms.
+- [x] Crash reporting decision (none; ADR-016) and `eas.json` profiles.
+- [ ] EAS `production` build uploaded to the internal track.
+- [ ] Release checklist from `06-decisions-and-risks.md` fully executed.
+- [x] Blueprint/code parity review; ADRs updated.
 
 Gate: clean-device run of install → onboarding → add → budget → export; Expo Doctor clean; no
 console errors; store assets approved.
+
+Status: **code package complete, gate not met.**
+
+- **Identity.** User-facing name is **Suffice**; repo slug, `expensetracker` scheme and database
+  filename stay technical. The 1024 px icon, Android adaptive foreground/monochrome, splash mark
+  and favicon are generated from one mark by `scripts/generate-brand-assets.py`. `ios.bundleIdentifier`
+  and `android.package` are `com.suffice.money`; `suffice.money` was unregistered when checked on
+  13 November 2026, but the namespace, store name and trademark still need clearance before store
+  records exist. `ios.icon` no longer overrides the
+  store icon with the template Icon Composer file.
+- **Accessibility.** `formatMoneySpoken` is now the single screen-reader path for money, using ICU
+  currency names ("12.50 US dollars") with a static-table fallback. `Money`, transaction rows,
+  bills, breakdown bars, the trend summary and the add sheet use it. The add-sheet amount caps at
+  1.3×; type segments, category/recent chips, name and place fields and the details card can grow;
+  activity rows use `minHeight`; the tab label caps at 1.4× so four destinations still fit. Reduce
+  motion was already wired through the tab layout, floating bar, sheet and snackbar.
+- **Currency.** Tests now pin USD, JPY, KWD and CHF formatting, parsing, sanitising, exponents and
+  spoken names, including JPY's decimal rejection and KWD's third decimal. Labels drop the symbol
+  when it merely repeats the ISO code, so PKR and CHF read once (`currencyLabel`).
+- **Release package.** `eas.json` has development, preview and production profiles;
+  `store/listing.md` holds listing copy, screenshot scenes, review notes and data-safety answers;
+  `store/privacy-policy.md` is the public-copy source; `RELEASE_CHECKLIST.md` separates code checks
+  from device/store checks. No analytics or crash SDK ships (ADR-016).
+- **Remaining gate.** An Android emulator runs the app in Expo Go, and the EAS CLI is signed in,
+  but no standalone `com.suffice.money` build has been produced, no physical device has run it, and
+  there are no Apple or Google store accounts. Nothing has been screen-reader driven, timed,
+  captured from a shipped build, uploaded or submitted. Expo Go cannot show the launcher icon,
+  splash, notification identity or share sheet, so those items stay unchecked until a `preview`
+  APK is installed. The design mockups are references, not screenshots; the add mockup still shows
+  the retired keypad and must not be used.
+
+Checks: `npx tsc --noEmit` and `npx expo lint` clean; Jest 23 suites / 165 tests; Expo Doctor
+20/20; `npx expo export --platform all` completes after enabling Metro's wasm asset handling and
+COOP/COEP headers in `metro.config.js`. A headless Chrome smoke boot reached `/welcome` with
+Geist loaded and schema v3 seeded; the only web console warning was the documented
+`expo-notifications` unsupported push-listener notice. This is not a device or store check.
 
 ---
 
@@ -459,7 +501,7 @@ console errors; store assets approved.
 gantt
   dateFormat YYYY-MM-DD
   axisFormat %d %b
-  title Expense Tracker — v1 schedule
+  title Suffice — v1 schedule
   section Build
   P0 Foundations        :p0, 2026-11-16, 2d
   P1 Data layer         :p1, after p0, 3d

@@ -1,5 +1,7 @@
 import {
+  decimalPlaces,
   formatMoney,
+  formatMoneySpoken,
   minorToDecimalString,
   parseMoneyInput,
   parseSignedMoneyInput,
@@ -102,5 +104,56 @@ describe("formatMoney", () => {
   test("uses U+2212 for negatives and an optional plus for income", () => {
     expect(formatMoney(-1250, "USD", { locale: "en-US" })).toBe("\u2212$12.50");
     expect(formatMoney(1250, "USD", { locale: "en-US", showPlus: true })).toBe("+$12.50");
+  });
+});
+
+describe("P7 currency matrix", () => {
+  test("USD: two decimals, narrow symbol and spoken dollars", () => {
+    expect(formatMoney(123450, "USD", { locale: "en-US" })).toBe("$1,234.50");
+    expect(parseMoneyInput("1234.50", "USD")).toBe(123450);
+    expect(parseMoneyInput("1234.567", "USD")).toBeNull();
+    expect(formatMoneySpoken(123450, "USD", { locale: "en-US" })).toBe(
+      "1,234.50 US dollars",
+    );
+  });
+
+  test("JPY: no decimals, yen sign and no dead decimal key", () => {
+    expect(formatMoney(12400, "JPY", { locale: "en-US" })).toBe("¥12,400");
+    expect(parseMoneyInput("12400", "JPY")).toBe(12400);
+    expect(parseMoneyInput("12400.5", "JPY")).toBeNull();
+    expect(sanitizeMoneyInput("12400.50", "JPY")).toBe("12400");
+    expect(decimalPlaces("JPY")).toBe(0);
+    expect(formatMoneySpoken(12400, "JPY", { locale: "en-US" })).toBe(
+      "12,400 Japanese yen",
+    );
+  });
+
+  test("KWD: three decimals, code prefix and spoken dinars", () => {
+    expect(formatMoney(1250, "KWD", { locale: "en-US" })).toBe("KWD 1.250");
+    expect(parseMoneyInput("1.250", "KWD")).toBe(1250);
+    expect(parseMoneyInput("1.2505", "KWD")).toBeNull();
+    expect(sanitizeMoneyInput("1.2505", "KWD")).toBe("1.250");
+    expect(decimalPlaces("KWD")).toBe(3);
+    expect(formatMoneySpoken(1250, "KWD", { locale: "en-US" })).toBe(
+      "1.250 Kuwaiti dinars",
+    );
+  });
+
+  test("CHF: letter symbol width, two decimals and spoken francs", () => {
+    expect(formatMoney(123456, "CHF", { locale: "en-US" })).toBe("CHF 1,234.56");
+    expect(parseMoneyInput("1234.56", "CHF")).toBe(123456);
+    expect(sanitizeMoneyInput("1,234.567", "CHF")).toBe("1234.56");
+    expect(formatMoneySpoken(123456, "CHF", { locale: "en-US" })).toBe(
+      "1,234.56 Swiss francs",
+    );
+  });
+
+  test("spoken money names direction instead of reading a bare symbol", () => {
+    expect(formatMoneySpoken(-1250, "USD", { locale: "en-US" })).toBe(
+      "minus 12.50 US dollars",
+    );
+    expect(formatMoneySpoken(1250, "USD", { locale: "en-US", showPlus: true })).toBe(
+      "plus 12.50 US dollars",
+    );
   });
 });

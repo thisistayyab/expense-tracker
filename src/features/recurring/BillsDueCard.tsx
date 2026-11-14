@@ -7,7 +7,7 @@ import { Card, Money } from "../../components/ui";
 import { listUpcomingRecurringRules } from "../../lib/db/repos/recurring";
 import type { Db, RecurringRule } from "../../lib/db/types";
 import { addDays, daysBetween, toIsoDate } from "../../lib/domain/dates";
-import { formatMoney } from "../../lib/format/money";
+import { formatMoneySpoken } from "../../lib/format/money";
 import { useTheme } from "../../lib/theme";
 import { postNextOccurrence } from "./processDue";
 import {
@@ -124,7 +124,7 @@ export function BillsDueCard({ currency }: { currency: string }) {
           key={rule.id}
           onPress={() => router.push("/settings/recurring")}
           accessibilityRole="button"
-          accessibilityLabel={`${rule.itemName ?? "Recurring bill"}, ${formatMoney(
+          accessibilityLabel={`${rule.itemName ?? "Recurring bill"}, ${formatMoneySpoken(
             rule.amountMinor,
             rule.currency,
           )}, ${dueLabel(rule.nextDueAt, today)}${rule.autoPost ? "" : ", unpaid"}`}

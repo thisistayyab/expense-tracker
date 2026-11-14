@@ -6,6 +6,7 @@ import ReanimatedSwipeable, {
 
 import { CategoryTile, Money } from "../../components/ui";
 import type { Account, Category, Transaction } from "../../lib/db/types";
+import { formatMoneySpoken } from "../../lib/format/money";
 import { useTheme } from "../../lib/theme";
 
 const ACTION_WIDTH = 76;
@@ -143,6 +144,13 @@ export const TransactionRow = memo(function TransactionRow({
       ? `${account?.name ?? "Account"} → ${transferAccount?.name ?? "Account"}`
       : `${category?.name ?? "Uncategorized"} · ${account?.name ?? "Account"}`;
   const hasNote = Boolean(transaction.note?.trim());
+  const spokenAmount = formatMoneySpoken(
+    transaction.type === "expense"
+      ? -Math.abs(transaction.amountMinor)
+      : Math.abs(transaction.amountMinor),
+    transaction.currency,
+    { showPlus: transaction.type === "income" },
+  );
 
   const left = (methods: SwipeableMethods) => (
     <SwipeActions
@@ -189,10 +197,10 @@ export const TransactionRow = memo(function TransactionRow({
         onLongPress={() => onLongPress(transaction)}
         delayLongPress={350}
         accessibilityRole="button"
-        accessibilityLabel={`${title}, ${subtitle}, ${transaction.currency} ${transaction.amountMinor}`}
+        accessibilityLabel={`${title}, ${spokenAmount}, ${subtitle}`}
         accessibilityHint="Opens transaction details. Swipe right to edit or left to delete."
         style={({ pressed }) => ({
-          height: TRANSACTION_ROW_HEIGHT,
+          minHeight: TRANSACTION_ROW_HEIGHT,
           paddingHorizontal: 16,
           flexDirection: "row",
           alignItems: "center",

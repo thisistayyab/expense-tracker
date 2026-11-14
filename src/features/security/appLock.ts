@@ -60,7 +60,7 @@ export async function authenticateToUnlock(): Promise<UnlockResult> {
 
   try {
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Unlock Expense Tracker",
+      promptMessage: "Unlock Suffice",
       promptDescription: "Your data stays on this device.",
       cancelLabel: "Cancel",
       fallbackLabel: "Use device passcode",

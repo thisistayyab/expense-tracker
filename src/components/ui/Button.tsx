@@ -62,7 +62,8 @@ export function Button({
       accessibilityState={{ disabled: isInactive, busy: loading }}
       style={({ pressed }) => [
         {
-          height,
+          minHeight: height,
+          paddingVertical: 8,
           borderRadius: height / 2,
           alignItems: "center",
           justifyContent: "center",

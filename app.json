@@ -1,20 +1,25 @@
 {
   "expo": {
-    "name": "expense-tracker",
+    "name": "Suffice",
     "slug": "expense-tracker",
     "version": "1.0.0",
+    "description": "A private, offline expense tracker. No account, no bank connection, no analytics.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "expensetracker",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#121317",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.suffice.money",
+      "buildNumber": "1",
+      "supportsTablet": false
     },
     "android": {
+      "package": "com.suffice.money",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#121317",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
@@ -30,7 +35,7 @@
         {
           "backgroundColor": "#121317",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 96
         }
       ],
       "expo-sqlite",
@@ -47,7 +52,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow Expense Tracker to use Face ID to unlock your data."
+          "faceIDPermission": "Allow Suffice to use Face ID to unlock your data."
         }
       ],
       "expo-document-picker"

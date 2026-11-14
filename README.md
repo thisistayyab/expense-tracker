@@ -1,56 +1,77 @@
-# Welcome to your Expo app 👋
+# Suffice
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A private, local-first expense tracker for iOS and Android. Log what you spend, set one budget,
+and see what is safe to spend today. No account, bank connection, analytics or cloud.
 
-## Get started
+**The name.** *Suffice* is the verb meaning "to be enough." It is not an acronym. The name states
+the product's one promise: an honest daily number for what is left to spend, rather than another
+dashboard that asks you to track everything.
 
-1. Install dependencies
+Built with Expo SDK 58, React Native, Expo Router, expo-sqlite and Geist.
 
-   ```bash
-   npm install
-   ```
+## Status
 
-2. Start the app
+P0–P6 are implemented. P7 (launch preparation) is code-complete: identity, icon/splash assets,
+store identifiers, accessibility fixes, currency coverage, EAS profiles, listing copy, privacy
+policy and the release checklist are in the repository. Physical-device accessibility checks,
+store screenshots, production builds and store submissions remain blocked on hardware and store
+accounts; see `RELEASE_CHECKLIST.md`.
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Useful checks:
 
-### Other setup steps
+```bash
+npx tsc --noEmit
+npx expo lint
+npx jest --ci
+npx expo-doctor
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+This project uses `npm` and has a `package-lock.json`. Always install Expo packages with
+`npx expo install` so the native versions match SDK 58.
 
-## Learn more
+## Product
 
-To learn more about developing your project with Expo, look at the following resources:
+- **Overview** — safe to spend, budget progress, recent activity, bills due.
+- **Add** — one native number pad, amount first, category, optional item name/place/note.
+- **Activity** — grouped history, search, filters, edit, delete and undo.
+- **Budgets** — overall and category limits with warning/over states.
+- **Insights** — six-month trend, category breakdown, top items and deterministic insights.
+- **Habit** — recurring bills, local reminders, CSV export, JSON backup/restore, app lock.
+- **Money** — ISO 4217 currencies with 0/2/3 decimals; no conversion, ever.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Structure
 
-## Join the community
+```text
+src/app/          Expo Router routes only
+src/components/   shared UI kit
+src/features/     feature screens and logic
+src/lib/          db, domain, formatting, theme
+assets/           fonts and launch art
+blueprints/       product, data, design and phase source of truth
+store/            listing copy and privacy policy
+scripts/          asset generation
+```
 
-Join our community of developers creating universal apps.
+## Data and privacy
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+All data is stored in the app's local SQLite database. Exports are created only when you ask and
+are shared through the system share sheet. App lock uses the device's authentication; it does not
+encrypt the database. There is no analytics or crash-reporting SDK in v1. See
+`store/privacy-policy.md`.
+
+## Release
+
+- Listing: `store/listing.md`
+- Privacy: `store/privacy-policy.md`
+- Checklist: `RELEASE_CHECKLIST.md`
+- EAS: `eas.json` (`development`, `preview`, `production`)
+
+The bundle identifier `com.suffice.money` is a placeholder until the namespace is reserved. The
+name **Suffice** has not had trademark clearance; confirm it before creating store records.

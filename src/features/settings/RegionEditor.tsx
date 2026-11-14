@@ -8,7 +8,7 @@ import {
   getCountry,
   type Country,
 } from "../../constants/countries";
-import { currencyOptions, getCurrency } from "../../constants/currencies";
+import { currencyLabel, currencyOptions, getCurrency } from "../../constants/currencies";
 import { detectRegionDefaults } from "../../lib/region";
 import { useTheme } from "../../lib/theme";
 
@@ -137,7 +137,7 @@ export function RegionEditor({
             <Text
               style={[theme.text.caption, { color: theme.colors.solidFg, opacity: 0.6, marginTop: 2 }]}
             >
-              {selectedCurrency.code} {selectedCurrency.symbol} · {selectedCurrency.name}
+              {currencyLabel(selectedCurrency)} · {selectedCurrency.name}
             </Text>
           </View>
           <Text style={[theme.text.title3, { color: theme.colors.accent }]}>✓</Text>
@@ -232,7 +232,7 @@ export function RegionEditor({
                 {item.name}
               </Text>
               <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
-                {item.currency} {getCurrency(item.currency).symbol}
+                {currencyLabel(getCurrency(item.currency))}
               </Text>
               {isSelected ? (
                 <Text style={[theme.text.body, { color: theme.colors.accent }]}>✓</Text>
@@ -264,7 +264,7 @@ export function RegionEditor({
         >
           <FieldRow
             label="Currency"
-            value={`${selectedCurrency.code} ${selectedCurrency.symbol}`}
+            value={currencyLabel(selectedCurrency)}
             onPress={() => setCurrencyPickerOpen(true)}
           />
         </View>
@@ -292,7 +292,7 @@ export function RegionEditor({
         title="Currency"
         options={currencyOptions().map((currency) => ({
           value: currency.code,
-          label: `${currency.code} ${currency.symbol}`,
+          label: currencyLabel(currency),
           secondary: currency.name,
         }))}
         selected={value.currency}

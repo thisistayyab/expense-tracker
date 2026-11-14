@@ -364,8 +364,7 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
   const errors: string[] = [];
 
   if (!isRecord(value)) return { ok: false, errors: ["The file is not a JSON object"] };
-  if (value.format !== BACKUP_FORMAT) {
-    return { ok: false, errors: ["This is not an Expense Tracker backup"] };
+  if (value.format !== BACKUP_FORMAT) {        return { ok: false, errors: ["This is not a Suffice backup"] };
   }
   if (value.formatVersion !== BACKUP_FORMAT_VERSION) {
     return { ok: false, errors: [`Unsupported backup format ${String(value.formatVersion)}`] };

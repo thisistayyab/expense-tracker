@@ -2,7 +2,7 @@ import { Text, useWindowDimensions, View } from "react-native";
 import Svg, { Circle, Defs, LinearGradient, Path, Stop, Text as SvgText } from "react-native-svg";
 
 import type { TrendPoint } from "../../lib/domain/insights";
-import { formatMoney } from "../../lib/format/money";
+import { formatMoneySpoken } from "../../lib/format/money";
 import { useTheme } from "../../lib/theme";
 
 type Point = { x: number; y: number };
@@ -64,7 +64,7 @@ export function TrendChart({
   const summary = points
     .map(
       (point) =>
-        `${point.label}: ${formatMoney(point.expenseMinor, currency)} spent, ${formatMoney(
+        `${point.label}: ${formatMoneySpoken(point.expenseMinor, currency)} spent, ${formatMoneySpoken(
           point.incomeMinor,
           currency,
         )} income`,

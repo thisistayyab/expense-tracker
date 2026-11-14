@@ -20,7 +20,7 @@ import {
   Sheet,
   TextField,
 } from "../../components/ui";
-import { currencyOptions } from "../../constants/currencies";
+import { currencyLabel, currencyOptions } from "../../constants/currencies";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
 import {
@@ -588,7 +588,7 @@ export function RecurringEditorSheet({
         title="Currency"
         options={currencyOptions().map((entry) => ({
           value: entry.code,
-          label: `${entry.code} ${entry.symbol}`,
+          label: currencyLabel(entry),
           secondary: entry.name,
         }))}
         selected={currency}

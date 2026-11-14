@@ -91,8 +91,10 @@ export function DatePickerSheet({
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
         accessibilityLabel={label}
+        hitSlop={5}
         style={({ pressed }) => ({
-          height: 34,
+          minHeight: 34,
+          paddingVertical: 5,
           paddingHorizontal: 16,
           borderRadius: 17,
           justifyContent: "center",
@@ -211,9 +213,10 @@ export function DatePickerSheet({
                   accessibilityRole="button"
                   accessibilityLabel={dayLabel(iso)}
                   accessibilityState={{ selected }}
+                  hitSlop={5}
                   style={({ pressed }) => ({
                     width: 34,
-                    height: 34,
+                    minHeight: 34,
                     borderRadius: 17,
                     alignItems: "center",
                     justifyContent: "center",

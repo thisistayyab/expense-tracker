@@ -109,7 +109,7 @@ export default function WelcomeScreen() {
               justifyContent: "center",
             }}
           >
-            <Text style={{ color: "#FFFFFF", fontSize: 28, fontWeight: "700" }}>$</Text>
+            <Text style={{ color: "#FFFFFF", fontSize: 30, fontWeight: "700" }}>S</Text>
           </View>
 
           <Text

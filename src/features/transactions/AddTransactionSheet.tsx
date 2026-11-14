@@ -9,6 +9,7 @@ import {
   ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -27,7 +28,7 @@ import type { Account, Category, Db, Transaction, TransactionType } from "../../
 import { addDays, toIsoDate } from "../../lib/domain/dates";
 import {
   decimalPlaces,
-  formatMoney,
+  formatMoneySpoken,
   minorToDecimalString,
   parseMoneyInput,
   sanitizeMoneyInput,
@@ -94,8 +95,10 @@ export function AddTransactionSheet({
   onSaved,
 }: AddTransactionSheetProps) {
   const { theme } = useTheme();
+  const { fontScale } = useWindowDimensions();
   const db: Db = useSQLiteContext();
   const today = useMemo(() => toIsoDate(new Date()), []);
+  const amountLineHeight = Math.ceil(58 * Math.min(fontScale, 1.3));
 
   const [type, setType] = useState<TransactionType>(
     existing?.type ?? initialType ?? "expense",
@@ -373,7 +376,8 @@ export function AddTransactionSheet({
   const nameField = (
     <View
       style={{
-        height: 50,
+        minHeight: 50,
+        paddingVertical: 6,
         borderRadius: 18,
         backgroundColor: theme.colors.surfaceSunken,
         flexDirection: "row",
@@ -455,9 +459,11 @@ export function AddTransactionSheet({
                     accessibilityRole="button"
                     accessibilityState={{ selected: active, disabled: Boolean(existing) }}
                     accessibilityLabel={TYPE_LABELS[option]}
+                    hitSlop={6}
                     style={{
                       flex: 1,
-                      height: 32,
+                      minHeight: 32,
+                      paddingVertical: 4,
                       borderRadius: 16,
                       alignItems: "center",
                       justifyContent: "center",
@@ -465,6 +471,8 @@ export function AddTransactionSheet({
                     }}
                   >
                     <Text
+                      maxFontSizeMultiplier={1.3}
+                      numberOfLines={1}
                       style={[
                         theme.text.caption,
                         {
@@ -511,14 +519,15 @@ export function AddTransactionSheet({
             selectTextOnFocus
             accessibilityLabel={`Amount in ${currency}`}
             accessibilityValue={{
-              text: formatMoney(amountMinor ?? 0, currency, { withCode: true }),
+              text: formatMoneySpoken(amountMinor ?? 0, currency),
             }}
             maxLength={14}
+            maxFontSizeMultiplier={1.3}
             style={{
               width: "100%",
               textAlign: "center",
               fontSize: 54,
-              lineHeight: 58,
+              lineHeight: amountLineHeight,
               fontWeight: "700",
               letterSpacing: -2.2,
               fontVariant: ["tabular-nums"],
@@ -555,8 +564,10 @@ export function AddTransactionSheet({
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={category.name}
+                    hitSlop={5}
                     style={{
-                      height: 34,
+                      minHeight: 34,
+                      paddingVertical: 6,
                       paddingHorizontal: 14,
                       borderRadius: 17,
                       justifyContent: "center",
@@ -581,8 +592,10 @@ export function AddTransactionSheet({
                 onPress={() => setPicker("category")}
                 accessibilityRole="button"
                 accessibilityLabel="More categories"
+                hitSlop={5}
                 style={{
-                  height: 34,
+                  minHeight: 34,
+                  paddingVertical: 6,
                   paddingHorizontal: 14,
                   borderRadius: 17,
                   justifyContent: "center",
@@ -622,8 +635,10 @@ export function AddTransactionSheet({
                     }}
                     accessibilityRole="button"
                     accessibilityLabel={`Use ${name}`}
+                    hitSlop={7}
                     style={{
-                      height: 30,
+                      minHeight: 30,
+                      paddingVertical: 5,
                       paddingHorizontal: 12,
                       borderRadius: 15,
                       justifyContent: "center",
@@ -687,7 +702,8 @@ export function AddTransactionSheet({
               style={[
                 theme.text.body,
                 {
-                  height: 46,
+                  minHeight: 46,
+                  paddingVertical: 10,
                   paddingHorizontal: 14,
                   borderRadius: 16,
                   backgroundColor: theme.colors.surfaceSunken,
@@ -706,7 +722,7 @@ export function AddTransactionSheet({
                 theme.text.body,
                 {
                   minHeight: 46,
-                  maxHeight: 88,
+                  maxHeight: 140,
                   paddingHorizontal: 14,
                   paddingVertical: 12,
                   borderRadius: 16,

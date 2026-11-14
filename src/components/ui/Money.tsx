@@ -1,6 +1,10 @@
 import { Text, type StyleProp, type TextStyle } from "react-native";
 
-import { formatMoney, type MoneyFormatOptions } from "../../lib/format/money";
+import {
+  formatMoney,
+  formatMoneySpoken,
+  type MoneyFormatOptions,
+} from "../../lib/format/money";
 import { useTheme, type TextToken } from "../../lib/theme";
 
 export type MoneyTone = "default" | "income" | "muted" | "onInk" | "danger";
@@ -39,7 +43,7 @@ export function Money({
             ? theme.colors.danger
             : theme.colors.textPrimary;
 
-  const spoken = formatMoney(minor, currency, { ...options, withCode: true });
+  const spoken = formatMoneySpoken(minor, currency, options);
 
   return (
     <Text

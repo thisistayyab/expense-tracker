@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button } from "../../components/ui";
 import { useTheme } from "../../lib/theme";
-import { useAppLock } from "./AppLockProvider";
+import { useAppLock } from "./appLockContext";
 
 /**
  * Opaque lock surface. It never unmounts the app underneath (so returning from the
@@ -63,11 +63,11 @@ export function LockScreen() {
             marginBottom: 8,
           }}
         >
-          <Text style={{ fontSize: 30, color: theme.colors.accentFg }}>⌾</Text>
+          <Text style={{ fontSize: 32, fontWeight: "700", color: theme.colors.accentFg }}>S</Text>
         </View>
 
         <Text style={[theme.text.title1, { color: theme.colors.textPrimary, textAlign: "center" }]}>
-          Expense Tracker is locked
+          Suffice is locked
         </Text>
         <Text
           style={[

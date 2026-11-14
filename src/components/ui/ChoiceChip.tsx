@@ -39,8 +39,9 @@ export function ChoiceChip({
       accessibilityState={{ selected, disabled }}
       style={({ pressed }) => [
         {
-          height: 34,
+          minHeight: 34,
           minWidth: 34,
+          paddingVertical: 6,
           paddingHorizontal: 14,
           borderRadius: 17,
           flexDirection: "row",

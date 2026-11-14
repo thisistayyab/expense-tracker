@@ -66,7 +66,7 @@ end-to-end.
 ## M4 — Release 1.0 (0.5 week)
 
 Scope:
-- App identity: real name, icon, splash, store screenshots, listing copy.
+- App identity: **Suffice** name, icon, splash, store screenshots, listing copy.
 - Privacy policy stating local-only storage and no analytics in v1.
 - EAS build (`production` profile), TestFlight/internal track, crash reporting decision.
 - Data-loss safeguards documented in-app ("your data lives on this device").

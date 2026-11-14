@@ -115,6 +115,7 @@ export function FloatingTabBar({ state, descriptors, emitter, navigateToTab, ins
                   <Animated.Text
                     entering={reduceMotion ? undefined : FadeIn.duration(theme.motion.chip)}
                     exiting={reduceMotion ? undefined : FadeOut.duration(100)}
+                    maxFontSizeMultiplier={1.4}
                     style={[theme.text.label, { color: theme.colors.solidFg }]}
                   >
                     {title}

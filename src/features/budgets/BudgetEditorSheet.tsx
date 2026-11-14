@@ -7,7 +7,12 @@ import { getCurrency } from "../../constants/currencies";
 import { deactivateBudget, upsertBudget } from "../../lib/db/repos/budgets";
 import type { Budget, BudgetPeriod, Db } from "../../lib/db/types";
 import { PERIOD_LABELS } from "../../lib/domain/budget-period";
-import { minorToDecimalString, parseMoneyInput, sanitizeMoneyInput } from "../../lib/format/money";
+import {
+  decimalPlaces,
+  minorToDecimalString,
+  parseMoneyInput,
+  sanitizeMoneyInput,
+} from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
 import { useTheme } from "../../lib/theme";
 
@@ -61,7 +66,9 @@ export function BudgetEditorSheet({
 
   const minor = parseMoneyInput(text, currency);
   const valid = minor !== null && minor > 0;
+  const exponent = decimalPlaces(currency);
   const symbol = getCurrency(currency).symbol;
+  const placeholder = exponent === 0 ? "0" : exponent === 3 ? "0.000" : "0.00";
 
   const save = () => {
     if (saving || minor === null || minor <= 0) return;
@@ -132,16 +139,26 @@ export function BudgetEditorSheet({
             paddingVertical: 6,
           }}
         >
-          <Text style={[theme.text.title2, { color: theme.colors.textSecondary }]}>{symbol}</Text>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={[theme.text.title2, { color: theme.colors.textSecondary, lineHeight: 60 }]}
+          >
+            {symbol}
+          </Text>
           <TextInput
             value={text}
             onChangeText={(next) => setText(sanitizeMoneyInput(next, currency))}
-            keyboardType="decimal-pad"
+            keyboardType={exponent === 0 ? "number-pad" : "decimal-pad"}
+            inputMode={exponent === 0 ? "numeric" : "decimal"}
             accessibilityLabel={`${title} amount in ${currency}`}
-            placeholder="0.00"
+            placeholder={placeholder}
             placeholderTextColor={theme.colors.textTertiary}
             maxLength={12}
-            style={[theme.text.display, { color: theme.colors.textPrimary, minWidth: 120 }]}
+            maxFontSizeMultiplier={1.3}
+            style={[
+              theme.text.display,
+              { color: theme.colors.textPrimary, minWidth: 120, lineHeight: 60 },
+            ]}
           />
         </View>
 

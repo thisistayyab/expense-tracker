@@ -25,7 +25,7 @@ import { countTransactions, listTransactions } from "../../lib/db/repos/transact
 import type { Db, Transaction } from "../../lib/db/types";
 import { closestToLimit } from "../../lib/domain/budget-plan";
 import { addDays, toIsoDate } from "../../lib/domain/dates";
-import { formatMoney } from "../../lib/format/money";
+import { formatMoney, formatMoneySpoken } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
 import { useOnboarding } from "../../lib/onboarding";
 import { useTheme } from "../../lib/theme";
@@ -284,7 +284,7 @@ export default function OverviewScreen() {
                     ? "Set a budget"
                     : `${
                         data.isCurrentPeriod ? "Safe to spend" : "Left over"
-                      } ${formatMoney(heroAmount, currency)}${
+                      } ${formatMoneySpoken(heroAmount, currency)}${
                         data.isCurrentPeriod ? " per day" : ""
                       }. Opens the breakdown.`
                 }
@@ -575,7 +575,7 @@ export default function OverviewScreen() {
                           key={transaction.id}
                           onPress={() => router.push(`/transaction/${transaction.id}`)}
                           accessibilityRole="button"
-                          accessibilityLabel={`${title}, ${formatMoney(
+                          accessibilityLabel={`${title}, ${formatMoneySpoken(
                             transaction.amountMinor,
                             transaction.currency,
                           )}, ${subtitle}`}

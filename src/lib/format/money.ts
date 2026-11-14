@@ -13,7 +13,7 @@ import { getCurrency, type Currency } from "../../constants/currencies";
  *   2. A static fallback built from the currency table — used when Intl throws or
  *      returns no digits. It groups like en-US and keeps letters-only symbols
  *      spaced ("KWD 1,250.000") so USD/EUR/JPY/KWD read identically from either
- *      path; see `scripts/check-money.mjs`.
+ *      path.
  *
  * Minus signs are normalised to U+2212 so a negative amount matches the design
  * spec on every platform (Intl emits an ASCII hyphen).
@@ -83,6 +83,42 @@ export function formatMoney(
     return `${currency.code} ${signed}`;
   }
   return signed;
+}
+
+/**
+ * Screen-reader form. Currency symbols are read inconsistently (or skipped) by
+ * TalkBack/VoiceOver, so this uses the currency's spoken name from ICU and
+ * prefixes negatives with the word "minus". Falls back to the static name when
+ * Hermes was built without currency-name data.
+ */
+export function formatMoneySpoken(
+  minor: number,
+  code: string,
+  options: Pick<MoneyFormatOptions, "locale" | "showPlus"> = {},
+): string {
+  const currency = getCurrency(code);
+  const safeMinor = Number.isFinite(minor) ? Math.trunc(minor) : 0;
+  const absolute = Math.abs(safeMinor);
+  let value: string;
+
+  try {
+    value = normalizeSpaces(
+      new Intl.NumberFormat(options.locale, {
+        style: "currency",
+        currency: currency.code,
+        currencyDisplay: "name",
+        minimumFractionDigits: currency.exponent,
+        maximumFractionDigits: currency.exponent,
+      }).format(absolute / 10 ** currency.exponent),
+    );
+    if (!/\d/.test(value)) value = `${minorToDecimalString(absolute, currency.code)} ${currency.name}`;
+  } catch {
+    value = `${minorToDecimalString(absolute, currency.code)} ${currency.name}`;
+  }
+
+  if (safeMinor < 0) return `minus ${value}`;
+  if (options.showPlus && absolute > 0) return `plus ${value}`;
+  return value;
 }
 
 /** Number of decimals the amount field must accept for this currency. */

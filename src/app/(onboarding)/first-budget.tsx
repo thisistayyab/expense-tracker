@@ -149,20 +149,34 @@ export default function FirstBudgetScreen() {
                   marginTop: 10,
                 }}
               >
-                <Text style={[theme.text.display, { color: theme.colors.textSecondary }]}>
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  style={[
+                    theme.text.display,
+                    { color: theme.colors.textSecondary, lineHeight: 60 },
+                  ]}
+                >
                   {symbol}
                 </Text>
                 <TextInput
                   value={text}
                   onChangeText={(next) => setText(sanitizeMoneyInput(next, currency))}
-                  keyboardType="decimal-pad"
+                  keyboardType={decimalPlaces(currency) === 0 ? "number-pad" : "decimal-pad"}
+                  inputMode={decimalPlaces(currency) === 0 ? "numeric" : "decimal"}
                   accessibilityLabel={`Monthly budget in ${currency}`}
-                  placeholder={decimalPlaces(currency) === 0 ? "0" : "0.00"}
+                  placeholder={
+                    decimalPlaces(currency) === 0
+                      ? "0"
+                      : decimalPlaces(currency) === 3
+                        ? "0.000"
+                        : "0.00"
+                  }
                   placeholderTextColor={theme.colors.textTertiary}
                   maxLength={12}
+                  maxFontSizeMultiplier={1.3}
                   style={[
                     theme.text.display,
-                    { color: theme.colors.textPrimary, flex: 1, minWidth: 80 },
+                    { color: theme.colors.textPrimary, flex: 1, minWidth: 80, lineHeight: 60 },
                   ]}
                 />
               </View>

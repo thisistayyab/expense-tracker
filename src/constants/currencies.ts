@@ -210,6 +210,15 @@ export function getCurrency(code: string | null | undefined): Currency {
   return (key && byCode.get(key)) || byCode.get(DEFAULT_CURRENCY_CODE)!;
 }
 
+/**
+ * Code plus symbol for a picker or detail row. Plenty of currencies use their ISO
+ * code as the symbol (PKR, CHF, KWD), so appending it again reads "PKR PKR";
+ * the code alone carries the same information there.
+ */
+export function currencyLabel(currency: Currency): string {
+  return currency.symbol === currency.code ? currency.code : `${currency.code} ${currency.symbol}`;
+}
+
 export function currencyOptions(): Currency[] {
   return [...currencies].sort((a, b) => a.code.localeCompare(b.code));
 }

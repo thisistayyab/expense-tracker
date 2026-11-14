@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Alert, ScrollView, Text, TextInput, View } from "react-native";
 
 import { Button, ChoiceChip, FieldRow, PickerSheet, Sheet } from "../../components/ui";
-import { currencyOptions, getCurrency } from "../../constants/currencies";
+import { currencyLabel, currencyOptions, getCurrency } from "../../constants/currencies";
 import {
   createAccount,
   setAccountArchived,
@@ -195,7 +195,7 @@ export function AccountEditorSheet({
         >
           <FieldRow
             label="Currency"
-            value={`${currencyMeta.code} ${currencyMeta.symbol}`}
+            value={currencyLabel(currencyMeta)}
             onPress={currencyLocked ? undefined : () => setCurrencyOpen(true)}
             muted={currencyLocked}
           />
@@ -275,7 +275,7 @@ export function AccountEditorSheet({
         title="Currency"
         options={currencyOptions().map((entry) => ({
           value: entry.code,
-          label: `${entry.code} ${entry.symbol}`,
+          label: currencyLabel(entry),
           secondary: entry.name,
         }))}
         selected={currency}

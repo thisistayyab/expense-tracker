@@ -42,7 +42,8 @@ export function PeriodControl({
               accessibilityLabel={option.accessibilityLabel}
               style={({ pressed }) => ({
                 flexGrow: 1,
-                height: 32,
+                minHeight: 32,
+                paddingVertical: 4,
                 paddingHorizontal: 10,
                 borderRadius: 15,
                 alignItems: "center",

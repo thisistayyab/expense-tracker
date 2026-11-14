@@ -73,7 +73,7 @@ and a second, fainter one bottom-left. This is the only dark-first screen in v1 
 make the first three seconds feel premium, not form-like.
 
 1. `Skip` top-right, 14/600 at 45% white, 44 pt target.
-2. Logo mark 62 × 62, radius 20, iris gradient, white `$`, glow `0 18px 40px` at 45% accent.
+2. Logo mark 62 × 62, radius 20, iris fill, white `A`, glow `0 18px 40px` at 45% accent.
 3. Headline 34/39, weight 700, tracking −1.5, three lines, white.
 4. Body 15/22 at 55% white, max 280 pt.
 5. Three value rows: 24 pt accent-tinted circle with a white check, title 14/600, subtitle 12.5 at
@@ -101,7 +101,8 @@ make the first three seconds feel premium, not form-like.
 2. Search pill: 46 tall, full radius, white, no border, placeholder `Search country or currency`.
    Matches country name, ISO code and currency code.
 3. Country rows are 56 tall inside one 24-radius card: ISO code chip (28 × 22, radius 7, warm
-   grey fill) + name 15/500 + currency `code symbol` right-aligned 13 `text2`. No chevrons — the
+   grey fill) + name 15/500 + currency label right-aligned 13 `text2` (`code symbol`, or the
+   code alone when the symbol is the code, so PKR and CHF never repeat). No chevrons — the
    row *is* the selection. Flags are rendered as the code chip in mockups and as emoji glyphs on
    device; the code is the fallback when the platform lacks flag data.
 4. `Currency` sits in its own card directly above the CTA, value `USD $ ›`. It is deliberately
@@ -293,7 +294,7 @@ coral `Delete all data` text button → version line.
 3. `Country` and `Currency` both open the same **Currency & region** screen (§1b), with a back
    chevron instead of pager dots. Currency shows `USD $`, never a flag alone.
 4. Data rows: `Export CSV` (Share), `Backup (JSON)` (Save file), `Restore from backup`, `App
-   lock` (Off ›). A fourth group, `ABOUT`, holds `About Expense Tracker` (version) and `Privacy`
+   lock` (Off ›). A fourth group, `ABOUT`, holds `About Suffice` (version) and `Privacy`
    (Local only).
 5. `Delete all data` is a 46 pt coral text button, separated from the cards, typed confirmation
    (`DELETE`) only. It opens a bottom sheet; it is never a swipeable row.

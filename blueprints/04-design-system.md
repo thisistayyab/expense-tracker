@@ -6,7 +6,10 @@ and future themes from rotting.
 
 ## Brand
 
-- Name shown to users: **Expense Tracker** (rename before release; slug/scheme stay technical).
+- Name shown to users: **Suffice** (slug/scheme/database stay technical; trademark clearance is a launch task).
+- Meaning: *suffice*, pronounced *suh-FYSE*, is the verb "to be enough." The name is not an
+  acronym; it states the promise — one number that is enough for today — and is shown with that
+  definition on the About screen.
 - Personality: **calm, precise, quietly premium.** A warm paper canvas, ink-dark money surfaces,
   one electric iris accent. No gradients on text, no playful mascots, no confetti — but depth,
   glow and large type are welcome on hero surfaces.
@@ -194,7 +197,7 @@ All haptics go through one `lib/haptics.ts` wrapper so they can be disabled late
 - WCAG AA contrast on all text, in both themes. The iris accent on `accentSoft` passes; the
   accent on the warm canvas is for ≥16 px bold or ≥3:1 non-text only.
 - Screen-reader order matches visual order; the hero number is a single accessible node.
-- Money is read with its currency name ("42 dollars 80, US dollars"), not a bare symbol.
+- Money is read with its currency name ("42 dollars 80, US dollars") through `formatMoneySpoken`, not a bare symbol or ISO code.
 - Charts and rings expose a text equivalent; color is never the only signal (signs, labels).
 - Dynamic type up to 200% does not clip the add sheet, budget rows or tab pill.
 - Reduce-motion, reduce-transparency and the glow fallback (flat ink, no radial) honored.

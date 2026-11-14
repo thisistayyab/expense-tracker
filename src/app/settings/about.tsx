@@ -15,9 +15,12 @@ export default function AboutScreen() {
       contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
     >
       <Card variant="ink" style={{ padding: 20 }}>
-        <Text style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}>Expense Tracker</Text>
+        <Text style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}>Suffice</Text>
         <Text style={[theme.text.title2, { color: theme.colors.onInk, marginTop: 6 }]}>
           Calm, precise money tracking.
+        </Text>
+        <Text style={[theme.text.body, { color: theme.colors.onInkMuted, marginTop: 8 }]}>
+          The name comes from the verb to suffice: to be enough.
         </Text>
         <Text style={[theme.text.body, { color: theme.colors.onInkMuted, marginTop: 8 }]}>
           Version {version} · offline-first, no account, no bank connection.
@@ -61,7 +64,7 @@ export default function AboutScreen() {
           { color: theme.colors.textTertiary, textAlign: "center", marginTop: 20 },
         ]}
       >
-        Expense Tracker {version} · works offline
+        Suffice {version} · works offline
       </Text>
     </ScrollView>
   );

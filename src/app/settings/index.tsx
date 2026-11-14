@@ -8,7 +8,7 @@ import { Card, SectionHeader } from "../../components/ui";
 import { DeleteAllSheet } from "../../features/settings/DeleteAllSheet";
 import { SettingsRow } from "../../features/settings/SettingsRow";
 import { getCountry } from "../../constants/countries";
-import { getCurrency } from "../../constants/currencies";
+import { currencyLabel, getCurrency } from "../../constants/currencies";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
 import { listRecurringRules } from "../../lib/db/repos/recurring";
@@ -94,7 +94,7 @@ export default function SettingsScreen() {
           />
           <SettingsRow
             label="Currency"
-            value={`${data.currency} ${currency.symbol}`}
+            value={currencyLabel(currency)}
             glyph="$"
             tone="mint"
             showDivider
@@ -189,7 +189,7 @@ export default function SettingsScreen() {
         <SectionHeader title="About" />
         <Card padded={false}>
           <SettingsRow
-            label="About Expense Tracker"
+            label="About Suffice"
             value={`v${version}`}
             glyph="i"
             tone="slate"
@@ -211,7 +211,7 @@ export default function SettingsScreen() {
             { color: theme.colors.textTertiary, marginTop: 20, textAlign: "center" },
           ]}
         >
-          Expense Tracker {version} · works offline
+          Suffice {version} · works offline
         </Text>
       </ScrollView>
 

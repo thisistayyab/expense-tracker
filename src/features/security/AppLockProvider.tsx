@@ -1,8 +1,6 @@
 import { useSQLiteContext } from "expo-sqlite";
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -20,29 +18,10 @@ import {
   type LockCapability,
   type UnlockResult,
 } from "./appLock";
+import { AppLockContext } from "./appLockContext";
 import { LockScreen } from "./LockScreen";
 
-type AppLockContextValue = {
-  /** null while the persisted preference is loading. */
-  enabled: boolean | null;
-  locked: boolean;
-  capability: LockCapability | null;
-  enable: () => Promise<UnlockResult>;
-  disable: () => Promise<UnlockResult>;
-  unlock: () => Promise<UnlockResult>;
-  /** For a device that no longer has any screen lock: do not trap the user. */
-  turnOffUnavailable: () => Promise<void>;
-  /** Re-read `app_lock` after a restore replaced the settings table. */
-  refresh: () => Promise<void>;
-};
-
-const AppLockContext = createContext<AppLockContextValue | null>(null);
-
-export function useAppLock(): AppLockContextValue {
-  const value = useContext(AppLockContext);
-  if (!value) throw new Error("useAppLock must be used inside <AppLockProvider>");
-  return value;
-}
+export { useAppLock } from "./appLockContext";
 
 export function AppLockProvider({ children }: { children: ReactNode }) {
   const db: Db = useSQLiteContext();
