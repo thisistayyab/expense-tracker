@@ -1,4 +1,6 @@
+import { BlurTargetView } from "expo-blur";
 import { Redirect, Tabs } from "expo-router";
+import { type ComponentRef, useRef } from "react";
 import { View } from "react-native";
 
 import { FloatingTabBar } from "../../components/navigation/FloatingTabBar";
@@ -16,6 +18,7 @@ const DESTINATIONS = [
 // tabs cross-fades only foreground glass cards without re-rasterizing gradients.
 export default function TabsLayout() {
   const { onboarded } = useOnboarding();
+  const blurTargetRef = useRef<ComponentRef<typeof View> | null>(null);
 
   // The flag can flip while this group is mounted (the dev reset), so the check
   // lives here rather than only at the entry route.
@@ -24,24 +27,26 @@ export default function TabsLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScreenBackground />
-      <Tabs
-        tabBar={() => null}
-        screenOptions={{
-          headerShown: false,
-          animation: "fade",
-          sceneStyle: { backgroundColor: "transparent" },
-        }}
-      >
-        {DESTINATIONS.map((destination) => (
-          <Tabs.Screen
-            key={destination.name}
-            name={destination.name}
-            options={{ title: destination.label }}
-          />
-        ))}
-      </Tabs>
-      <FloatingTabBar />
+      <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+        <ScreenBackground />
+        <Tabs
+          tabBar={() => null}
+          screenOptions={{
+            headerShown: false,
+            animation: "fade",
+            sceneStyle: { backgroundColor: "transparent" },
+          }}
+        >
+          {DESTINATIONS.map((destination) => (
+            <Tabs.Screen
+              key={destination.name}
+              name={destination.name}
+              options={{ title: destination.label }}
+            />
+          ))}
+        </Tabs>
+      </BlurTargetView>
+      <FloatingTabBar blurTarget={blurTargetRef} />
     </View>
   );
 }

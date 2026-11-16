@@ -21,8 +21,13 @@ describe("periodWindow", () => {
     });
   });
 
-  test("a positive offset cannot look into the future", () => {
-    expect(periodWindow("monthly", TODAY, TODAY, 3).start).toBe("2026-03-01");
+  test("a positive offset plans ahead and is never the current period", () => {
+    expect(periodWindow("monthly", TODAY, TODAY, 1)).toEqual({
+      start: "2026-04-01",
+      end: "2026-04-30",
+      isCurrent: false,
+    });
+    expect(periodWindow("monthly", TODAY, TODAY, 3).start).toBe("2026-06-01");
   });
 
   test("yearly windows are whole calendar years", () => {

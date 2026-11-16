@@ -21,6 +21,7 @@ function budget(overrides: Partial<Budget> & { id: string }): Budget {
   return {
     categoryId: null,
     period: "monthly",
+    month: null,
     limitMinor: 100_000,
     currency: "USD",
     rollover: false,
@@ -40,6 +41,7 @@ describe("buildBudgetPlan", () => {
     const plan = buildBudgetPlan({
       currency: "USD",
       period: "monthly",
+      month: "2026-03",
       budgets: [budget({ id: "overall", limitMinor: 300_000 })],
       categories: [],
       spendByCategory: [],
@@ -62,6 +64,7 @@ describe("buildBudgetPlan", () => {
     const plan = buildBudgetPlan({
       currency: "USD",
       period: "monthly",
+      month: "2026-03",
       budgets: [],
       categories: [],
       spendByCategory: [],
@@ -81,6 +84,7 @@ describe("buildBudgetPlan", () => {
     const plan = buildBudgetPlan({
       currency: "USD",
       period: "monthly",
+      month: "2026-03",
       budgets: [budget({ id: "overall", limitMinor: 50_000 })],
       categories: [],
       spendByCategory: [],
@@ -98,6 +102,7 @@ describe("buildBudgetPlan", () => {
     const plan = buildBudgetPlan({
       currency: "USD",
       period: "monthly",
+      month: "2026-03",
       budgets: [
         budget({ id: "b-rent", categoryId: "rent", limitMinor: 80_000, period: "monthly" }),
         budget({ id: "b-food", categoryId: "food", limitMinor: 40_000 }),
@@ -135,6 +140,7 @@ describe("buildBudgetPlan", () => {
     const plan = buildBudgetPlan({
       currency: "USD",
       period: "monthly",
+      month: "2026-03",
       budgets: [
         budget({ id: "overall", limitMinor: 100_000 }),
         budget({ id: "food", categoryId: "food", limitMinor: 80_000 }),
@@ -156,6 +162,7 @@ describe("buildBudgetPlan", () => {
     const plan = buildBudgetPlan({
       currency: "USD",
       period: "monthly",
+      month: "2026-03",
       budgets: [budget({ id: "overall", limitMinor: 200_000 })],
       categories: [],
       spendByCategory: [],
@@ -168,10 +175,74 @@ describe("buildBudgetPlan", () => {
     expect(plan.safePerDayMinor).toBeNull();
   });
 
+  test("a month limit replaces the standing limit for that month only", () => {
+    const budgets = [
+      budget({ id: "overall-standing", limitMinor: 300_000 }),
+      budget({ id: "overall-december", limitMinor: 450_000, month: "2026-12" }),
+      budget({ id: "food-standing", categoryId: "food", limitMinor: 40_000 }),
+      budget({ id: "food-december", categoryId: "food", limitMinor: 60_000, month: "2026-12" }),
+    ];
+
+    const december = buildBudgetPlan({
+      currency: "USD",
+      period: "monthly",
+      month: "2026-12",
+      budgets,
+      categories: [food],
+      spendByCategory: [],
+      totalSpentMinor: 0,
+      daysRemaining: 31,
+      isCurrentPeriod: false,
+    });
+    expect(december.overallBudget?.id).toBe("overall-december");
+    expect(december.rows[0]).toMatchObject({
+      budgetId: "food-december",
+      month: "2026-12",
+      limitMinor: 60_000,
+    });
+
+    // January has no override, so the standing limits cover it again.
+    const january = buildBudgetPlan({
+      currency: "USD",
+      period: "monthly",
+      month: "2026-01",
+      budgets,
+      categories: [food],
+      spendByCategory: [],
+      totalSpentMinor: 0,
+      daysRemaining: 31,
+      isCurrentPeriod: false,
+    });
+    expect(january.overallBudget?.id).toBe("overall-standing");
+    expect(january.rows[0]).toMatchObject({
+      budgetId: "food-standing",
+      month: null,
+      limitMinor: 40_000,
+    });
+  });
+
+  test("weekly and yearly plans ignore month-specific rows", () => {
+    const plan = buildBudgetPlan({
+      currency: "USD",
+      period: "weekly",
+      month: "2026-03",
+      budgets: [budget({ id: "odd", month: "2026-03" })],
+      categories: [],
+      spendByCategory: [],
+      totalSpentMinor: 0,
+      daysRemaining: 7,
+      isCurrentPeriod: true,
+    });
+
+    expect(plan.overallBudget).toBeNull();
+    expect(plan.rows).toHaveLength(0);
+  });
+
   test("budgets in another currency are offered for recreation, never totalled", () => {
     const plan = buildBudgetPlan({
       currency: "USD",
       period: "monthly",
+      month: "2026-03",
       budgets: [
         budget({ id: "overall", limitMinor: 200_000 }),
         budget({ id: "eur", currency: "EUR", limitMinor: 90_000 }),
@@ -197,6 +268,7 @@ describe("closestToLimit", () => {
   ].map((row, index) => ({
     budgetId: `b-${index}`,
     categoryId: `c-${index}`,
+    month: null,
     name: row.name,
     icon: null,
     color: null,

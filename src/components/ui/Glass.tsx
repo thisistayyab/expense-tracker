@@ -1,4 +1,4 @@
-import { BlurView } from "expo-blur";
+import { BlurView, type BlurViewProps } from "expo-blur";
 import { GlassContainer, GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import type { ReactNode } from "react";
 import { Platform, StyleSheet, View, type ColorValue, type StyleProp, type ViewStyle } from "react-native";
@@ -29,12 +29,26 @@ export type GlassProps = {
   style?: StyleProp<ViewStyle>;
   /** Adds a subtle top-edge light catch and diagonal optical sheen on blurred glass. */
   sheen?: boolean;
+  /**
+   * Overrides the iOS 26 material. `clear` keeps the background visible (cards);
+   * `regular` frosts it, which navigation chrome needs so labels stay legible
+   * over scrolling content.
+   */
+  effect?: "regular" | "clear";
+  /** Target container ref required by Android `BlurView` to sample background content. */
+  blurTarget?: BlurViewProps["blurTarget"];
 };
 
 const BLUR_INTENSITY: Record<GlassTone, number> = {
   thin: 30,
   regular: 52,
   thick: 78,
+};
+
+const ANDROID_BLUR_INTENSITY: Record<GlassTone, number> = {
+  thin: 28,
+  regular: 42,
+  thick: 60,
 };
 
 /**
@@ -49,7 +63,8 @@ export function Glass({
   interactive = false,
   tintColor,
   style,
-  sheen = true,
+  effect,
+  blurTarget,
 }: GlassProps) {
   const { theme } = useTheme();
   const corner = radius ?? theme.radius.card;
@@ -60,12 +75,14 @@ export function Glass({
         ? theme.colors.glassThick
         : theme.colors.glass;
   const sized = [padded ? styles.padded : null, style];
+  const androidBlurred = Platform.OS === "android" && Boolean(blurTarget);
+  const useBlur = Platform.OS === "ios" || Platform.OS === "web" || androidBlurred;
 
   if (liquidGlass) {
     return (
       <GlassView
         colorScheme={theme.scheme}
-        glassEffectStyle={tone === "thick" ? "regular" : "clear"}
+        glassEffectStyle={effect ?? (tone === "thick" ? "regular" : "clear")}
         isInteractive={interactive}
         tintColor={tintColor}
         style={[{ borderRadius: corner, borderCurve: "continuous", overflow: "hidden" }, sized]}
@@ -75,6 +92,15 @@ export function Glass({
     );
   }
 
+  const androidGlassTint =
+    theme.scheme === "dark" ? "rgba(24, 27, 36, 0.34)" : "rgba(255, 255, 255, 0.42)";
+  const androidFallbackBg =
+    tone === "thin"
+      ? theme.colors.surfaceMuted
+      : theme.scheme === "dark"
+        ? "#181B23"
+        : "#FFFFFF";
+
   return (
     <View
       style={[
@@ -83,34 +109,53 @@ export function Glass({
           borderCurve: "continuous",
           overflow: "hidden",
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: theme.scheme === "dark" ? theme.colors.glassBorder : theme.colors.cardBorder,
+          borderColor:
+            theme.scheme === "dark"
+              ? androidBlurred
+                ? "rgba(255, 255, 255, 0.16)"
+                : theme.colors.glassBorder
+              : androidBlurred
+                ? "rgba(15, 23, 42, 0.11)"
+                : theme.colors.cardBorder,
           backgroundColor:
-            Platform.OS === "android"
+            Platform.OS === "android" && !androidBlurred
               ? typeof tintColor === "string"
                 ? tintColor
-                : tone === "thin"
-                  ? theme.colors.surfaceMuted
-                  : theme.scheme === "dark"
-                    ? "#181B23"
-                    : "#FFFFFF"
+                : androidFallbackBg
               : undefined,
         },
         sized,
       ]}
     >
-      {Platform.OS === "ios" || Platform.OS === "web" ? (
+      {useBlur ? (
         <>
           <BlurView
             pointerEvents="none"
-            tint={theme.colors.blurTint}
-            intensity={BLUR_INTENSITY[tone]}
-            style={StyleSheet.absoluteFill}
+            blurTarget={androidBlurred ? blurTarget : undefined}
+            blurMethod={androidBlurred ? "dimezisBlurViewSdk31Plus" : undefined}
+            blurReductionFactor={androidBlurred ? 3.5 : undefined}
+            tint={
+              androidBlurred
+                ? theme.scheme === "dark"
+                  ? "systemThinMaterialDark"
+                  : "systemThinMaterialLight"
+                : theme.colors.blurTint
+            }
+            intensity={androidBlurred ? ANDROID_BLUR_INTENSITY[tone] : BLUR_INTENSITY[tone]}
+            style={[StyleSheet.absoluteFill, { borderRadius: corner }]}
           />
           <View
             pointerEvents="none"
             style={[
               StyleSheet.absoluteFill,
-              { backgroundColor: typeof tintColor === "string" ? tintColor : fill },
+              {
+                backgroundColor:
+                  typeof tintColor === "string"
+                    ? tintColor
+                    : androidBlurred
+                      ? androidGlassTint
+                      : fill,
+              },
             ]}
           />
         </>

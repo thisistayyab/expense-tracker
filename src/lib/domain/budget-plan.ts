@@ -18,6 +18,8 @@ export type CategorySpend = {
 export type BudgetRow = {
   budgetId: string;
   categoryId: string;
+  /** The month this row's limit applies to; null when it is the standing limit. */
+  month: string | null;
   name: string;
   icon: string | null;
   color: string | null;
@@ -33,6 +35,8 @@ export type BudgetRow = {
 export type BudgetPlanInput = {
   currency: string;
   period: BudgetPeriod;
+  /** `YYYY-MM` of the window; a monthly override for it wins over the standing limit. */
+  month: string;
   /** Active budgets for every currency/period; filtered here. */
   budgets: readonly Budget[];
   categories: readonly Category[];
@@ -74,18 +78,39 @@ function categoryLookup(categories: readonly Category[]): Map<string, Category> 
   return new Map(categories.map((category) => [category.id, category]));
 }
 
+/**
+ * One limit per (currency, category): the row for this month wins, and without one
+ * the standing limit covers the month. Currency is part of the key because two
+ * currencies may hold the same category at the same time.
+ */
+function resolveForMonth(budgets: readonly Budget[], month: string): Budget[] {
+  const key = (budget: Budget) => `${budget.currency}|${budget.categoryId ?? "overall"}`;
+  const resolved = new Map<string, Budget>();
+  for (const budget of budgets) {
+    if (budget.month === null) resolved.set(key(budget), budget);
+  }
+  for (const budget of budgets) {
+    if (budget.month === month) resolved.set(key(budget), budget);
+  }
+  return [...resolved.values()];
+}
+
 export function buildBudgetPlan(input: BudgetPlanInput): BudgetPlan {
   const currency = input.currency.toUpperCase();
   const activeForPeriod = input.budgets.filter(
     (budget) => budget.isActive && budget.period === input.period,
   );
+  // Weekly and yearly budgets have no month axis, so they only ever read standing
+  // rows; a monthly plan layers the displayed month's limits over them.
+  const scoped =
+    input.period === "monthly"
+      ? resolveForMonth(activeForPeriod, input.month)
+      : activeForPeriod.filter((budget) => budget.month === null);
 
   const overallBudget =
-    activeForPeriod.find(
-      (budget) => budget.currency === currency && budget.categoryId === null,
-    ) ?? null;
+    scoped.find((budget) => budget.currency === currency && budget.categoryId === null) ?? null;
 
-  const matched = activeForPeriod.filter(
+  const matched = scoped.filter(
     (budget) => budget.currency === currency && budget.categoryId !== null,
   );
 
@@ -106,6 +131,7 @@ export function buildBudgetPlan(input: BudgetPlanInput): BudgetPlan {
       return {
         budgetId: budget.id,
         categoryId: budget.categoryId!,
+        month: budget.month,
         // A budget outlives its category only if the category was hard-deleted;
         // ON DELETE CASCADE normally removes both together.
         name: category?.name ?? "Removed category",
@@ -173,7 +199,7 @@ export function buildBudgetPlan(input: BudgetPlanInput): BudgetPlan {
     totalCategoryLimitsMinor: totalLimits(limits),
     categoryLimitsExceedOverall:
       overallLimitMinor !== null && totalLimits(limits) > overallLimitMinor,
-    previousCurrencyBudgets: activeForPeriod.filter((budget) => budget.currency !== currency),
+    previousCurrencyBudgets: scoped.filter((budget) => budget.currency !== currency),
   };
 }
 

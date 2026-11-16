@@ -172,6 +172,10 @@ export default function FirstBudgetScreen() {
                   >
                     {symbol}
                   </Text>
+                  {/* No lineHeight on the input: on iOS a single-line TextInput spreads
+                      a large lineHeight unevenly, clipping the digits and sinking them
+                      below the symbol's baseline (Android centres them). The row's
+                      alignItems centres the input, so it lines up on both platforms. */}
                   <TextInput
                     value={text}
                     onChangeText={(next) => setText(sanitizeMoneyInput(next, currency))}
@@ -192,7 +196,7 @@ export default function FirstBudgetScreen() {
                     maxFontSizeMultiplier={1.3}
                     style={[
                       theme.text.display,
-                      { color: theme.colors.textPrimary, flex: 1, minWidth: 80, lineHeight: 60 },
+                      { color: theme.colors.textPrimary, flex: 1, minWidth: 80, paddingVertical: 0 },
                     ]}
                   />
                 </View>

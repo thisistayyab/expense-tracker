@@ -71,6 +71,8 @@ export type Budget = {
   id: string;
   categoryId: string | null;
   period: BudgetPeriod;
+  /** `YYYY-MM` for a limit that applies to that month only; null = every month. */
+  month: string | null;
   limitMinor: number;
   currency: string;
   rollover: boolean;

@@ -13,6 +13,7 @@ import {
   CategoryTile,
   Glass,
   Money,
+  MonthSelector,
   PickerSheet,
   ProgressBar,
   ProgressRing,
@@ -24,7 +25,12 @@ import { useBudgetPlan } from "../../features/budgets/useBudgetPlan";
 import { deactivateBudget } from "../../lib/db/repos/budgets";
 import { setSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import type { Budget, BudgetPeriod, Db } from "../../lib/db/types";
-import { PERIOD_LABELS } from "../../lib/domain/budget-period";
+import {
+  monthShortLabel,
+  PERIOD_LABELS,
+  periodWindow,
+  windowLabel,
+} from "../../lib/domain/budget-period";
 import { toIsoDate } from "../../lib/domain/dates";
 import { formatMoney } from "../../lib/format/money";
 import { iosEnter } from "../../lib/motion";
@@ -33,14 +39,17 @@ import { useTheme } from "../../lib/theme";
 type Editing = {
   categoryId: string | null;
   title: string;
-  /** The row being edited in this currency; null when creating or recreating. */
-  existing: Budget | null;
   initialLimitMinor?: number;
+  /** The row being recreated was limited to one month; keep that scope. */
+  monthScope?: boolean;
   /** Previous-currency row retired once its replacement is saved. */
   replacesBudgetId?: string;
 };
 
 const PERIODS: BudgetPeriod[] = ["weekly", "monthly", "yearly"];
+
+/** How far ahead a month-specific limit may be planned from the Budgets screen. */
+const MAX_MONTH_OFFSET = 12;
 
 function isBudgetPeriod(value: string): value is BudgetPeriod {
   return value === "weekly" || value === "monthly" || value === "yearly";
@@ -52,10 +61,16 @@ export default function BudgetsScreen() {
   const db: Db = useSQLiteContext();
   const today = useMemo(() => toIsoDate(new Date()), []);
   const [periodOverride, setPeriodOverride] = useState<BudgetPeriod | undefined>(undefined);
-  const { data, loading, error, refresh } = useBudgetPlan({ period: periodOverride });
+  const [monthOffset, setMonthOffset] = useState(0);
+  const { data, loading, error, refresh } = useBudgetPlan({
+    period: periodOverride,
+    monthOffset,
+  });
   const [editing, setEditing] = useState<Editing | null>(null);
   const [picking, setPicking] = useState(false);
+  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
   const [periodOpen, setPeriodOpen] = useState(false);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const firstFocus = useRef(true);
 
@@ -78,14 +93,13 @@ export default function BudgetsScreen() {
 
   const openOverall = () => {
     if (!plan) return;
-    setEditing({ categoryId: null, title: "Overall budget", existing: plan.overallBudget });
+    setEditing({ categoryId: null, title: "Overall budget" });
   };
 
-  const openCategory = (categoryId: string, budget: Budget | null) => {
+  const openCategory = (categoryId: string) => {
     setEditing({
       categoryId,
       title: categoryById.get(categoryId)?.name ?? "Category limit",
-      existing: budget,
     });
   };
 
@@ -97,8 +111,8 @@ export default function BudgetsScreen() {
     setEditing({
       categoryId: budget.categoryId,
       title: `${name} in ${data.currency}`,
-      existing: null,
       initialLimitMinor: budget.limitMinor,
+      monthScope: budget.month !== null,
       replacesBudgetId: budget.id,
     });
   };
@@ -122,6 +136,7 @@ export default function BudgetsScreen() {
   const changePeriod = (next: BudgetPeriod) => {
     if (next === data?.period) return;
     setActionError(null);
+    setMonthOffset(0);
     setSettings(db, { [SETTING_KEYS.budgetPeriod]: next })
       // The hook reloads from the override, and the stored key keeps Overview in
       // step the next time it is opened.
@@ -130,6 +145,39 @@ export default function BudgetsScreen() {
         setActionError(`Could not change the period: ${String(cause)}`);
       });
   };
+
+  const monthKey = data?.month ?? today.slice(0, 7);
+  // The editor needs both limits: the every-month one and this month's override.
+  const findLimits = (
+    categoryId: string | null,
+  ): { standing: Budget | null; monthly: Budget | null } => {
+    if (!data) return { standing: null, monthly: null };
+    const matching = data.budgets.filter(
+      (budget) =>
+        budget.categoryId === categoryId &&
+        budget.period === data.period &&
+        budget.currency === data.currency,
+    );
+    return {
+      standing: matching.find((budget) => budget.month === null) ?? null,
+      monthly: matching.find((budget) => budget.month === monthKey) ?? null,
+    };
+  };
+  const editingLimits = editing ? findLimits(editing.categoryId) : { standing: null, monthly: null };
+  const monthOptions = useMemo(() => {
+    const min = data?.minMonthOffset ?? 0;
+    const offsets = [0];
+    for (let offset = 1; offset <= MAX_MONTH_OFFSET; offset += 1) offsets.push(offset);
+    for (let offset = -1; offset >= min; offset -= 1) offsets.push(offset);
+    return offsets.map((offset) => {
+      const window = periodWindow("monthly", today, today, offset);
+      return {
+        value: String(offset),
+        label: windowLabel("monthly", window),
+        secondary: offset === 0 ? "Current month" : offset === 1 ? "Next month" : undefined,
+      };
+    });
+  }, [data?.minMonthOffset, today]);
 
   const rows = plan?.rows ?? [];
   const availableCategories = (data?.categories ?? []).filter(
@@ -203,6 +251,27 @@ export default function BudgetsScreen() {
             </TactilePressable>
           </View>
 
+          {data?.period === "monthly" ? (
+            <View style={{ marginTop: 14 }}>
+              <MonthSelector
+                label={data.label}
+                onPrevious={
+                  data.monthOffset > data.minMonthOffset
+                    ? () => setMonthOffset((value) => Math.max(data.minMonthOffset, value - 1))
+                    : undefined
+                }
+                onNext={
+                  data.monthOffset < MAX_MONTH_OFFSET
+                    ? () => setMonthOffset((value) => Math.min(MAX_MONTH_OFFSET, value + 1))
+                    : undefined
+                }
+                onPressLabel={() => setMonthPickerOpen(true)}
+                canGoPrevious={data.monthOffset > data.minMonthOffset}
+                canGoNext={data.monthOffset < MAX_MONTH_OFFSET}
+              />
+            </View>
+          ) : null}
+
           {error || actionError ? (
             <Text style={[theme.text.caption, { color: theme.colors.danger, marginTop: 10 }]}>
               {error ?? actionError}
@@ -226,7 +295,9 @@ export default function BudgetsScreen() {
                           <Text
                             style={[theme.text.eyebrow, { color: theme.colors.textSecondary }]}
                           >
-                            Overall budget
+                            {plan?.overallBudget?.month
+                              ? `Overall budget · ${monthShortLabel(plan.overallBudget.month)} only`
+                              : "Overall budget"}
                           </Text>
                           <Money
                             minor={plan.overallLimitMinor}
@@ -237,10 +308,15 @@ export default function BudgetsScreen() {
                           <Text
                             style={[theme.text.caption, { color: theme.colors.textSecondary }]}
                           >
-                            {`${formatMoney(plan.spentMinor, data.currency)} spent · ${formatMoney(
-                              plan.remainingMinor ?? 0,
-                              data.currency,
-                            )} left`}
+                            {(plan.remainingMinor ?? 0) < 0
+                              ? `${formatMoney(plan.spentMinor, data.currency)} spent · ${formatMoney(
+                                  Math.abs(plan.remainingMinor ?? 0),
+                                  data.currency,
+                                )} over`
+                              : `${formatMoney(plan.spentMinor, data.currency)} spent · ${formatMoney(
+                                  plan.remainingMinor ?? 0,
+                                  data.currency,
+                                )} left`}
                           </Text>
                         </View>
                         <ProgressRing value={plan.progress} size={78} stroke={8} color={ringColor}>
@@ -339,28 +415,28 @@ export default function BudgetsScreen() {
               ) : null}
 
               <Animated.View entering={iosEnter(90)}>
-                <SectionHeader title="Category limits" />
+                <SectionHeader
+                  title={
+                    data.monthOffset === 0
+                      ? "Category limits"
+                      : `Category limits · ${data.label}`
+                  }
+                />
 
                 {rows.length ? (
                   <Card variant="glass" padded={false}>
                     {rows.map((row, index) => {
-                      const budget =
-                        data.budgets.find(
-                          (candidate) =>
-                            candidate.categoryId === row.categoryId &&
-                            candidate.period === data.period &&
-                            candidate.currency === data.currency,
-                        ) ?? null;
                       const status =
                         row.remainingMinor < 0
                           ? `${formatMoney(Math.abs(row.remainingMinor), data.currency)} over`
                           : row.state === "warning"
                             ? `${Math.round(row.progress * 100)}% used`
                             : `${formatMoney(row.remainingMinor, data.currency)} left`;
+                      const scopeNote = row.month ? ` · ${monthShortLabel(row.month)} only` : "";
                       return (
                         <TactilePressable
                           key={row.budgetId}
-                          onPress={() => openCategory(row.categoryId, budget)}
+                          onPress={() => openCategory(row.categoryId)}
                           haptic="selection"
                           scaleTo={0.985}
                           radius={14}
@@ -399,7 +475,7 @@ export default function BudgetsScreen() {
                                 ]}
                                 numberOfLines={1}
                               >
-                                {status}
+                                {`${status}${scopeNote}`}
                               </Text>
                             </View>
                             <Money
@@ -431,7 +507,10 @@ export default function BudgetsScreen() {
                         size="sm"
                         fullWidth={false}
                         disabled={availableCategories.length === 0}
-                        onPress={() => setPicking(true)}
+                        onPress={() => {
+                          setPendingCategoryId(null);
+                          setPicking(true);
+                        }}
                       />
                     </View>
                   </Card>
@@ -444,7 +523,10 @@ export default function BudgetsScreen() {
                     size="sm"
                     fullWidth={false}
                     disabled={availableCategories.length === 0}
-                    onPress={() => setPicking(true)}
+                    onPress={() => {
+                      setPendingCategoryId(null);
+                      setPicking(true);
+                    }}
                     style={{ marginTop: 10, alignSelf: "flex-start" }}
                   />
                 ) : null}
@@ -487,7 +569,9 @@ export default function BudgetsScreen() {
                             >
                               {`${formatMoney(budget.limitMinor, budget.currency)} ${
                                 budget.currency
-                              } · ${PERIOD_LABELS[budget.period]}`}
+                              } · ${PERIOD_LABELS[budget.period]}${
+                                budget.month ? ` · ${monthShortLabel(budget.month)} only` : ""
+                              }`}
                             </Text>
                           </View>
                           <Button
@@ -527,7 +611,9 @@ export default function BudgetsScreen() {
                   ? "Weekly budgets carry over — every week uses the same limit."
                   : data.period === "yearly"
                     ? "Yearly budgets carry over — they do not reset in January."
-                    : "Monthly budgets carry over — they do not reset on the 1st."}
+                    : data.monthOffset === 0
+                      ? "Monthly limits carry over. Set one for a single month and only that month changes."
+                      : `${data.label} uses its own limit where set; otherwise the every-month limit applies.`}
                 {" Each period keeps its own limits."}
               </Text>
             </>
@@ -544,8 +630,15 @@ export default function BudgetsScreen() {
         }))}
         searchable
         searchPlaceholder="Search categories"
-        onSelect={(value) => openCategory(value, null)}
+        onSelect={(value) => setPendingCategoryId(value)}
         onClose={() => setPicking(false)}
+        onClosed={() => {
+          if (pendingCategoryId) {
+            const categoryId = pendingCategoryId;
+            setPendingCategoryId(null);
+            openCategory(categoryId);
+          }
+        }}
       />
 
       <PickerSheet
@@ -568,17 +661,31 @@ export default function BudgetsScreen() {
         onClose={() => setPeriodOpen(false)}
       />
 
+      <PickerSheet
+        visible={monthPickerOpen}
+        title="Budget month"
+        options={monthOptions}
+        selected={String(data?.monthOffset ?? 0)}
+        onSelect={(value) => setMonthOffset(Number(value))}
+        onClose={() => setMonthPickerOpen(false)}
+      />
+
       {editing && data ? (
         <BudgetEditorSheet
-          key={`${editing.categoryId ?? "overall"}-${editing.replacesBudgetId ?? "own"}`}
+          key={`${editing.categoryId ?? "overall"}-${editing.replacesBudgetId ?? "own"}-${data.month}`}
           visible
           currency={data.currency}
           period={data.period}
-          startDate={editing.existing?.startDate ?? today}
+          month={data.month}
+          monthLabel={data.label}
+          isCurrentMonth={data.isCurrentPeriod}
+          startDate={editingLimits.standing?.startDate ?? today}
           categoryId={editing.categoryId}
           title={editing.title}
-          existing={editing.existing}
+          standing={editingLimits.standing}
+          monthly={editingLimits.monthly}
           initialLimitMinor={editing.initialLimitMinor}
+          initialScope={editing.monthScope ? "month" : undefined}
           onClose={() => setEditing(null)}
           onSaved={finishEditing}
         />

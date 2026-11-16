@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { FlatList, Keyboard, Pressable, Text, TextInput, View } from "react-native";
+import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AppIcon, Button, FieldRow, PickerSheet } from "../../components/ui";
 import {
@@ -120,13 +120,13 @@ export function RegionEditor({
             marginTop: 16,
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
-            borderWidth: 1,
-            borderColor: theme.colors.glassBorder,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: theme.colors.cardBorder,
             padding: 16,
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
-            backgroundColor: theme.colors.glassThick,
+            backgroundColor: theme.colors.surface,
           }}
         >
           <Text style={{ fontSize: 22 }}>{selected.flag}</Text>
@@ -162,10 +162,10 @@ export function RegionEditor({
               height: 46,
               borderRadius: 23,
               paddingHorizontal: 16,
-              backgroundColor: theme.colors.glassThin,
+              backgroundColor: theme.colors.surfaceMuted,
               color: theme.colors.textPrimary,
-              borderWidth: 1,
-              borderColor: theme.colors.glassBorder,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: theme.colors.cardBorder,
             },
           ]}
         />
@@ -186,12 +186,16 @@ export function RegionEditor({
         keyboardShouldPersistTaps="handled"
         style={{ flex: 1, marginHorizontal: 20 }}
         contentContainerStyle={{
-          backgroundColor: theme.colors.glassThick,
+          backgroundColor: theme.colors.surface,
           borderRadius: theme.radius.card,
           borderCurve: "continuous",
-          borderWidth: 1,
-          borderColor: theme.colors.glassBorder,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: theme.colors.cardBorder,
           overflow: "hidden",
+          // Rows are edge-to-edge tappable, but their content needs the inset the
+          // design's pickgroup had: otherwise the flag tile, currency code and
+          // check icon sit flush against the card's border and rounded corners.
+          paddingHorizontal: 16,
         }}
         renderItem={({ item, index }) => {
           const isSelected = item.code === value.country;
@@ -206,7 +210,7 @@ export function RegionEditor({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 12,
-                borderTopWidth: index === 0 ? 0 : 1,
+                borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
                 borderTopColor: theme.colors.border,
                 opacity: pressed ? 0.6 : 1,
               })}
@@ -262,9 +266,9 @@ export function RegionEditor({
 
         <View
           style={{
-            backgroundColor: theme.colors.glass,
-            borderWidth: 1,
-            borderColor: theme.colors.glassBorder,
+            backgroundColor: theme.colors.surface,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: theme.colors.cardBorder,
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
             overflow: "hidden",

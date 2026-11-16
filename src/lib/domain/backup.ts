@@ -111,6 +111,7 @@ export const TABLE_COLUMNS: Record<BackupTable, readonly string[]> = {
     "id",
     "category_id",
     "period",
+    "month",
     "limit_minor",
     "currency",
     "rollover",
@@ -166,6 +167,9 @@ const isNullableIso: Check = (value) => value === null || isIso(value);
 const isInstant: Check = (value) =>
   typeof value === "string" && !Number.isNaN(Date.parse(value));
 const isCurrency: Check = (value) => typeof value === "string" && isCurrencyCode(value);
+const isNullableMonth: Check = (value) =>
+  value === null ||
+  (typeof value === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value));
 const integerAtLeast = (minimum: number): Check => (value) =>
   Number.isSafeInteger(value) && (value as number) >= minimum;
 const nullableInteger = (minimum: number): Check => (value) =>
@@ -255,6 +259,7 @@ const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
     id: isString,
     category_id: isNullableString,
     period: oneOf(BUDGET_PERIODS),
+    month: isNullableMonth,
     limit_minor: integerAtLeast(1),
     currency: isCurrency,
     rollover: isBoolInt,
@@ -327,18 +332,25 @@ function validateRows(table: BackupTable, rows: unknown, errors: string[]): Back
       if (!known.has(key)) push(errors, `${table}[${index}] has unknown column ${key}`);
     }
 
+    const normalized = { ...(row as BackupRow) };
     for (const column of columns) {
-      if (!(column in row)) {
+      if (!(column in normalized)) {
+        // Backups written before schema 4 have no month: their budgets are standing
+        // limits that apply to every month, which is exactly what null means.
+        if (table === "budgets" && column === "month") {
+          normalized.month = null;
+          continue;
+        }
         push(errors, `${table}[${index}] is missing ${column}`);
         continue;
       }
-      const value = row[column];
+      const value = normalized[column];
       if (!checks[column](value)) {
         push(errors, `${table}[${index}].${column} has an invalid value`);
       }
     }
 
-    out.push(row as BackupRow);
+    out.push(normalized);
   });
 
   return out;
@@ -469,6 +481,9 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
     if (row.category_id !== null && !categoryIds.has(String(row.category_id))) {
       push(errors, `Budget ${String(row.id)} points at a missing category`);
     }
+    if (row.month !== null && row.period !== "monthly") {
+      push(errors, `Budget ${String(row.id)} has a month but is not monthly`);
+    }
   }
   for (const row of tables.category_rules) {
     if (!categoryIds.has(String(row.category_id))) {
@@ -494,7 +509,7 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
   for (const row of tables.budgets) {
     const key = `${String(row.category_id ?? "overall")}|${String(row.period)}|${String(
       row.currency,
-    )}`;
+    )}|${String(row.month ?? "every-month")}`;
     if (budgetKeys.has(key)) push(errors, `Duplicate budget for ${key}`);
     budgetKeys.add(key);
   }

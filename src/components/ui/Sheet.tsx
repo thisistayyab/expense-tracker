@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -41,6 +42,8 @@ import { TactilePressable } from "./TactilePressable";
 export type SheetProps = {
   visible: boolean;
   onClose: () => void;
+  /** Called once exit animation and native Modal dismissal have fully finished. */
+  onClosed?: () => void;
   title?: string;
   subtitle?: string;
   children: ReactNode;
@@ -48,6 +51,13 @@ export type SheetProps = {
   maxHeightRatio?: number;
   embedded?: boolean;
 };
+
+type SheetStage =
+  | "closed"
+  | "open"
+  | "closingExternal"
+  | "closingInteractive"
+  | "nativeDismissing";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const INITIAL_OFFSET = Math.min(SCREEN_HEIGHT, 640);
@@ -59,6 +69,7 @@ const INITIAL_OFFSET = Math.min(SCREEN_HEIGHT, 640);
 export function Sheet({
   visible,
   onClose,
+  onClosed,
   title,
   subtitle,
   children,
@@ -70,38 +81,68 @@ export function Sheet({
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
 
-  const [mounted, setMounted] = useState(visible);
-  if (visible && !mounted) {
-    setMounted(true);
+  const [prevVisible, setPrevVisible] = useState(visible);
+  const [stage, setStage] = useState<SheetStage>(visible ? "open" : "closed");
+
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible && stage !== "open") {
+      setStage("open");
+    } else if (!visible && stage === "open") {
+      setStage("closingExternal");
+    }
   }
+
+  const closedNotifiedRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  const onClosedRef = useRef(onClosed);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    onClosedRef.current = onClosed;
+  }, [onClose, onClosed]);
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
   const keyboardShift = useSharedValue(0);
   const handleActive = useSharedValue(0);
 
-  const finishClose = useCallback(() => {
-    setMounted(false);
-    onClose();
-  }, [onClose]);
+  const notifyClosedOnce = useCallback(() => {
+    if (closedNotifiedRef.current) return;
+    closedNotifiedRef.current = true;
+    onClosedRef.current?.();
+  }, []);
+
+  const finishNativeDismiss = useCallback(() => {
+    setStage((current) => (current === "nativeDismissing" ? "closed" : current));
+    notifyClosedOnce();
+  }, [notifyClosedOnce]);
+
+  const finishSlideOut = useCallback(
+    (wasInteractive: boolean) => {
+      if (wasInteractive) {
+        onCloseRef.current();
+      }
+      if (embedded) {
+        setStage("closed");
+        notifyClosedOnce();
+      } else {
+        setStage("nativeDismissing");
+      }
+    },
+    [embedded, notifyClosedOnce],
+  );
 
   const dismissInteractive = useCallback(() => {
+    if (stage !== "open") return;
+    Keyboard.dismiss();
     haptics.tick();
-    if (reduceMotion) {
-      progress.set(0);
-      dragY.set(0);
-      finishClose();
-      return;
-    }
-    progress.set(
-      withTiming(0, { duration: 220 }, (finished) => {
-        if (finished) runOnJS(finishClose)();
-      }),
-    );
-  }, [dragY, finishClose, progress, reduceMotion]);
+    setStage("closingInteractive");
+  }, [stage]);
 
   useEffect(() => {
-    if (visible) {
+    if (stage === "open") {
+      closedNotifiedRef.current = false;
       dragY.set(0);
       if (reduceMotion) {
         progress.set(1);
@@ -109,14 +150,40 @@ export function Sheet({
         progress.set(0);
         progress.set(withSpring(1, SPRING_SHEET));
       }
-    } else if (mounted) {
+      return undefined;
+    }
+
+    if (stage === "closingInteractive" && embedded) {
+      dragY.set(0);
+      const frame = requestAnimationFrame(() => {
+        setStage("open");
+        onCloseRef.current();
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+
+    if (stage === "closingExternal" || stage === "closingInteractive") {
+      const wasInteractive = stage === "closingInteractive";
+      if (reduceMotion) {
+        progress.set(0);
+        const timer = setTimeout(() => finishSlideOut(wasInteractive), 16);
+        return () => clearTimeout(timer);
+      }
       progress.set(
-        withTiming(0, { duration: reduceMotion ? 1 : 200 }, (finished) => {
-          if (finished) runOnJS(setMounted)(false);
+        withTiming(0, { duration: 200 }, (finished) => {
+          if (finished) runOnJS(finishSlideOut)(wasInteractive);
         }),
       );
+      return undefined;
     }
-  }, [dragY, mounted, progress, reduceMotion, visible]);
+
+    if (stage === "nativeDismissing") {
+      const timer = setTimeout(finishNativeDismiss, Platform.OS === "ios" ? 250 : 32);
+      return () => clearTimeout(timer);
+    }
+
+    return undefined;
+  }, [dragY, embedded, finishNativeDismiss, finishSlideOut, progress, reduceMotion, stage]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -140,7 +207,7 @@ export function Sheet({
     };
   }, [insets.bottom, keyboardShift, reduceMotion]);
 
-  const panGesture = useMemo(
+  const createPanGesture = useCallback(
     () =>
       Gesture.Pan()
         .activeOffsetY(5)
@@ -165,6 +232,10 @@ export function Sheet({
     [dismissInteractive, dragY, handleActive, reduceMotion],
   );
 
+  // RNGH forbids binding the same Gesture instance to multiple GestureDetectors.
+  const grabberPan = useMemo(() => createPanGesture(), [createPanGesture]);
+  const headerPan = useMemo(() => createPanGesture(), [createPanGesture]);
+
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(dragY.value, [0, 320], [1, 0.2], Extrapolation.CLAMP);
     return {
@@ -184,7 +255,7 @@ export function Sheet({
     opacity: interpolate(handleActive.value, [0, 1], [0.32, 0.6]),
   }));
 
-  if (!mounted && !visible) return null;
+  if (stage === "closed" && !visible) return null;
 
   const maxHeight = Math.round(SCREEN_HEIGHT * maxHeightRatio);
   const sheetSurfaceColor =
@@ -215,8 +286,8 @@ export function Sheet({
         ) : null}
       </View>
 
-      <GestureDetector gesture={panGesture}>
-        <View>
+      <View>
+        <GestureDetector gesture={grabberPan}>
           <View style={styles.grabberRow}>
             <Animated.View
               style={[
@@ -226,9 +297,11 @@ export function Sheet({
               ]}
             />
           </View>
+        </GestureDetector>
 
-          {title || subtitle ? (
-            <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+        {title || subtitle ? (
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <GestureDetector gesture={headerPan}>
               <View style={styles.headerText}>
                 {title ? (
                   <Text style={[theme.text.title2, { color: theme.colors.textPrimary }]}>
@@ -246,27 +319,27 @@ export function Sheet({
                   </Text>
                 ) : null}
               </View>
-              <TactilePressable
-                onPress={dismissInteractive}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                hitSlop={10}
-                radius={999}
-                scaleTo={0.9}
-                style={[
-                  styles.closeButton,
-                  {
-                    backgroundColor: theme.colors.surfaceMuted,
-                    borderColor: theme.colors.cardBorder,
-                  },
-                ]}
-              >
-                <AppIcon name="close" size={16} color={theme.colors.textSecondary} weight="bold" />
-              </TactilePressable>
-            </View>
-          ) : null}
-        </View>
-      </GestureDetector>
+            </GestureDetector>
+            <TactilePressable
+              onPress={dismissInteractive}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={12}
+              radius={999}
+              scaleTo={0.9}
+              style={[
+                styles.closeButton,
+                {
+                  backgroundColor: theme.colors.surfaceMuted,
+                  borderColor: theme.colors.cardBorder,
+                },
+              ]}
+            >
+              <AppIcon name="close" size={16} color={theme.colors.textSecondary} weight="bold" />
+            </TactilePressable>
+          </View>
+        ) : null}
+      </View>
 
       <View style={styles.body}>{children}</View>
 
@@ -281,6 +354,7 @@ export function Sheet({
       <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
         {Platform.OS === "ios" || Platform.OS === "web" ? (
           <BlurView
+            pointerEvents="none"
             tint={theme.scheme === "dark" ? "dark" : "light"}
             intensity={18}
             style={StyleSheet.absoluteFill}
@@ -301,10 +375,11 @@ export function Sheet({
 
   return (
     <Modal
-      visible={mounted}
+      visible={stage === "open" || stage === "closingExternal" || stage === "closingInteractive"}
       transparent
       statusBarTranslucent
       animationType="none"
+      onDismiss={finishNativeDismiss}
       onRequestClose={dismissInteractive}
     >
       <GestureHandlerRootView style={styles.flexOne}>{overlay}</GestureHandlerRootView>

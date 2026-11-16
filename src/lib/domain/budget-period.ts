@@ -13,8 +13,9 @@ import {
 /**
  * Which window a budget is measured against. Monthly and yearly are calendar
  * aligned; a weekly budget is anchored to its `budgets.start_date` (payday), not to
- * Monday. `monthOffset` walks backwards from the current month for the Home month
- * selector — 0 is the current period, -1 the previous month.
+ * Monday. `monthOffset` walks from the current month — 0 is the current period, -1
+ * the previous month and +1 the next one, so month-specific budgets can be planned
+ * ahead. Callers clamp the range they allow.
  */
 export const PERIOD_LABELS: Record<BudgetPeriod, string> = {
   weekly: "Weekly",
@@ -41,7 +42,7 @@ export function periodWindow(
     return { start, end, isCurrent: true };
   }
 
-  const offset = Math.min(0, Math.trunc(monthOffset));
+  const offset = Math.trunc(monthOffset);
   if (period === "yearly") {
     // One step is one *year* here, not one month of the year.
     const year = Number(todayIso.slice(0, 4)) + offset;
@@ -63,6 +64,20 @@ export function earliestMonthOffset(earliestIso: IsoDate | null, todayIso: IsoDa
   const todayYear = Number(todayIso.slice(0, 4));
   const todayMonth = Number(todayIso.slice(5, 7));
   return Math.min(0, (year - todayYear) * 12 + (month - todayMonth));
+}
+
+/** The calendar month a window starts in, `YYYY-MM` — the key month budgets use. */
+export function windowMonth(window: PeriodWindow): string {
+  return window.start.slice(0, 7);
+}
+
+/** "Nov 2026" for the month-scope chip. */
+export function monthShortLabel(monthIso: string): string {
+  return fromIsoDate(`${monthIso}-01`).toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 /** "November 2026", "2026", "3 – 9 Nov 2026". */

@@ -1,5 +1,4 @@
 import { GlassView } from "expo-glass-effect";
-import { LinearGradient } from "expo-linear-gradient";
 import { router, usePathname } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -15,7 +14,7 @@ import { haptics } from "../../lib/haptics";
 import { SPRING_PRESS, SPRING_RELEASE, SPRING_SNAPPY } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 import { AppIcon } from "../ui/AppIcon";
-import { Glass, GlassGroup, liquidGlass } from "../ui/Glass";
+import { Glass, GlassGroup, liquidGlass, type GlassProps } from "../ui/Glass";
 import { TabIcon, type TabIconName } from "./TabIcon";
 import { TAB_BAR_BOTTOM_GAP, TAB_BAR_HEIGHT, TAB_BAR_SIDE } from "./tabBar";
 
@@ -102,7 +101,7 @@ function TabButton({
  * paired with a detached circular Quick Add glass orb inside a shared GlassGroup.
  * Mounts via translateY only so native iOS GlassView never loses optical depth.
  */
-export function FloatingTabBar() {
+export function FloatingTabBar({ blurTarget }: { blurTarget?: GlassProps["blurTarget"] } = {}) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -163,9 +162,18 @@ export function FloatingTabBar() {
       <GlassGroup spacing={10} style={styles.row}>
         <Glass
           tone="regular"
+          effect="regular"
           interactive
           radius={30}
-          style={[styles.capsule, theme.shadow.glass]}
+          blurTarget={blurTarget}
+          // iOS-only: the native glass starts clear enough that scrolling content
+          // bleeds into the inactive labels. On Android, Glass layers real BlurView
+          // (via blurTarget) with a sheer frosted tint.
+          tintColor={Platform.OS === "ios" ? theme.colors.glass : undefined}
+          style={[
+            styles.capsule,
+            Platform.OS === "ios" ? theme.shadow.glass : null,
+          ]}
         >
           <View
             onLayout={(e) => setCapsuleWidth(e.nativeEvent.layout.width)}
@@ -178,14 +186,9 @@ export function FloatingTabBar() {
                   styles.activePill,
                   {
                     width: pillWidth,
-                    backgroundColor:
-                      theme.scheme === "dark"
-                        ? "rgba(41, 151, 255, 0.22)"
-                        : "rgba(0, 122, 255, 0.12)",
-                    borderColor:
-                      theme.scheme === "dark"
-                        ? "rgba(130, 195, 255, 0.28)"
-                        : "rgba(0, 122, 255, 0.16)",
+                    // Solid accent, not a translucent wash: a see-through pill let
+                    // the content behind it mix with the label and icon.
+                    backgroundColor: theme.colors.accentFill,
                   },
                   pillStyle,
                 ]}
@@ -197,14 +200,21 @@ export function FloatingTabBar() {
                 key={tab.href}
                 tab={tab}
                 active={index === activeIndex}
-                accentColor={theme.colors.accent}
+                accentColor={theme.colors.accentFg}
                 inactiveColor={theme.colors.textSecondary}
               />
             ))}
           </View>
         </Glass>
 
-        <Animated.View style={[styles.fabOuter, theme.shadow.fab, fabStyle]}>
+        <Animated.View
+          style={[
+            styles.fabOuter,
+            !liquidGlass ? { backgroundColor: theme.colors.accentFill } : null,
+            theme.shadow.fab,
+            fabStyle,
+          ]}
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Add transaction"
@@ -230,18 +240,7 @@ export function FloatingTabBar() {
                 <AppIcon name="plus" size={24} color={theme.colors.accentFg} weight="bold" />
               </GlassView>
             ) : (
-              <View style={styles.fabSurface}>
-                <LinearGradient
-                  colors={[theme.colors.accentTop, theme.colors.accentFill, theme.colors.accentBottom]}
-                  locations={[0, 0.52, 1]}
-                  start={{ x: 0.25, y: 0 }}
-                  end={{ x: 0.75, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View
-                  pointerEvents="none"
-                  style={[styles.fabRim, { borderColor: theme.colors.accentRim }]}
-                />
+              <View style={[styles.fabSurface, { backgroundColor: theme.colors.accentFill }]}>
                 <AppIcon name="plus" size={24} color={theme.colors.accentFg} weight="bold" />
               </View>
             )}
@@ -280,7 +279,6 @@ const styles = StyleSheet.create({
     bottom: 4,
     borderRadius: 26,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth * 2,
   },
   tabPress: {
     flex: 1,
@@ -315,10 +313,5 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-  },
-  fabRim: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: TAB_BAR_HEIGHT / 2,
-    borderWidth: 1,
   },
 });

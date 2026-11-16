@@ -7,6 +7,7 @@ type BudgetRow = {
   id: string;
   category_id: string | null;
   period: BudgetPeriod;
+  month: string | null;
   limit_minor: number;
   currency: string;
   rollover: number;
@@ -16,7 +17,7 @@ type BudgetRow = {
   updated_at: string;
 };
 
-const SELECT = `SELECT id, category_id, period, limit_minor, currency, rollover,
+const SELECT = `SELECT id, category_id, period, month, limit_minor, currency, rollover,
                        start_date, is_active, created_at, updated_at
                 FROM budgets`;
 
@@ -25,6 +26,7 @@ function mapBudget(row: BudgetRow): Budget {
     id: row.id,
     categoryId: row.category_id,
     period: row.period,
+    month: row.month,
     limitMinor: row.limit_minor,
     currency: row.currency,
     rollover: intToBool(row.rollover),
@@ -64,17 +66,22 @@ export type UpsertBudget = {
   /** null = the overall budget. */
   categoryId: string | null;
   period: BudgetPeriod;
+  /** `YYYY-MM` for that month only; null or omitted = the every-month limit. */
+  month?: string | null;
   limitMinor: number;
   currency: string;
   startDate: string;
   rollover?: boolean;
 };
 
+const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 /**
- * One budget per (category, period, currency) and exactly one overall budget per
- * (period, currency) — the partial index enforces the NULL case that SQLite's
- * UNIQUE constraint cannot. Upsert is manual because `ON CONFLICT` cannot target a
- * partial index by column list.
+ * One budget per (category, period, currency, month) and exactly one overall budget
+ * per (period, currency, month) — the partial indexes enforce the NULL cases that a
+ * plain UNIQUE constraint cannot. A month is part of the identity, so a standing
+ * limit and its month override coexist. Upsert is manual because `ON CONFLICT`
+ * cannot target a partial index by column list.
  */
 export async function upsertBudget(db: Db, input: UpsertBudget): Promise<Budget> {
   if (!Number.isSafeInteger(input.limitMinor) || input.limitMinor <= 0) {
@@ -82,14 +89,22 @@ export async function upsertBudget(db: Db, input: UpsertBudget): Promise<Budget>
   }
   if (!isCurrencyCode(input.currency)) throw new Error(`Unknown currency: ${input.currency}`);
 
+  const month = input.month ?? null;
+  if (month !== null) {
+    if (input.period !== "monthly") {
+      throw new Error("Only a monthly budget can be limited to one month");
+    }
+    if (!MONTH_KEY.test(month)) throw new Error(`Invalid budget month: ${month}`);
+  }
+
   const currency = input.currency.toUpperCase();
   const now = new Date().toISOString();
 
   const existing = await db.getFirstAsync<{ id: string }>(
     `SELECT id FROM budgets
-      WHERE period = ? AND currency = ?
+      WHERE period = ? AND currency = ? AND month IS ?
         AND ((? IS NULL AND category_id IS NULL) OR category_id = ?)`,
-    [input.period, currency, input.categoryId, input.categoryId],
+    [input.period, currency, month, input.categoryId, input.categoryId],
   );
 
   if (existing) {
@@ -110,12 +125,13 @@ export async function upsertBudget(db: Db, input: UpsertBudget): Promise<Budget>
 
   const id = newId();
   await db.runAsync(
-    `INSERT INTO budgets (id, category_id, period, limit_minor, currency, rollover, start_date, is_active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    `INSERT INTO budgets (id, category_id, period, month, limit_minor, currency, rollover, start_date, is_active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
     [
       id,
       input.categoryId,
       input.period,
+      month,
       Math.trunc(input.limitMinor),
       currency,
       boolToInt(input.rollover ?? false),

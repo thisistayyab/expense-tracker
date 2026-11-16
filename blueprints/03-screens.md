@@ -186,13 +186,17 @@ only in that currency) — the app never silently re-labels history.
 
 **Layout:**
 - Header: period label + period pill (opens the picker).
+- Month selector for monthly budgets: previous/next step and a month picker, allowing one
+  year ahead so a different limit can be planned before the month starts.
 - "Overall budget" ink card with a progress ring (create/edit inline).
 - Category list: limit, spent, remaining; progress bar; tap → set/edit limit sheet with a
-  numeric keypad and quick "+10% / -10%" chips.
+  numeric keypad, quick "+10% / -10%" chips, and an "Every month" / "<Month>" scope choice.
 - Toggle: "Roll over unused" per category.
 - Copy last month's budgets action.
 
-**Rules:** one budget per category per period per currency; deleting a budget leaves
+**Rules:** one standing budget and at most one month-specific budget per category, period and
+currency. A month-specific limit wins for that month only; removing it falls back to the
+standing limit. Weekly and yearly periods have no month scope. Deleting a budget leaves
 transactions intact; soft warning (not a block) when total category limits exceed the overall
 budget. Limits are typed in the active currency and only count toward safe-to-spend when
 `budgets.currency` matches it; budgets in another currency appear in a collapsed "Previous

@@ -1,6 +1,7 @@
 import { migration001 } from "./migrations/001-initial";
 import { migration002 } from "./migrations/002-insight-index";
 import { migration003 } from "./migrations/003-recurring-unique";
+import { migration004 } from "./migrations/004-budget-month";
 import type { Db } from "./types";
 
 export type Migration = {
@@ -9,7 +10,12 @@ export type Migration = {
 };
 
 /** Append-only, ordered. Adding a migration means appending here too. */
-export const migrations: readonly Migration[] = [migration001, migration002, migration003];
+export const migrations: readonly Migration[] = [
+  migration001,
+  migration002,
+  migration003,
+  migration004,
+];
 
 export const LATEST_SCHEMA_VERSION = migrations[migrations.length - 1].version;
 

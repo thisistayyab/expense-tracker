@@ -18,6 +18,7 @@ export type PickerSheetProps = {
   selected?: string;
   onSelect: (value: string) => void;
   onClose: () => void;
+  onClosed?: () => void;
   searchable?: boolean;
   searchPlaceholder?: string;
 };
@@ -32,6 +33,7 @@ export function PickerSheet({
   selected,
   onSelect,
   onClose,
+  onClosed,
   searchable = false,
   searchPlaceholder = "Search",
 }: PickerSheetProps) {
@@ -55,7 +57,7 @@ export function PickerSheet({
   }, [options, query]);
 
   return (
-    <Sheet visible={visible} onClose={close} title={title}>
+    <Sheet visible={visible} onClose={close} onClosed={onClosed} title={title}>
       {searchable ? (
         <View style={styles.searchWrap}>
           <View

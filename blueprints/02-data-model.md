@@ -141,20 +141,29 @@ CREATE TABLE budgets (
   id          TEXT PRIMARY KEY,
   category_id TEXT REFERENCES categories(id) ON DELETE CASCADE, -- NULL = overall budget
   period      TEXT NOT NULL CHECK (period IN ('weekly','monthly','yearly')),
+  month       TEXT,             -- NULL = every month; 'YYYY-MM' = that month only (monthly)
   limit_minor INTEGER NOT NULL CHECK (limit_minor > 0),
   currency    TEXT NOT NULL,     -- currency the limit was typed in
   rollover    INTEGER NOT NULL DEFAULT 0 CHECK (rollover IN (0,1)),
   start_date  TEXT NOT NULL,     -- anchor date for weekly/yearly periods
   is_active   INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
   created_at  TEXT NOT NULL,
-  updated_at  TEXT NOT NULL,
-  UNIQUE (category_id, period, currency)
+  updated_at  TEXT NOT NULL
 );
 
--- SQLite treats NULLs as distinct, so UNIQUE above does NOT stop duplicate
--- "overall" budgets (category_id IS NULL). Enforce it with a partial index:
-CREATE UNIQUE INDEX idx_budget_overall
-  ON budgets(period, currency) WHERE category_id IS NULL;
+-- Uniqueness moved into partial indexes in migration 004: a month row and its
+-- standing row coexist, and SQLite treats NULLs as distinct in a plain UNIQUE.
+-- One every-month limit per category/period/currency and one overall limit:
+CREATE UNIQUE INDEX idx_budget_standing_overall
+  ON budgets(period, currency) WHERE month IS NULL AND category_id IS NULL;
+CREATE UNIQUE INDEX idx_budget_standing_category
+  ON budgets(category_id, period, currency) WHERE month IS NULL AND category_id IS NOT NULL;
+-- One limit per month, again with a separate index for the overall row:
+CREATE UNIQUE INDEX idx_budget_month_overall
+  ON budgets(period, currency, month) WHERE month IS NOT NULL AND category_id IS NULL;
+CREATE UNIQUE INDEX idx_budget_month_category
+  ON budgets(category_id, period, currency, month)
+  WHERE month IS NOT NULL AND category_id IS NOT NULL;
 
 CREATE TABLE category_rules (
   id         TEXT PRIMARY KEY,
@@ -212,7 +221,7 @@ Future tables (documented, **not** created in v1): `goals`, `goal_contributions`
 | `currency` snapshot on every money row | A settings change must never rewrite history; totals filter by active currency instead of converting |
 | `_minor` integer amounts + `currency` exponent | Works for 0-, 2- and 3-decimal currencies without a second code path |
 | `budgets.category_id` nullable | "--overall--" budget without a magic category row |
-| `UNIQUE (category_id, period, currency)` + partial index | One budget per category per period per currency **and** one overall budget per period (needed because SQLite allows multiple NULLs in a UNIQUE constraint) |
+| `budgets.month` nullable + partial unique indexes | A standing limit covers every month; a `YYYY-MM` row overrides it for that month only, so a month's row and its standing row coexist. Partial indexes are needed because SQLite treats NULLs as distinct in a plain UNIQUE |
 | `next_due_at` stored, not recomputed on read | Cheap "bills due" queries and stable reminders |
 | `category_rules` table, no ML | Deterministic, explainable, testable; ML only if data justifies it |
 | `settings` as string KV | Avoids schema churn for flags like country, currency and onboarding |
@@ -225,7 +234,9 @@ Future tables (documented, **not** created in v1): `goals`, `goal_contributions`
 - Every migration is append-only and idempotent-safe when re-run against an already-migrated DB.
 - Never edit an applied migration; add a new one.
 - Applied so far: **001** initial schema, **002** insights covering index (P5), **003** the
-  partial unique index `idx_tx_recurring_date` on `(recurring_id, local_date)` (P6).
+  partial unique index `idx_tx_recurring_date` on `(recurring_id, local_date)` (P6), **004**
+  `budgets.month` plus the partial unique indexes that let a month limit sit beside its
+  standing limit.
 - Before shipping a release, test: fresh install, upgrade from previous release,
   and upgrade with a non-empty database.
 

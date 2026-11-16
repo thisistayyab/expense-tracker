@@ -96,7 +96,7 @@ describe("migrations", () => {
     const result = await migrate(db);
 
     expect(result.to).toBe(LATEST_SCHEMA_VERSION);
-    expect(result.applied).toEqual([1, 2, 3]);
+    expect(result.applied).toEqual([1, 2, 3, 4]);
 
     const tables = await db.getAllAsync<{ name: string }>(
       `SELECT name FROM sqlite_master
@@ -291,6 +291,55 @@ describe("budgets", () => {
     const budgets = await listBudgets(db, { currency: "USD", period: "monthly" });
     expect(budgets).toHaveLength(1);
     expect(budgets[0].limitMinor).toBe(120_000);
+  });
+
+  test("a month limit and an every-month limit coexist for one category", async () => {
+    const { db, categoryId } = await seededDb();
+
+    await upsertBudget(db, {
+      categoryId,
+      period: "monthly",
+      limitMinor: 40_000,
+      currency: "USD",
+      startDate: "2026-11-01",
+    });
+    await upsertBudget(db, {
+      categoryId,
+      period: "monthly",
+      month: "2026-12",
+      limitMinor: 60_000,
+      currency: "USD",
+      startDate: "2026-12-01",
+    });
+
+    const budgets = await listBudgets(db, { currency: "USD", period: "monthly" });
+    expect(budgets).toHaveLength(2);
+    expect(budgets.find((budget) => budget.month === null)?.limitMinor).toBe(40_000);
+    expect(budgets.find((budget) => budget.month === "2026-12")?.limitMinor).toBe(60_000);
+
+    // Editing the month updates its own row instead of the standing limit.
+    const edited = await upsertBudget(db, {
+      categoryId,
+      period: "monthly",
+      month: "2026-12",
+      limitMinor: 70_000,
+      currency: "USD",
+      startDate: "2026-12-01",
+    });
+    expect(edited.limitMinor).toBe(70_000);
+    expect(await listBudgets(db, { currency: "USD", period: "monthly" })).toHaveLength(2);
+
+    // Only a monthly budget can carry a month.
+    await expect(
+      upsertBudget(db, {
+        categoryId,
+        period: "weekly",
+        month: "2026-12",
+        limitMinor: 10_000,
+        currency: "USD",
+        startDate: "2026-12-01",
+      }),
+    ).rejects.toThrow(/monthly/);
   });
 
   test("a currency-scoped budget never hides behind the same category in another currency", async () => {

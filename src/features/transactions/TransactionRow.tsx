@@ -3,6 +3,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  type SharedValue,
+} from "react-native-reanimated";
 import { AppIcon, type AppIconName, CategoryTile, Money } from "../../components/ui";
 import type { Account, Category, Transaction } from "../../lib/db/types";
 import { formatMoneySpoken } from "../../lib/format/money";
@@ -51,45 +57,58 @@ function SwipeAction({
   icon,
   backgroundColor,
   foregroundColor,
+  progress,
   onPress,
 }: {
   label: string;
   icon: AppIconName;
   backgroundColor: string;
   foregroundColor: string;
+  progress: SharedValue<number>;
   onPress: () => void;
 }) {
   const { theme } = useTheme();
+  const revealStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.08, 1], [0, 1, 1], Extrapolation.CLAMP),
+  }));
+
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => ({
-        width: ACTION_WIDTH,
-        height: "100%",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 3,
-        backgroundColor,
-        opacity: pressed ? 0.85 : 1,
-      })}
-    >
-      <AppIcon name={icon} size={17} color={foregroundColor} weight="semibold" />
-      <Text style={[theme.text.caption, { color: foregroundColor, fontWeight: "700", fontSize: 11.5 }]}>
-        {label}
-      </Text>
-    </Pressable>
+    <Animated.View style={[styles.actionSlot, revealStyle]}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        style={({ pressed }) => [
+          styles.actionPress,
+          {
+            backgroundColor,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}
+      >
+        <AppIcon name={icon} size={17} color={foregroundColor} weight="semibold" />
+        <Text
+          style={[
+            theme.text.caption,
+            { color: foregroundColor, fontWeight: "700", fontSize: 11.5 },
+          ]}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
 function SwipeActions({
   side,
+  progress,
   onEdit,
   onDelete,
   close,
 }: {
   side: "left" | "right";
+  progress: SharedValue<number>;
   onEdit: () => void;
   onDelete: () => void;
   close: () => void;
@@ -102,6 +121,7 @@ function SwipeActions({
         icon="sliders"
         backgroundColor={theme.colors.accent}
         foregroundColor={theme.colors.accentFg}
+        progress={progress}
         onPress={() => {
           close();
           onEdit();
@@ -115,6 +135,7 @@ function SwipeActions({
       icon="trash"
       backgroundColor={theme.colors.danger}
       foregroundColor={theme.colors.accentFg}
+      progress={progress}
       onPress={() => {
         close();
         onDelete();
@@ -152,17 +173,19 @@ export const TransactionRow = memo(function TransactionRow({
 
   const spokenAmount = formatMoneySpoken(transaction.amountMinor, transaction.currency);
 
-  const left = (methods: SwipeableMethods) => (
+  const left = (progress: SharedValue<number>, methods: SwipeableMethods) => (
     <SwipeActions
       side="left"
+      progress={progress}
       onEdit={() => onEdit(transaction)}
       onDelete={() => onDelete(transaction)}
       close={methods.close}
     />
   );
-  const right = (methods: SwipeableMethods) => (
+  const right = (progress: SharedValue<number>, methods: SwipeableMethods) => (
     <SwipeActions
       side="right"
+      progress={progress}
       onEdit={() => onEdit(transaction)}
       onDelete={() => onDelete(transaction)}
       close={methods.close}
@@ -176,10 +199,17 @@ export const TransactionRow = memo(function TransactionRow({
       rightThreshold={ACTION_WIDTH * 0.55}
       overshootLeft={false}
       overshootRight={false}
-      renderLeftActions={(_progress, _drag, methods) => left(methods)}
-      renderRightActions={(_progress, _drag, methods) => right(methods)}
+      renderLeftActions={(progress, _drag, methods) => left(progress, methods)}
+      renderRightActions={(progress, _drag, methods) => right(progress, methods)}
       containerStyle={{
+        marginHorizontal: 20,
         overflow: "hidden",
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.cardBorder,
+        borderLeftWidth: StyleSheet.hairlineWidth,
+        borderRightWidth: StyleSheet.hairlineWidth,
+        borderTopWidth: isFirst ? StyleSheet.hairlineWidth : 0,
+        borderBottomWidth: isLast ? StyleSheet.hairlineWidth : 0,
         borderTopLeftRadius: isFirst ? theme.radius.card : 0,
         borderTopRightRadius: isFirst ? theme.radius.card : 0,
         borderBottomLeftRadius: isLast ? theme.radius.card : 0,
@@ -196,7 +226,7 @@ export const TransactionRow = memo(function TransactionRow({
         style={({ pressed }) => [
           styles.row,
           {
-            backgroundColor: pressed ? theme.colors.surfaceMuted : "transparent",
+            backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
           },
         ]}
       >
@@ -236,6 +266,16 @@ export const TransactionRow = memo(function TransactionRow({
 });
 
 const styles = StyleSheet.create({
+  actionSlot: {
+    width: ACTION_WIDTH,
+    height: "100%",
+  },
+  actionPress: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
   row: {
     minHeight: TRANSACTION_ROW_HEIGHT,
     paddingHorizontal: 16,

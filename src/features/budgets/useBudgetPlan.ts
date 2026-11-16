@@ -17,6 +17,7 @@ import {
   earliestMonthOffset,
   periodWindow,
   windowLabel,
+  windowMonth,
   type PeriodWindow,
 } from "../../lib/domain/budget-period";
 import { daysRemainingInPeriod, toIsoDate } from "../../lib/domain/dates";
@@ -26,6 +27,8 @@ export type BudgetOverview = {
   period: BudgetPeriod;
   label: string;
   window: PeriodWindow;
+  /** `YYYY-MM` the plan is measured in; month-specific limits key off it. */
+  month: string;
   /** The shared number Home and Budgets both render (P4 gate). */
   plan: BudgetPlan;
   /** Past months have no "per day left", only a left-over number. */
@@ -62,7 +65,8 @@ export function useBudgetPlan(
   refresh: () => void;
 } {
   const db: Db = useSQLiteContext();
-  const monthOffset = Math.min(0, options.monthOffset ?? 0);
+  // Negative walks back, positive plans ahead; each caller clamps what it offers.
+  const monthOffset = Math.trunc(options.monthOffset ?? 0);
   const periodOverride = options.period;
   const [data, setData] = useState<BudgetOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,6 +114,7 @@ export function useBudgetPlan(
     const plan = buildBudgetPlan({
       currency,
       period,
+      month: windowMonth(window),
       budgets,
       categories,
       spendByCategory,
@@ -129,6 +134,7 @@ export function useBudgetPlan(
       period,
       label: windowLabel(period, window),
       window,
+      month: windowMonth(window),
       plan,
       isCurrentPeriod: window.isCurrent,
       budgets,
@@ -137,6 +143,7 @@ export function useBudgetPlan(
       monthOffset,
       minMonthOffset: minOffset,
       canGoPrevious: monthOffset > minOffset,
+      // Home only browses the past; the Budgets screen may also plan ahead.
       canGoNext: monthOffset < 0,
     });
     setError(null);

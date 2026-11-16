@@ -146,6 +146,8 @@ The Activity tab presents transactions grouped by day. Users can search across i
 
 Budgets may be set for the overall period or for individual categories. Three periods are supported: weekly, monthly, and yearly. Monthly and yearly periods follow the calendar, while weekly periods are anchored to a chosen start date so that a user can align them with payday.
 
+A monthly budget is a standing limit that applies to every month. The Budgets screen can also set a limit for a single month, either by stepping to another month or by planning ahead. A limit set for one month overrides the standing limit for that month only; every other month keeps the standing limit, and removing the month's limit falls back to it. Weekly and yearly budgets have no per-month override. The month selector on the Budgets screen chooses which month's limits and progress are shown.
+
 Each budget stores its own currency. Progress is displayed as normal, warning, or over budget. Overspending is shown honestly: the remaining amount becomes negative, while the safe-to-spend figure is clamped at zero. A category budget may exceed the overall budget; the app warns the user but does not block the choice.
 
 ### 4.6 Insights
