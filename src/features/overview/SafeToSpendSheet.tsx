@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 
-import { Button, Money, Sheet } from "../../components/ui";
+import { Button, Card, Money, Sheet } from "../../components/ui";
 import type { BudgetPlan } from "../../lib/domain/budget-plan";
 import { useTheme } from "../../lib/theme";
 
@@ -68,7 +68,7 @@ export function SafeToSpendSheet({
           {label}
         </Text>
 
-        <View style={{ marginTop: 14 }}>
+        <Card variant="muted" padded={false} style={{ marginTop: 16, paddingHorizontal: 16, paddingVertical: 4 }}>
           <Row label="Overall limit">
             <Money minor={plan.overallLimitMinor ?? 0} currency={currency} />
           </Row>
@@ -92,7 +92,7 @@ export function SafeToSpendSheet({
               {isCurrentPeriod ? String(plan.daysRemaining) : label}
             </Text>
           </Row>
-        </View>
+        </Card>
 
         <Text
           style={[

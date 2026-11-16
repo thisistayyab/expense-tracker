@@ -1,10 +1,17 @@
 import { useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import Constants from "expo-constants";
 
-import { Button, Card, SectionHeader, Sheet } from "../../components/ui";
+import {
+  Button,
+  Card,
+  ScreenBackground,
+  SectionHeader,
+  Sheet,
+  TactilePressable,
+} from "../../components/ui";
 import { DeleteAllSheet } from "../../features/settings/DeleteAllSheet";
 import {
   exportBackup,
@@ -192,8 +199,13 @@ export default function DataScreen() {
   }, [params.action]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
+      >
         <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
           Your data lives only on this device. Export a CSV for a spreadsheet, or a JSON backup
           that can restore every table exactly — including your region and currency.
@@ -201,7 +213,13 @@ export default function DataScreen() {
 
         <SectionHeader title="Export" />
         <View style={{ gap: 10 }}>
-          <Button label="Export CSV" onPress={() => void runCsv()} disabled={busy} loading={busy} />
+          <Button
+            label="Export CSV"
+            leftIcon="share"
+            onPress={() => void runCsv()}
+            disabled={busy}
+            loading={busy}
+          />
           <Button
             label="Backup everything (JSON)"
             variant="ghost"
@@ -211,7 +229,7 @@ export default function DataScreen() {
         </View>
 
         <SectionHeader title="Restore" />
-        <Card style={{ gap: 10 }}>
+        <Card variant="glass" style={{ gap: 10 }}>
           <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
             Pick a backup file to preview its row counts. Nothing is written until you choose
             Replace or Merge.
@@ -225,18 +243,28 @@ export default function DataScreen() {
         </Card>
 
         <SectionHeader title="Danger zone" />
-        <Pressable
+        <TactilePressable
           onPress={() => setResetOpen(true)}
+          haptic="selection"
+          scaleTo={0.97}
+          radius={theme.radius.card}
           accessibilityRole="button"
           accessibilityLabel="Delete all data"
-          style={({ pressed }) => ({
-            minHeight: 46,
+          style={{
+            minHeight: 48,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: `${theme.colors.danger}32`,
+            backgroundColor: `${theme.colors.danger}16`,
             justifyContent: "center",
-            opacity: pressed ? 0.6 : 1,
-          })}
+            alignItems: "center",
+          }}
         >
-          <Text style={[theme.text.label, { color: theme.colors.danger }]}>Delete all data…</Text>
-        </Pressable>
+          <Text style={[theme.text.label, { color: theme.colors.danger, fontWeight: "700" }]}>
+            Delete all data…
+          </Text>
+        </TactilePressable>
 
         {busy ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 14 }} /> : null}
 
@@ -275,8 +303,8 @@ export default function DataScreen() {
                   style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
-                    paddingVertical: 7,
-                    borderBottomWidth: 1,
+                    paddingVertical: 8,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
                     borderBottomColor: theme.colors.border,
                   }}
                 >

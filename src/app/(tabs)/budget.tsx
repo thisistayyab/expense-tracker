@@ -1,7 +1,8 @@
 import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
@@ -10,12 +11,13 @@ import {
   Button,
   Card,
   CategoryTile,
+  Glass,
   Money,
   PickerSheet,
   ProgressBar,
   ProgressRing,
-  ScreenBackground,
   SectionHeader,
+  TactilePressable,
 } from "../../components/ui";
 import { BudgetEditorSheet } from "../../features/budgets/BudgetEditorSheet";
 import { useBudgetPlan } from "../../features/budgets/useBudgetPlan";
@@ -25,6 +27,7 @@ import type { Budget, BudgetPeriod, Db } from "../../lib/db/types";
 import { PERIOD_LABELS } from "../../lib/domain/budget-period";
 import { toIsoDate } from "../../lib/domain/dates";
 import { formatMoney } from "../../lib/format/money";
+import { iosEnter } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 
 type Editing = {
@@ -144,10 +147,10 @@ export default function BudgetsScreen() {
         : theme.colors.accent;
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <ScreenBackground />
+    <View style={{ flex: 1 }}>
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
         <ScrollView
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             padding: 20,
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
@@ -165,33 +168,39 @@ export default function BudgetsScreen() {
               marginTop: 4,
             }}
           >
-            <Text style={[theme.text.title1, { color: theme.colors.textPrimary }]}>Budgets</Text>
-            <Pressable
+            <Text
+              accessibilityRole="header"
+              style={[theme.text.title1, { color: theme.colors.textPrimary }]}
+            >
+              Budgets
+            </Text>
+            <TactilePressable
               onPress={() => setPeriodOpen(true)}
               disabled={!data}
+              haptic="selection"
+              scaleTo={0.94}
+              radius={999}
               accessibilityRole="button"
               accessibilityLabel={`Budget period, ${PERIOD_LABELS[data?.period ?? "monthly"]}`}
               hitSlop={6}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                height: 34,
-                paddingHorizontal: 14,
-                borderRadius: 17,
-                // Hairline surface, like the month pill on Overview: a muted fill
-                // on the paper canvas washed out to nothing.
-                backgroundColor: theme.colors.surface,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: theme.colors.cardBorder,
-                opacity: pressed ? 0.65 : 1,
-              })}
             >
-              <Text style={[theme.text.label, { color: theme.colors.textSecondary }]}>
-                {PERIOD_LABELS[data?.period ?? "monthly"]}
-              </Text>
-              <AppIcon name="chevronDown" color={theme.colors.textTertiary} size={14} />
-            </Pressable>
+              <Glass
+                tone="regular"
+                radius={999}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  height: 36,
+                  paddingHorizontal: 14,
+                }}
+              >
+                <Text style={[theme.text.label, { color: theme.colors.textPrimary }]}>
+                  {PERIOD_LABELS[data?.period ?? "monthly"]}
+                </Text>
+                <AppIcon name="chevronDown" color={theme.colors.textSecondary} size={13} />
+              </Glass>
+            </TactilePressable>
           </View>
 
           {error || actionError ? (
@@ -206,93 +215,116 @@ export default function BudgetsScreen() {
             </View>
           ) : (
             <>
-              <Card style={{ marginTop: 16, padding: 18 }}>
-                {plan?.overallLimitMinor != null ? (
-                  <>
-                    <View
-                      style={{ flexDirection: "row", alignItems: "center", gap: 14 }}
-                    >
-                      <View style={{ flex: 1, gap: 6 }}>
-                        <Text
-                          style={[theme.text.eyebrow, { color: theme.colors.textSecondary }]}
-                        >
-                          Overall budget
-                        </Text>
-                        <Money
-                          minor={plan.overallLimitMinor}
-                          currency={data.currency}
-                          tone="default"
-                          size="total"
-                        />
-                        <Text
-                          style={[theme.text.caption, { color: theme.colors.textSecondary }]}
-                        >
-                          {`${formatMoney(plan.spentMinor, data.currency)} spent · ${formatMoney(
-                            plan.remainingMinor ?? 0,
-                            data.currency,
-                          )} left`}
-                        </Text>
+              <Animated.View entering={iosEnter(30)}>
+                <Card variant="glass" style={{ marginTop: 16, padding: 20 }}>
+                  {plan?.overallLimitMinor != null ? (
+                    <>
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center", gap: 16 }}
+                      >
+                        <View style={{ flex: 1, gap: 6 }}>
+                          <Text
+                            style={[theme.text.eyebrow, { color: theme.colors.textSecondary }]}
+                          >
+                            Overall budget
+                          </Text>
+                          <Money
+                            minor={plan.overallLimitMinor}
+                            currency={data.currency}
+                            tone="default"
+                            size="total"
+                          />
+                          <Text
+                            style={[theme.text.caption, { color: theme.colors.textSecondary }]}
+                          >
+                            {`${formatMoney(plan.spentMinor, data.currency)} spent · ${formatMoney(
+                              plan.remainingMinor ?? 0,
+                              data.currency,
+                            )} left`}
+                          </Text>
+                        </View>
+                        <ProgressRing value={plan.progress} size={78} stroke={8} color={ringColor}>
+                          <Text
+                            style={[
+                              theme.text.label,
+                              {
+                                color: theme.colors.textPrimary,
+                                fontWeight: "700",
+                                fontVariant: ["tabular-nums"],
+                              },
+                            ]}
+                          >
+                            {`${pct}%`}
+                          </Text>
+                        </ProgressRing>
                       </View>
-                      <ProgressRing value={plan.progress} color={ringColor}>
-                        <Text style={[theme.text.label, { color: theme.colors.textPrimary }]}>
-                          {`${pct}%`}
-                        </Text>
-                      </ProgressRing>
-                    </View>
-                    <View style={{ marginTop: 14 }}>
-                      <ProgressBar
-                        value={plan.progress}
-                        state={plan.state === "ok" ? "normal" : plan.state}
-                        color={ringColor}
-                        trackColor={theme.colors.surfaceSunken}
-                      />
-                    </View>
-                    <Pressable
-                      onPress={openOverall}
-                      accessibilityRole="button"
-                      accessibilityLabel="Edit overall budget"
-                      hitSlop={6}
-                      style={({ pressed }) => ({
-                        marginTop: 12,
-                        alignSelf: "flex-start",
-                        opacity: pressed ? 0.6 : 1,
-                      })}
-                    >
-                      <Text style={[theme.text.label, { color: theme.colors.accent }]}>
-                        Edit overall limit
-                      </Text>
-                    </Pressable>
-                  </>
-                ) : (
-                  <>
-                    <Text style={[theme.text.eyebrow, { color: theme.colors.textSecondary }]}>
-                      Overall budget
-                    </Text>
-                    <Text
-                      style={[theme.text.title2, { color: theme.colors.textPrimary, marginTop: 6 }]}
-                    >
-                      No overall limit yet
-                    </Text>
-                    <Text
-                      style={[
-                        theme.text.body,
-                        { color: theme.colors.textSecondary, marginTop: 6, maxWidth: 280 },
-                      ]}
-                    >
-                      One number for everything you spend. Overview turns it into what is
-                      safe to spend today.
-                    </Text>
-                    <View style={{ marginTop: 16, alignSelf: "flex-start" }}>
-                      <Button
-                        label="Set overall limit"
-                        size="sm"
-                        fullWidth={false}
+                      <View style={{ marginTop: 16 }}>
+                        <ProgressBar
+                          value={plan.progress}
+                          state={plan.state === "ok" ? "normal" : plan.state}
+                          color={ringColor}
+                          trackColor={theme.colors.surfaceSunken}
+                        />
+                      </View>
+                      <TactilePressable
                         onPress={openOverall}
-                      />
-                    </View>
-                  </>
-                )}
-              </Card>
+                        haptic="selection"
+                        scaleTo={0.95}
+                        radius={999}
+                        accessibilityRole="button"
+                        accessibilityLabel="Edit overall budget"
+                        hitSlop={6}
+                        style={{
+                          marginTop: 14,
+                          alignSelf: "flex-start",
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: 999,
+                          backgroundColor: theme.colors.accentSoft,
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: `${theme.colors.accent}28`,
+                        }}
+                      >
+                        <Text style={[theme.text.caption, { fontWeight: "700", color: theme.colors.accent }]}>
+                          Edit overall limit
+                        </Text>
+                        <AppIcon name="chevronRight" color={theme.colors.accent} size={12} />
+                      </TactilePressable>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={[theme.text.eyebrow, { color: theme.colors.textSecondary }]}>
+                        Overall budget
+                      </Text>
+                      <Text
+                        style={[theme.text.title2, { color: theme.colors.textPrimary, marginTop: 6 }]}
+                      >
+                        No overall limit yet
+                      </Text>
+                      <Text
+                        style={[
+                          theme.text.body,
+                          { color: theme.colors.textSecondary, marginTop: 6, maxWidth: 280 },
+                        ]}
+                      >
+                        One number for everything you spend. Overview turns it into what is
+                        safe to spend today.
+                      </Text>
+                      <View style={{ marginTop: 16, alignSelf: "flex-start" }}>
+                        <Button
+                          label="Set overall limit"
+                          size="sm"
+                          fullWidth={false}
+                          onPress={openOverall}
+                        />
+                      </View>
+                    </>
+                  )}
+                </Card>
+              </Animated.View>
 
               {plan?.categoryLimitsExceedOverall ? (
                 <Text
@@ -306,121 +338,122 @@ export default function BudgetsScreen() {
                 </Text>
               ) : null}
 
-              <SectionHeader title="Category limits" />
+              <Animated.View entering={iosEnter(90)}>
+                <SectionHeader title="Category limits" />
 
-              {rows.length ? (
-                <Card padded={false}>
-                  {rows.map((row, index) => {
-                    const budget =
-                      data.budgets.find(
-                        (candidate) =>
-                          candidate.categoryId === row.categoryId &&
-                          candidate.period === data.period &&
-                          candidate.currency === data.currency,
-                      ) ?? null;
-                    const status =
-                      row.remainingMinor < 0
-                        ? `${formatMoney(Math.abs(row.remainingMinor), data.currency)} over`
-                        : row.state === "warning"
-                          ? `${Math.round(row.progress * 100)}% used`
-                          : `${formatMoney(row.remainingMinor, data.currency)} left`;
-                    return (
-                      <Pressable
-                        key={row.budgetId}
-                        onPress={() => openCategory(row.categoryId, budget)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${row.name} limit, ${status}`}
-                        style={({ pressed }) => ({
-                          paddingHorizontal: 16,
-                          paddingVertical: 14,
-                          borderTopWidth: index === 0 ? 0 : 1,
-                          borderTopColor: theme.colors.border,
-                          opacity: pressed ? 0.7 : 1,
-                        })}
-                      >
-                        <View
-                          style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+                {rows.length ? (
+                  <Card variant="glass" padded={false}>
+                    {rows.map((row, index) => {
+                      const budget =
+                        data.budgets.find(
+                          (candidate) =>
+                            candidate.categoryId === row.categoryId &&
+                            candidate.period === data.period &&
+                            candidate.currency === data.currency,
+                        ) ?? null;
+                      const status =
+                        row.remainingMinor < 0
+                          ? `${formatMoney(Math.abs(row.remainingMinor), data.currency)} over`
+                          : row.state === "warning"
+                            ? `${Math.round(row.progress * 100)}% used`
+                            : `${formatMoney(row.remainingMinor, data.currency)} left`;
+                      return (
+                        <TactilePressable
+                          key={row.budgetId}
+                          onPress={() => openCategory(row.categoryId, budget)}
+                          haptic="selection"
+                          scaleTo={0.985}
+                          radius={14}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${row.name} limit, ${status}`}
+                          style={{
+                            paddingHorizontal: 16,
+                            paddingVertical: 14,
+                            borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                            borderTopColor: theme.colors.border,
+                          }}
                         >
-                          <CategoryTile icon={row.icon} color={row.color} size={38} />
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text
-                              style={[theme.text.label, { color: theme.colors.textPrimary }]}
-                              numberOfLines={1}
-                            >
-                              {row.name}
-                            </Text>
-                            <Text
-                              style={[
-                                theme.text.caption,
-                                {
-                                  color:
-                                    row.remainingMinor < 0
-                                      ? theme.colors.danger
-                                      : row.state === "warning"
-                                        ? theme.colors.warning
-                                        : theme.colors.textSecondary,
-                                  marginTop: 2,
-                                },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {status}
-                            </Text>
+                          <View
+                            style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+                          >
+                            <CategoryTile icon={row.icon} color={row.color} size={38} />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text
+                                style={[theme.text.label, { color: theme.colors.textPrimary }]}
+                                numberOfLines={1}
+                              >
+                                {row.name}
+                              </Text>
+                              <Text
+                                style={[
+                                  theme.text.caption,
+                                  {
+                                    color:
+                                      row.remainingMinor < 0
+                                        ? theme.colors.danger
+                                        : row.state === "warning"
+                                          ? theme.colors.warning
+                                          : theme.colors.textSecondary,
+                                    marginTop: 2,
+                                  },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {status}
+                              </Text>
+                            </View>
+                            <Money
+                              minor={row.limitMinor}
+                              currency={data.currency}
+                              tone="muted"
+                            />
                           </View>
-                          <Money
-                            minor={row.limitMinor}
-                            currency={data.currency}
-                            tone="muted"
-                          />
-                        </View>
-                        <View style={{ marginTop: 10 }}>
-                          <ProgressBar
-                            value={row.progress}
-                            height={5}
-                            state={row.state === "ok" ? "normal" : row.state}
-                          />
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </Card>
-              ) : (
-                // Body copy sitting bare on the canvas, with the action floating
-                // underneath it, was the one block on this screen that did not
-                // match the card language everywhere else.
-                <Card style={{ padding: 16 }}>
-                  <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
-                    No category limits yet. Add one and it appears on Overview.
-                  </Text>
-                  <View style={{ marginTop: 12, alignSelf: "flex-start" }}>
-                    <Button
-                      label="Add a category limit"
-                      variant="ghost"
-                      size="sm"
-                      fullWidth={false}
-                      disabled={availableCategories.length === 0}
-                      onPress={() => setPicking(true)}
-                    />
-                  </View>
-                </Card>
-              )}
+                          <View style={{ marginTop: 10 }}>
+                            <ProgressBar
+                              value={row.progress}
+                              height={5}
+                              state={row.state === "ok" ? "normal" : row.state}
+                            />
+                          </View>
+                        </TactilePressable>
+                      );
+                    })}
+                  </Card>
+                ) : (
+                  <Card variant="glass" style={{ padding: 16 }}>
+                    <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+                      No category limits yet. Add one and it appears on Overview.
+                    </Text>
+                    <View style={{ marginTop: 12, alignSelf: "flex-start" }}>
+                      <Button
+                        label="Add a category limit"
+                        variant="ghost"
+                        size="sm"
+                        fullWidth={false}
+                        disabled={availableCategories.length === 0}
+                        onPress={() => setPicking(true)}
+                      />
+                    </View>
+                  </Card>
+                )}
 
-              {rows.length ? (
-                <Button
-                  label="Set a category limit"
-                  variant="ghost"
-                  size="sm"
-                  fullWidth={false}
-                  disabled={availableCategories.length === 0}
-                  onPress={() => setPicking(true)}
-                  style={{ marginTop: 10, alignSelf: "flex-start" }}
-                />
-              ) : null}
+                {rows.length ? (
+                  <Button
+                    label="Set a category limit"
+                    variant="ghost"
+                    size="sm"
+                    fullWidth={false}
+                    disabled={availableCategories.length === 0}
+                    onPress={() => setPicking(true)}
+                    style={{ marginTop: 10, alignSelf: "flex-start" }}
+                  />
+                ) : null}
+              </Animated.View>
 
               {plan?.previousCurrencyBudgets.length ? (
                 <>
                   <SectionHeader title="Another currency" />
-                  <Card padded={false}>
+                  <Card variant="glass" padded={false}>
                     {plan.previousCurrencyBudgets.map((budget, index) => {
                       const name = budget.categoryId
                         ? (categoryById.get(budget.categoryId)?.name ?? "Category limit")
@@ -431,7 +464,7 @@ export default function BudgetsScreen() {
                           style={{
                             paddingHorizontal: 16,
                             paddingVertical: 12,
-                            borderTopWidth: index === 0 ? 0 : 1,
+                            borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
                             borderTopColor: theme.colors.border,
                             flexDirection: "row",
                             alignItems: "center",

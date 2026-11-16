@@ -319,9 +319,12 @@ export function RecurringEditorSheet({
           style={{
             marginHorizontal: 20,
             marginTop: 12,
-            backgroundColor: theme.colors.surfaceSunken,
-            borderRadius: 22,
-            paddingHorizontal: 16,
+            backgroundColor: theme.colors.surfaceMuted,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            overflow: "hidden",
           }}
         >
           <FieldRow
@@ -351,9 +354,12 @@ export function RecurringEditorSheet({
           style={{
             marginHorizontal: 20,
             marginTop: 8,
-            backgroundColor: theme.colors.surfaceSunken,
-            borderRadius: 22,
-            paddingHorizontal: 16,
+            backgroundColor: theme.colors.surfaceMuted,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            overflow: "hidden",
           }}
         >
           <FieldRow
@@ -451,12 +457,15 @@ export function RecurringEditorSheet({
           style={{
             marginHorizontal: 20,
             marginTop: 12,
-            backgroundColor: theme.colors.surfaceSunken,
-            borderRadius: 22,
-            paddingHorizontal: 16,
+            backgroundColor: theme.colors.surfaceMuted,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            overflow: "hidden",
           }}
         >
-          <View style={{ minHeight: 56, flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ minHeight: 56, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12 }}>
             <View style={{ flex: 1 }}>
               <Text style={[theme.text.body, { color: theme.colors.textPrimary }]}>
                 Post automatically

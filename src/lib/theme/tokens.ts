@@ -1,60 +1,80 @@
 import type { TextStyle } from "react-native";
 
 /**
- * Design tokens — mirrors blueprints/04-design-system.md.
- * Feature code must never hard-code a hex value; read these through `useTheme()`.
+ * Suffice design system — Modern iOS Liquid Glass & Optical Depth.
  *
- * The system follows the iOS recipe rather than a decorative one: opaque system
- * surfaces for content, translucent material only for bars and sheets, true system
- * colours, and typography sized to its container.
+ * Semantic color rule — strict:
+ *  - Expenses always render in primary ink.
+ *  - Income renders in semantic emerald.
+ *  - Coral red renders ONLY for overspend and destructive/error states.
  */
 
 export type ColorTokens = {
+  /** Primary atmospheric canvas fill */
   bg: string;
   bgTop: string;
   bgBottom: string;
+  /** Translucent & elevated card surfaces */
   surface: string;
   surfaceMuted: string;
   surfaceSunken: string;
+  /** Optical glass layers */
   glass: string;
   glassThin: string;
   glassThick: string;
   glassBorder: string;
+  /** Crisp inner top-edge specular rim & light catch on glass */
+  glassHighlight: string;
+  /** Subtle internal top-to-bottom frost gradient overlay */
+  glassSheen: string;
+  /** Native UIBlurEffect / expo-blur tint material */
+  blurTint: "systemChromeMaterialLight" | "systemChromeMaterialDark";
+  /** Hero smoked obsidian-sapphire glass card */
   ink: string;
   inkDeep: string;
   inkGlow: string;
+  heroFrom: string;
+  heroTo: string;
+  inkBorder: string;
+  /** Solid high-contrast pill / CTA contrast pair */
   solid: string;
   solidFg: string;
+  /** Structural hairline & card rim */
   border: string;
   cardBorder: string;
+  /** Typography inks */
   textPrimary: string;
   textSecondary: string;
   textTertiary: string;
+  /** Primary iOS system interactive tint & liquid button gradient */
   accent: string;
   accentAlt: string;
   accentSoft: string;
   accentFg: string;
   accentFill: string;
   accentFillAlt: string;
-  /** Glass capsule: light edge at the top, deep edge at the bottom, white rim. */
   accentTop: string;
   accentBottom: string;
   accentRim: string;
   specular: string;
+  /** Semantic financial feedback */
   income: string;
   expense: string;
   warning: string;
   danger: string;
   transfer: string;
+  /** Content rendered over dark smoked glass hero cards */
   onInk: string;
   onInkMuted: string;
   inkTrack: string;
+  /** Overlay chrome */
   scrim: string;
   tabBar: string;
   homeBar: string;
   insightFrom: string;
   insightTo: string;
   sheet: string;
+  /** Ambient atmospheric light blooms behind frosted glass */
   bloom1: string;
   bloom2: string;
   bloom3: string;
@@ -64,142 +84,167 @@ export type ToneName = "iris" | "mint" | "amber" | "coral" | "sky" | "slate";
 
 export type Tone = { background: string; foreground: string };
 
-/** iOS system colours, light. */
 const lightColors: ColorTokens = {
-  // Warm paper, not grey. The canvas carries a faint vertical gradient so the page
-  // has a light source; the cards are warmer still, which is what stops a white
-  // card on a white screen from looking like a template.
-  bg: "#F3EEE2",
-  bgTop: "#F7F3E9",
-  bgBottom: "#EDE6D6",
-  // Cards are pure white against the paper canvas. The earlier warm off-white
-  // surface sat so close to the background that the page read as one flat wash;
-  // the contrast between paper and white is what makes a card look placed.
+  bg: "#F2F3F7",
+  bgTop: "#F6F7FA",
+  bgBottom: "#EEEDF2",
+
   surface: "#FFFFFF",
-  surfaceMuted: "#F3EEE2",
-  surfaceSunken: "#E9E2D1",
-  glass: "rgba(255,253,248,0.86)",
-  glassThin: "rgba(255,253,248,0.54)",
-  glassThick: "#FFFFFF",
-  glassBorder: "rgba(20,23,19,0.10)",
-  ink: "#151A16",
-  inkDeep: "#0D120F",
-  inkGlow: "transparent",
-  solid: "#151A16",
-  solidFg: "#FFFDF8",
-  border: "#E3DCCB",
-  cardBorder: "rgba(20,23,19,0.09)",
-  textPrimary: "#121613",
-  textSecondary: "#5B615A",
-  textTertiary: "#8B9088",
-  accent: "#17614A",
-  accentAlt: "#2E8A66",
-  accentSoft: "#E2EFE7",
+  surfaceMuted: "#ECEDF2",
+  surfaceSunken: "#E4E6ED",
+
+  glass: "rgba(255, 255, 255, 0.80)",
+  glassThin: "rgba(255, 255, 255, 0.62)",
+  glassThick: "rgba(255, 255, 255, 0.94)",
+  glassBorder: "rgba(15, 23, 42, 0.075)",
+  glassHighlight: "rgba(255, 255, 255, 0.65)",
+  glassSheen: "rgba(255, 255, 255, 0.0)",
+  blurTint: "systemChromeMaterialLight",
+
+  ink: "#161922",
+  inkDeep: "#101219",
+  inkGlow: "rgba(255, 255, 255, 0.04)",
+  heroFrom: "#1D212C",
+  heroTo: "#141720",
+  inkBorder: "rgba(255, 255, 255, 0.08)",
+
+  solid: "#141720",
+  solidFg: "#FFFFFF",
+
+  border: "rgba(15, 23, 42, 0.07)",
+  cardBorder: "rgba(15, 23, 42, 0.055)",
+
+  textPrimary: "#0C0F18",
+  textSecondary: "#525B70",
+  textTertiary: "#858FA3",
+
+  accent: "#007AFF",
+  accentAlt: "#2B90FF",
+  accentSoft: "rgba(0, 122, 255, 0.10)",
   accentFg: "#FFFFFF",
-  accentFill: "#17614A",
-  accentFillAlt: "#2E8A66",
-  accentTop: "#2F8C69",
-  accentBottom: "#114E39",
-  accentRim: "rgba(255,255,255,0.26)",
-  specular: "rgba(255,255,255,0.34)",
-  income: "#16704F",
-  expense: "#BC4B2E",
-  warning: "#B0781F",
-  danger: "#BC4B2E",
-  transfer: "#8C5A8F",
-  onInk: "#FFFDF8",
-  onInkMuted: "rgba(255,253,248,0.72)",
-  inkTrack: "rgba(255,255,255,0.16)",
-  scrim: "rgba(13,18,15,0.45)",
-  tabBar: "rgba(255,253,248,0.92)",
-  homeBar: "#121613",
-  insightFrom: "#EAF2EA",
-  insightTo: "#F7F2E6",
-  sheet: "#FFFFFF",
-  bloom1: "transparent",
-  bloom2: "transparent",
-  bloom3: "transparent",
+  accentFill: "#007AFF",
+  accentFillAlt: "#2B90FF",
+  accentTop: "#007AFF",
+  accentBottom: "#007AFF",
+  accentRim: "rgba(255, 255, 255, 0.0)",
+  specular: "rgba(255, 255, 255, 0.0)",
+
+  income: "#169B5C",
+  expense: "#DC2F43",
+  warning: "#D97706",
+  danger: "#D92D3F",
+  transfer: "#5E5CE6",
+
+  onInk: "#F8FAFF",
+  onInkMuted: "rgba(235, 242, 255, 0.72)",
+  inkTrack: "rgba(255, 255, 255, 0.14)",
+
+  scrim: "rgba(10, 12, 18, 0.44)",
+  tabBar: "rgba(255, 255, 255, 0.88)",
+  homeBar: "#0C0F18",
+  insightFrom: "#F5F8FD",
+  insightTo: "#F5F8FD",
+  sheet: "#F9FAFC",
+
+  bloom1: "rgba(15, 23, 42, 0.0)",
+  bloom2: "rgba(15, 23, 42, 0.0)",
+  bloom3: "rgba(15, 23, 42, 0.0)",
 };
 
-/** iOS system colours, dark. */
 const darkColors: ColorTokens = {
-  bg: "#0B0E0C",
-  bgTop: "#0E1310",
-  bgBottom: "#080B09",
-  surface: "#141913",
-  surfaceMuted: "#1A201A",
-  surfaceSunken: "#232A22",
-  glass: "rgba(20,25,19,0.92)",
-  glassThin: "rgba(255,255,255,0.06)",
-  glassThick: "#141913",
-  glassBorder: "rgba(255,255,255,0.07)",
-  ink: "#1A201A",
-  inkDeep: "#101410",
-  inkGlow: "transparent",
-  solid: "#F2F1EA",
-  solidFg: "#0B0E0C",
-  border: "#262E26",
-  cardBorder: "rgba(255,255,255,0.09)",
-  textPrimary: "#F2F1EA",
-  textSecondary: "#A3AB9F",
-  textTertiary: "#6F776C",
-  accent: "#5FD3A3",
-  accentAlt: "#7FE3B8",
-  accentSoft: "#12291F",
-  accentFg: "#08130D",
-  accentFill: "#3FBE8C",
-  accentFillAlt: "#63D8A6",
-  accentTop: "#6ADFAF",
-  accentBottom: "#2E8F68",
-  accentRim: "rgba(255,255,255,0.22)",
-  specular: "rgba(255,255,255,0.30)",
-  income: "#4FD39B",
-  expense: "#FF8A70",
-  warning: "#F0BE63",
-  danger: "#FF8A70",
-  transfer: "#C08BC3",
-  onInk: "#F2F1EA",
-  onInkMuted: "rgba(242,241,234,0.72)",
-  inkTrack: "rgba(255,255,255,0.16)",
-  scrim: "rgba(0,0,0,0.60)",
-  tabBar: "rgba(20,25,19,0.92)",
-  homeBar: "#F2F1EA",
-  insightFrom: "#16241B",
-  insightTo: "#202019",
-  sheet: "#141913",
-  bloom1: "transparent",
-  bloom2: "transparent",
-  bloom3: "transparent",
+  bg: "#0B0C10",
+  bgTop: "#0F1117",
+  bgBottom: "#090A0D",
+
+  surface: "#15171F",
+  surfaceMuted: "#1C1F2A",
+  surfaceSunken: "#101218",
+
+  glass: "rgba(24, 27, 36, 0.86)",
+  glassThin: "rgba(24, 27, 36, 0.68)",
+  glassThick: "rgba(22, 24, 32, 0.96)",
+  glassBorder: "rgba(255, 255, 255, 0.095)",
+  glassHighlight: "rgba(255, 255, 255, 0.10)",
+  glassSheen: "rgba(255, 255, 255, 0.0)",
+  blurTint: "systemChromeMaterialDark",
+
+  ink: "#151821",
+  inkDeep: "#0F1118",
+  inkGlow: "rgba(255, 255, 255, 0.03)",
+  heroFrom: "#1B1F2B",
+  heroTo: "#141720",
+  inkBorder: "rgba(255, 255, 255, 0.085)",
+
+  solid: "#F5F6FA",
+  solidFg: "#0B0C10",
+
+  border: "rgba(255, 255, 255, 0.075)",
+  cardBorder: "rgba(255, 255, 255, 0.065)",
+
+  textPrimary: "#F4F5F8",
+  textSecondary: "#98A0B3",
+  textTertiary: "#636B7E",
+
+  accent: "#0A84FF",
+  accentAlt: "#409CFF",
+  accentSoft: "rgba(10, 132, 255, 0.14)",
+  accentFg: "#FFFFFF",
+  accentFill: "#0A84FF",
+  accentFillAlt: "#3399FF",
+  accentTop: "#0A84FF",
+  accentBottom: "#0A84FF",
+  accentRim: "rgba(255, 255, 255, 0.0)",
+  specular: "rgba(255, 255, 255, 0.0)",
+
+  income: "#30D158",
+  expense: "#FF453A",
+  warning: "#FF9F0A",
+  danger: "#FF453A",
+  transfer: "#7D7AFF",
+
+  onInk: "#F5F6FA",
+  onInkMuted: "rgba(244, 245, 248, 0.66)",
+  inkTrack: "rgba(255, 255, 255, 0.12)",
+
+  scrim: "rgba(0, 0, 0, 0.56)",
+  tabBar: "rgba(22, 24, 32, 0.90)",
+  homeBar: "#F4F5F8",
+  insightFrom: "#161A24",
+  insightTo: "#161A24",
+  sheet: "#15171F",
+
+  bloom1: "rgba(255, 255, 255, 0.0)",
+  bloom2: "rgba(255, 255, 255, 0.0)",
+  bloom3: "rgba(255, 255, 255, 0.0)",
 };
 
 const lightTones: Record<ToneName, Tone> = {
-  iris: { background: "#DFEDE5", foreground: "#17614A" },
-  mint: { background: "#E3F2E8", foreground: "#157A52" },
-  amber: { background: "#F7EBD6", foreground: "#94651A" },
-  coral: { background: "#F9E4DC", foreground: "#A84328" },
-  sky: { background: "#DFEAF0", foreground: "#2C6478" },
-  slate: { background: "#E9E4D9", foreground: "#5B615A" },
+  iris: { background: "rgba(94, 92, 230, 0.13)", foreground: "#4F4CD9" },
+  mint: { background: "rgba(16, 155, 96, 0.13)", foreground: "#0E8A55" },
+  amber: { background: "rgba(217, 119, 6, 0.14)", foreground: "#B45D04" },
+  coral: { background: "rgba(224, 40, 64, 0.12)", foreground: "#CC2138" },
+  sky: { background: "rgba(0, 122, 255, 0.12)", foreground: "#0068DB" },
+  slate: { background: "rgba(100, 116, 139, 0.14)", foreground: "#475569" },
 };
 
 const darkTones: Record<ToneName, Tone> = {
-  iris: { background: "#172A21", foreground: "#8FDCC0" },
-  mint: { background: "#122A1E", foreground: "#6FE0AD" },
-  amber: { background: "#2B2313", foreground: "#EFC177" },
-  coral: { background: "#2E1C15", foreground: "#FFA98F" },
-  sky: { background: "#16262B", foreground: "#8FCBDD" },
-  slate: { background: "#22271F", foreground: "#A9AF9F" },
+  iris: { background: "rgba(129, 140, 248, 0.20)", foreground: "#A5B4FC" },
+  mint: { background: "rgba(50, 215, 148, 0.18)", foreground: "#5EEAD4" },
+  amber: { background: "rgba(255, 179, 64, 0.19)", foreground: "#FFC76B" },
+  coral: { background: "rgba(255, 82, 102, 0.20)", foreground: "#FF8594" },
+  sky: { background: "rgba(41, 151, 255, 0.20)", foreground: "#70BFFF" },
+  slate: { background: "rgba(148, 163, 184, 0.18)", foreground: "#CBD5E1" },
 };
 
-/** iOS system colours for category accents. */
 export const categoryRamp = [
-  "#17614A",
-  "#BC4B2E",
-  "#B0781F",
-  "#8C5A8F",
-  "#2C6478",
-  "#4A5A7A",
-  "#A2845E",
-  "#5B615A",
+  "#0A84FF",
+  "#30D19A",
+  "#FF9F0A",
+  "#FF4D6D",
+  "#5E5CE6",
+  "#00C7BE",
+  "#BF5AF2",
+  "#64748B",
 ] as const;
 
 const FONT_REGULAR = "Urbanist_400Regular";
@@ -208,96 +253,95 @@ const FONT_SEMIBOLD = "Urbanist_600SemiBold";
 const FONT_BOLD = "Urbanist_700Bold";
 
 /**
- * Type scale, tuned for Urbanist. Each token names the face it needs because
- * React Native cannot pick a weight inside one custom family on Android. Amounts set `fontVariant: ["tabular-nums"]`
- * and shrink to fit their row instead of overflowing.
+ * Type scale aligned with iOS Dynamic Type hierarchy + Urbanist display geometry.
+ * Amounts set `fontVariant: ["tabular-nums"]` via <Money>.
  */
 const textScale = {
   hero: {
     fontFamily: FONT_BOLD,
-    fontSize: 40,
-    lineHeight: 44,
+    fontSize: 42,
+    lineHeight: 48,
     fontWeight: "700",
-    letterSpacing: -1.2,
-  },
+    letterSpacing: -1.4,
+  } satisfies TextStyle,
   display: {
     fontFamily: FONT_BOLD,
     fontSize: 34,
     lineHeight: 40,
     fontWeight: "700",
-    letterSpacing: -1,
-  },
+    letterSpacing: -1.0,
+  } satisfies TextStyle,
   amountXL: {
     fontFamily: FONT_BOLD,
     fontSize: 48,
-    lineHeight: 52,
+    lineHeight: 54,
     fontWeight: "700",
     letterSpacing: -1.6,
-  },
+  } satisfies TextStyle,
   total: {
     fontFamily: FONT_BOLD,
     fontSize: 30,
     lineHeight: 36,
     fontWeight: "700",
-    letterSpacing: -1,
-  },
+    letterSpacing: -1.0,
+  } satisfies TextStyle,
   title1: {
     fontFamily: FONT_BOLD,
-    fontSize: 34,
-    lineHeight: 41,
+    fontSize: 32,
+    lineHeight: 38,
     fontWeight: "700",
-    letterSpacing: -0.8,
-  },
+    letterSpacing: -0.9,
+  } satisfies TextStyle,
   title2: {
     fontFamily: FONT_BOLD,
     fontSize: 22,
     lineHeight: 28,
     fontWeight: "700",
     letterSpacing: -0.5,
-  },
+  } satisfies TextStyle,
   title3: {
     fontFamily: FONT_SEMIBOLD,
-    fontSize: 20,
+    fontSize: 19,
     lineHeight: 25,
     fontWeight: "600",
-    letterSpacing: -0.4,
-  },
+    letterSpacing: -0.35,
+  } satisfies TextStyle,
   body: {
     fontFamily: FONT_REGULAR,
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 16.5,
+    lineHeight: 23,
     fontWeight: "400",
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.15,
+  } satisfies TextStyle,
   bodyStrong: {
     fontFamily: FONT_SEMIBOLD,
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 16.5,
+    lineHeight: 23,
     fontWeight: "600",
-    letterSpacing: -0.3,
-  },
+    letterSpacing: -0.25,
+  } satisfies TextStyle,
   label: {
     fontFamily: FONT_SEMIBOLD,
-    fontSize: 16,
-    lineHeight: 21,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: "600",
-    letterSpacing: -0.1,
-  },
+    letterSpacing: -0.15,
+  } satisfies TextStyle,
   eyebrow: {
+    fontFamily: FONT_SEMIBOLD,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    letterSpacing: 0.35,
+  } satisfies TextStyle,
+  caption: {
     fontFamily: FONT_MEDIUM,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
-    letterSpacing: 0,
-  },
-  caption: {
-    fontFamily: FONT_REGULAR,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "400",
-    letterSpacing: 0,
-  },
-} satisfies Record<string, TextStyle>;
+    letterSpacing: -0.05,
+  } satisfies TextStyle,
+} as const;
 
 export type TextToken = keyof typeof textScale;
 
@@ -313,15 +357,14 @@ export const space = {
   huge: 40,
 } as const;
 
+/** Unified concentric iOS squircle corner scale. */
 export const radius = {
-  tile: 10,
+  tile: 12,
   chip: 999,
-  input: 12,
-  // 12 is deliberately tight: at 16+ every white block reads as an app-store
-  // screenshot. The hero and sheets are the only tall, soft shapes.
-  card: 12,
-  hero: 18,
-  sheet: 28,
+  input: 14,
+  card: 20,
+  hero: 26,
+  sheet: 32,
   pill: 999,
 } as const;
 
@@ -334,57 +377,53 @@ export type Shadow = {
 };
 
 const lightShadows = {
-  // Cards and chips are flat by design; these stay zeroed so any straggler
-  // reference renders flat instead of reintroducing the template look.
   card: {
-    shadowColor: "#101217",
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 0,
+    shadowColor: "#0B162C",
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1,
   },
   chip: {
-    shadowColor: "#101217",
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    shadowOffset: { width: 0, height: 0 },
+    shadowColor: "#0B162C",
+    shadowOpacity: 0.035,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 0,
   },
   glass: {
-    shadowColor: "#101217",
-    shadowOpacity: 0.10,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-  // The one coloured shadow in the app: a filled glass capsule sits slightly above
-  // the canvas, so its own tint appears underneath it.
-  button: {
-    shadowColor: "#0F4A35",
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 5 },
+    shadowColor: "#0B162C",
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 4,
   },
+  button: {
+    shadowColor: "#0066E6",
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
   lift: {
-    shadowColor: "#101217",
-    shadowOpacity: 0.12,
+    shadowColor: "#091224",
+    shadowOpacity: 0.10,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    elevation: 5,
   },
   sheet: {
-    shadowColor: "#000000",
+    shadowColor: "#070D1A",
     shadowOpacity: 0.14,
     shadowRadius: 30,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 16,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 14,
   },
   fab: {
-    shadowColor: "#000000",
-    shadowOpacity: 0.18,
+    shadowColor: "#0062E0",
+    shadowOpacity: 0.26,
     shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 7 },
     elevation: 6,
   },
 } satisfies Record<string, Shadow>;
@@ -392,66 +431,68 @@ const lightShadows = {
 const darkShadows = {
   card: {
     shadowColor: "#000000",
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 0,
   },
   chip: {
     shadowColor: "#000000",
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 0,
   },
   glass: {
     shadowColor: "#000000",
-    shadowOpacity: 0.34,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    shadowOpacity: 0.36,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
   },
   button: {
-    shadowColor: "#000000",
-    shadowOpacity: 0.55,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    shadowColor: "#0A84FF",
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
   },
   lift: {
     shadowColor: "#000000",
-    shadowOpacity: 0.40,
+    shadowOpacity: 0.42,
     shadowRadius: 26,
     shadowOffset: { width: 0, height: 12 },
-    elevation: 7,
+    elevation: 0,
   },
   sheet: {
     shadowColor: "#000000",
     shadowOpacity: 0.50,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 16,
+    shadowRadius: 34,
+    shadowOffset: { width: 0, height: -10 },
+    elevation: 14,
   },
   fab: {
-    shadowColor: "#000000",
-    shadowOpacity: 0.45,
+    shadowColor: "#0A84FF",
+    shadowOpacity: 0.30,
     shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
 } satisfies Record<string, Shadow>;
 
+/** Authentic UIKit / SwiftUI near-critical spring timings. */
 export const motion = {
-  chip: 140,
-  pill: 220,
-  sheet: 280,
-  progress: 420,
-  countUp: 600,
+  chip: 150,
+  pill: 240,
+  sheet: 300,
+  progress: 480,
+  countUp: 620,
   snackbar: 4000,
-  /** Physical responses: a short contraction, an eased settle, a soft slide. */
-  press: { damping: 22, stiffness: 340, mass: 0.5 },
-  release: { damping: 15, stiffness: 240, mass: 0.7 },
-  settle: { damping: 20, stiffness: 190, mass: 0.9 },
+  press: { damping: 26, stiffness: 460, mass: 0.6 },
+  release: { damping: 24, stiffness: 320, mass: 0.65 },
+  settle: { damping: 28, stiffness: 260, mass: 0.85 },
+  sheetSpring: { damping: 32, stiffness: 340, mass: 0.9 },
+  snappy: { damping: 22, stiffness: 380, mass: 0.65 },
 } as const;
 
 export type Theme = {

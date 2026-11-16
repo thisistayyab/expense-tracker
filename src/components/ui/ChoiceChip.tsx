@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
-
+import { Platform, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { TactilePressable } from "./TactilePressable";
 
@@ -9,13 +8,16 @@ export type ChoiceChipProps = {
   selected?: boolean;
   disabled?: boolean;
   onPress?: () => void;
-  /** `accent` is the filter-badge look; `solid` is the primary segmented look. */
+  /** `accent` is the translucent tinted chip look; `solid` is the primary segmented pill look. */
   tone?: "solid" | "accent";
   leading?: ReactNode;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 };
 
+/**
+ * Interactive Apple-style capsule chip with smooth matte contrast and spring press physics.
+ */
 export function ChoiceChip({
   label,
   selected = false,
@@ -27,56 +29,66 @@ export function ChoiceChip({
   accessibilityLabel,
 }: ChoiceChipProps) {
   const { theme } = useTheme();
+  const isAccentTone = tone === "accent";
 
-  // Segmented look: idle chips are outlines on the surface, the chosen one is a
-  // solid ink capsule. Every chip is the same height and has the same spring, so a
-  // filter row behaves like one instrument.
-  const selectedBackground = tone === "accent" ? theme.colors.accentSoft : theme.colors.solid;
-  const selectedForeground = tone === "accent" ? theme.colors.accent : theme.colors.solidFg;
-  const idleForeground = theme.colors.textSecondary;
+  const fg = selected
+    ? isAccentTone
+      ? theme.colors.accent
+      : theme.colors.solidFg
+    : theme.colors.textPrimary;
 
   return (
     <TactilePressable
-      onPress={onPress}
-      disabled={disabled || !onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected, disabled }}
-      scaleTo={0.95}
+      onPress={onPress}
+      disabled={disabled}
       haptic="selection"
-      flashColor={selected ? "rgba(255,255,255,0.16)" : "rgba(16,18,23,0.05)"}
+      scaleTo={0.96}
+      radius={999}
       style={[
+        styles.chip,
+        selected && !isAccentTone && Platform.OS === "ios" ? theme.shadow.chip : null,
         {
-          minHeight: 34,
-          minWidth: 34,
-          paddingVertical: 6,
-          paddingHorizontal: 14,
           borderRadius: theme.radius.chip,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          overflow: "hidden",
-          backgroundColor: selected ? selectedBackground : theme.colors.surface,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: selected ? "transparent" : theme.colors.cardBorder,
-          opacity: disabled ? 0.4 : 1,
+          borderCurve: "continuous",
+          borderColor: selected
+            ? isAccentTone
+              ? `${theme.colors.accent}44`
+              : "transparent"
+            : theme.colors.cardBorder,
+          backgroundColor: selected
+            ? isAccentTone
+              ? theme.colors.accentSoft
+              : theme.colors.solid
+            : theme.colors.surfaceMuted,
         },
         style,
       ]}
     >
       {leading}
-      <Text
-        style={[
-          theme.text.label,
-          {
-            color: selected ? selectedForeground : idleForeground,
-          },
-        ]}
-        numberOfLines={1}
-      >
+      <Text style={[theme.text.caption, styles.label, { color: fg }]} numberOfLines={1}>
         {label}
       </Text>
     </TactilePressable>
   );
 }
+
+const styles = StyleSheet.create({
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 36,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 6,
+    overflow: "hidden",
+  },
+  label: {
+    fontWeight: "600",
+    fontSize: 13.5,
+  },
+});

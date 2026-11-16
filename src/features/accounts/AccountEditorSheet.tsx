@@ -1,8 +1,15 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { Button, ChoiceChip, FieldRow, PickerSheet, Sheet } from "../../components/ui";
+import {
+  AppIcon,
+  Button,
+  ChoiceChip,
+  FieldRow,
+  PickerSheet,
+  Sheet,
+} from "../../components/ui";
 import { currencyLabel, currencyOptions, getCurrency } from "../../constants/currencies";
 import {
   createAccount,
@@ -157,9 +164,12 @@ export function AccountEditorSheet({
             theme.text.body,
             {
               height: 50,
-              borderRadius: 18,
+              borderRadius: theme.radius.input,
+              borderCurve: "continuous",
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: theme.colors.cardBorder,
               paddingHorizontal: 14,
-              backgroundColor: theme.colors.surfaceSunken,
+              backgroundColor: theme.colors.surfaceMuted,
               color: theme.colors.textPrimary,
             },
           ]}
@@ -174,23 +184,36 @@ export function AccountEditorSheet({
           Type
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {ACCOUNT_TYPES.map((entry) => (
-            <ChoiceChip
-              key={entry.value}
-              label={entry.label}
-              selected={type === entry.value}
-              onPress={() => setType(entry.value)}
-              disabled={busy}
-            />
-          ))}
+          {ACCOUNT_TYPES.map((entry) => {
+            const selected = type === entry.value;
+            return (
+              <ChoiceChip
+                key={entry.value}
+                label={entry.label}
+                selected={selected}
+                leading={
+                  <AppIcon
+                    name={entry.icon}
+                    size={14}
+                    color={selected ? theme.colors.solidFg : theme.colors.textSecondary}
+                  />
+                }
+                onPress={() => setType(entry.value)}
+                disabled={busy}
+              />
+            );
+          })}
         </View>
 
         <View
           style={{
             marginTop: 16,
-            paddingHorizontal: 14,
-            borderRadius: 20,
-            backgroundColor: theme.colors.surfaceSunken,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: theme.colors.cardBorder,
+            overflow: "hidden",
+            backgroundColor: theme.colors.surfaceMuted,
           }}
         >
           <FieldRow
@@ -200,7 +223,11 @@ export function AccountEditorSheet({
             muted={currencyLocked}
           />
           <View
-            style={{ borderTopWidth: 1, borderTopColor: theme.colors.border, paddingVertical: 10 }}
+            style={{
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: theme.colors.border,
+              paddingVertical: 10,
+            }}
           >
             <Text style={[theme.text.label, { color: theme.colors.textSecondary }]}>
               Opening balance

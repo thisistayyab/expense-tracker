@@ -118,29 +118,32 @@ export function RegionEditor({
         <View
           style={{
             marginTop: 16,
-            borderRadius: 24,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: theme.colors.glassBorder,
             padding: 16,
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
-            backgroundColor: theme.colors.solid,
+            backgroundColor: theme.colors.glassThick,
           }}
         >
           <Text style={{ fontSize: 22 }}>{selected.flag}</Text>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text
-              style={[theme.text.title3, { color: theme.colors.solidFg }]}
+              style={[theme.text.title3, { color: theme.colors.textPrimary }]}
               numberOfLines={1}
             >
               {selected.name}
             </Text>
             <Text
-              style={[theme.text.caption, { color: theme.colors.solidFg, opacity: 0.6, marginTop: 2 }]}
+              style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}
             >
               {currencyLabel(selectedCurrency)} · {selectedCurrency.name}
             </Text>
           </View>
-          <AppIcon name="check" color={theme.colors.accent} size={16} />
+          <AppIcon name="checkmarkCircle" color={theme.colors.accent} size={20} />
         </View>
 
         <TextInput
@@ -184,10 +187,10 @@ export function RegionEditor({
         style={{ flex: 1, marginHorizontal: 20 }}
         contentContainerStyle={{
           backgroundColor: theme.colors.glassThick,
-          borderRadius: 22,
+          borderRadius: theme.radius.card,
+          borderCurve: "continuous",
           borderWidth: 1,
           borderColor: theme.colors.glassBorder,
-          paddingHorizontal: 16,
           overflow: "hidden",
         }}
         renderItem={({ item, index }) => {
@@ -259,11 +262,12 @@ export function RegionEditor({
 
         <View
           style={{
-            backgroundColor: theme.colors.glassThin,
+            backgroundColor: theme.colors.glass,
             borderWidth: 1,
             borderColor: theme.colors.glassBorder,
-            borderRadius: 22,
-            paddingHorizontal: 16,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            overflow: "hidden",
           }}
         >
           <FieldRow

@@ -1,14 +1,21 @@
-import { GlassView, isGlassEffectAPIAvailable } from "expo-glass-effect";
+import { GlassView } from "expo-glass-effect";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Haptics from "expo-haptics";
 import { router, usePathname } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { haptics } from "../../lib/haptics";
+import { SPRING_PRESS, SPRING_RELEASE, SPRING_SNAPPY } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 import { AppIcon } from "../ui/AppIcon";
+import { Glass, GlassGroup, liquidGlass } from "../ui/Glass";
 import { TabIcon, type TabIconName } from "./TabIcon";
 import { TAB_BAR_BOTTOM_GAP, TAB_BAR_HEIGHT, TAB_BAR_SIDE } from "./tabBar";
 
@@ -25,227 +32,293 @@ const TABS: Tab[] = [
   { href: "/insights", label: "Insights", icon: "insights" },
 ];
 
-function TabButton({ tab, active }: { tab: Tab; active: boolean }) {
+function TabButton({
+  tab,
+  active,
+  accentColor,
+  inactiveColor,
+}: {
+  tab: Tab;
+  active: boolean;
+  accentColor: string;
+  inactiveColor: string;
+}) {
   const { theme } = useTheme();
-  const color = active ? theme.colors.accent : theme.colors.textSecondary;
+  const reduceMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   return (
     <Pressable
+      onPressIn={() => {
+        if (!reduceMotion) {
+          scale.set(withSpring(0.92, SPRING_PRESS));
+        }
+      }}
+      onPressOut={() => {
+        if (!reduceMotion) {
+          scale.set(withSpring(1, SPRING_RELEASE));
+        }
+      }}
+      onPress={() => {
+        haptics.selection();
+        if (!active) router.navigate(tab.href);
+      }}
       accessibilityRole="tab"
       accessibilityLabel={tab.label}
       accessibilityState={{ selected: active }}
-      onPress={() => {
-        void Haptics.selectionAsync();
-        if (!active) router.navigate(tab.href);
-      }}
-      style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.55 : 1 }]}
+      style={styles.tabPress}
     >
-      <TabIcon name={tab.icon} color={color} size={22} />
-      <Text numberOfLines={1} style={[theme.text.eyebrow, styles.label, { color }]}>
-        {tab.label}
-      </Text>
+      <Animated.View style={[styles.tabInner, animatedStyle]}>
+        <TabIcon
+          name={tab.icon}
+          color={active ? accentColor : inactiveColor}
+          size={21}
+          focused={active}
+        />
+        <Text
+          numberOfLines={1}
+          style={[
+            theme.text.caption,
+            styles.tabLabel,
+            {
+              color: active ? accentColor : inactiveColor,
+              fontWeight: active ? "700" : "500",
+            },
+          ]}
+        >
+          {tab.label}
+        </Text>
+      </Animated.View>
     </Pressable>
   );
 }
 
 /**
- * A floating capsule above the content: the shape iOS 26's system tab bar took
- * (Liquid Glass, detached from the edge), with YouTube's arrangement of tabs.
- * The add action stays a separate circular button above the trailing end, like
- * Apple News, so it never competes with the four destinations.
+ * iOS 26 Liquid Glass tab bar: floating glass navigation capsule on the left
+ * paired with a detached circular Quick Add glass orb inside a shared GlassGroup.
+ * Mounts via translateY only so native iOS GlassView never loses optical depth.
  */
 export function FloatingTabBar() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const liquid = isGlassEffectAPIAvailable();
+  const reduceMotion = useReducedMotion();
 
-  const [rowWidth, setRowWidth] = useState(0);
-  const activeIndex = TABS.findIndex((tab) => tab.href === pathname);
+  const [capsuleWidth, setCapsuleWidth] = useState(0);
+  const pillX = useSharedValue(0);
+  const fabScale = useSharedValue(1);
+  const barTranslateY = useSharedValue(reduceMotion ? 0 : 28);
 
-  const mount = useSharedValue(0);
-  const pill = useSharedValue(Math.max(activeIndex, 0));
-  const fabIn = useSharedValue(0.4);
-  const fabPress = useSharedValue(1);
-
-  useEffect(() => {
-    mount.value = withSpring(1, { damping: 21, stiffness: 200, mass: 0.9 });
-    fabIn.value = withSpring(1, { damping: 15, stiffness: 220 });
-  }, [mount, fabIn]);
-
-  useEffect(() => {
-    if (activeIndex < 0) return;
-    pill.value = withSpring(activeIndex, { damping: 17, stiffness: 190, mass: 0.8 });
-  }, [activeIndex, pill]);
-
-  const shellStyle = useAnimatedStyle(() => ({
-    opacity: mount.value,
-    transform: [{ translateY: (1 - mount.value) * 10 }],
-  }));
-
-  const pillStyle = useAnimatedStyle(() => {
-    const width = rowWidth / TABS.length;
-    return { width, transform: [{ translateX: pill.value * width }] };
-  });
-
-  const fabStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: fabIn.value * fabPress.value }],
-  }));
-
-  const items = (
-    <View
-      style={styles.row}
-      onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}
-    >
-      {rowWidth > 0 && activeIndex >= 0 ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.pill, { backgroundColor: theme.colors.accentSoft }, pillStyle]}
-        />
-      ) : null}
-      {TABS.map((tab) => (
-        <TabButton key={tab.href} tab={tab} active={pathname === tab.href} />
-      ))}
-    </View>
+  const activeIndex = Math.max(
+    0,
+    TABS.findIndex((tab) => pathname === tab.href || pathname.startsWith(`${tab.href}/`)),
   );
 
-  return (
-    <View
-      pointerEvents="box-none"
-      style={[styles.root, { marginBottom: insets.bottom + TAB_BAR_BOTTOM_GAP }]}
-    >
-      <Animated.View pointerEvents="box-none" style={[styles.shell, shellStyle]}>
-        {liquid ? (
-          <GlassView
-            colorScheme={theme.scheme}
-            glassEffectStyle="regular"
-            style={styles.capsule}
-          >
-            {items}
-          </GlassView>
-        ) : (
-          <View
-            style={[
-              styles.capsule,
-              theme.shadow.glass,
-              {
-                backgroundColor: theme.colors.tabBar,
-                borderColor: theme.colors.glassBorder,
-              },
-            ]}
-          >
-            {/* Without native glass this capsule was an opaque white pill with a
-                hairline edge — a plain div. The sheen gives it the same material
-                language as the buttons on every platform. */}
-            <LinearGradient
-              pointerEvents="none"
-              colors={[theme.colors.specular, "rgba(255,255,255,0)"]}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            {items}
-          </View>
-        )}
-      </Animated.View>
+  useEffect(() => {
+    barTranslateY.set(reduceMotion ? 0 : withSpring(0, SPRING_SNAPPY));
+  }, [barTranslateY, reduceMotion]);
 
-      <Animated.View pointerEvents="box-none" style={[styles.fabWrap, fabStyle]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add transaction"
-          onPress={() => {
-            void Haptics.selectionAsync();
-            router.push("/add");
-          }}
-          onPressIn={() => {
-            fabPress.value = withSpring(0.92, { damping: 20, stiffness: 320 });
-          }}
-          onPressOut={() => {
-            fabPress.value = withSpring(1, { damping: 18, stiffness: 260 });
-          }}
-          style={[
-            styles.fab,
-            theme.shadow.fab,
-            {
-              backgroundColor: theme.colors.accentFill,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: theme.colors.accentRim,
-            },
-          ]}
+  useEffect(() => {
+    if (capsuleWidth <= 0) return;
+    const innerWidth = capsuleWidth - 8;
+    const slotWidth = innerWidth / TABS.length;
+    const target = activeIndex * slotWidth;
+    pillX.set(
+      reduceMotion ? withTiming(target, { duration: 0 }) : withSpring(target, SPRING_SNAPPY),
+    );
+  }, [activeIndex, capsuleWidth, pillX, reduceMotion]);
+
+  const dockStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: barTranslateY.value }],
+  }));
+
+  const pillWidth = capsuleWidth > 0 ? (capsuleWidth - 8) / TABS.length : 0;
+
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value }],
+  }));
+
+  const fabStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: fabScale.value }],
+  }));
+
+  const bottomOffset = Math.max(insets.bottom, TAB_BAR_BOTTOM_GAP);
+
+  return (
+    <Animated.View
+      pointerEvents="box-none"
+      style={[
+        styles.dock,
+        {
+          bottom: bottomOffset,
+          paddingHorizontal: TAB_BAR_SIDE,
+        },
+        dockStyle,
+      ]}
+    >
+      <GlassGroup spacing={10} style={styles.row}>
+        <Glass
+          tone="regular"
+          interactive
+          radius={30}
+          style={[styles.capsule, theme.shadow.glass]}
         >
-          <LinearGradient
-            colors={[theme.colors.accentTop, theme.colors.accentBottom]}
-            start={{ x: 0.2, y: 0 }}
-            end={{ x: 0.8, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <LinearGradient
-            colors={["rgba(255,255,255,0.26)", "rgba(255,255,255,0)"]}
-            start={{ x: 0.2, y: 0 }}
-            end={{ x: 0.8, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <AppIcon name="plus" color={theme.colors.accentFg} size={24} />
-        </Pressable>
-      </Animated.View>
-    </View>
+          <View
+            onLayout={(e) => setCapsuleWidth(e.nativeEvent.layout.width)}
+            style={styles.capsuleRow}
+          >
+            {pillWidth > 0 ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.activePill,
+                  {
+                    width: pillWidth,
+                    backgroundColor:
+                      theme.scheme === "dark"
+                        ? "rgba(41, 151, 255, 0.22)"
+                        : "rgba(0, 122, 255, 0.12)",
+                    borderColor:
+                      theme.scheme === "dark"
+                        ? "rgba(130, 195, 255, 0.28)"
+                        : "rgba(0, 122, 255, 0.16)",
+                  },
+                  pillStyle,
+                ]}
+              />
+            ) : null}
+
+            {TABS.map((tab, index) => (
+              <TabButton
+                key={tab.href}
+                tab={tab}
+                active={index === activeIndex}
+                accentColor={theme.colors.accent}
+                inactiveColor={theme.colors.textSecondary}
+              />
+            ))}
+          </View>
+        </Glass>
+
+        <Animated.View style={[styles.fabOuter, theme.shadow.fab, fabStyle]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add transaction"
+            hitSlop={6}
+            onPressIn={() => {
+              haptics.tick();
+              if (!reduceMotion) fabScale.set(withSpring(0.9, SPRING_PRESS));
+            }}
+            onPressOut={() => {
+              if (!reduceMotion) fabScale.set(withSpring(1, SPRING_RELEASE));
+            }}
+            onPress={() => router.push("/add")}
+            style={styles.fabPress}
+          >
+            {liquidGlass && Platform.OS === "ios" ? (
+              <GlassView
+                colorScheme={theme.scheme}
+                glassEffectStyle="regular"
+                isInteractive
+                tintColor={theme.colors.accentFill}
+                style={styles.fabSurface}
+              >
+                <AppIcon name="plus" size={24} color={theme.colors.accentFg} weight="bold" />
+              </GlassView>
+            ) : (
+              <View style={styles.fabSurface}>
+                <LinearGradient
+                  colors={[theme.colors.accentTop, theme.colors.accentFill, theme.colors.accentBottom]}
+                  locations={[0, 0.52, 1]}
+                  start={{ x: 0.25, y: 0 }}
+                  end={{ x: 0.75, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View
+                  pointerEvents="none"
+                  style={[styles.fabRim, { borderColor: theme.colors.accentRim }]}
+                />
+                <AppIcon name="plus" size={24} color={theme.colors.accentFg} weight="bold" />
+              </View>
+            )}
+          </Pressable>
+        </Animated.View>
+      </GlassGroup>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  dock: {
     position: "absolute",
-    left: TAB_BAR_SIDE,
-    right: TAB_BAR_SIDE,
-    bottom: 0,
+    left: 0,
+    right: 0,
   },
-  shell: {
-    height: TAB_BAR_HEIGHT,
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   capsule: {
     flex: 1,
     height: TAB_BAR_HEIGHT,
-    borderRadius: TAB_BAR_HEIGHT / 2,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "transparent",
-    paddingHorizontal: 6,
-    overflow: "hidden",
   },
-  row: {
+  capsuleRow: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    padding: 4,
   },
-  pill: {
+  activePill: {
     position: "absolute",
-    left: 0,
-    top: 8,
-    height: TAB_BAR_HEIGHT - 16,
-    borderRadius: (TAB_BAR_HEIGHT - 16) / 2,
+    left: 4,
+    top: 4,
+    bottom: 4,
+    borderRadius: 26,
+    borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth * 2,
   },
-  tab: {
+  tabPress: {
     flex: 1,
-    height: TAB_BAR_HEIGHT - 8,
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabInner: {
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
   },
-  label: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: "500",
+  tabLabel: {
+    fontSize: 10.5,
+    lineHeight: 13,
+    letterSpacing: -0.05,
   },
-  fabWrap: {
-    position: "absolute",
-    right: 8,
-    bottom: TAB_BAR_HEIGHT + 12,
+  fabOuter: {
+    width: TAB_BAR_HEIGHT,
+    height: TAB_BAR_HEIGHT,
+    borderRadius: TAB_BAR_HEIGHT / 2,
   },
-  fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  fabPress: {
+    width: TAB_BAR_HEIGHT,
+    height: TAB_BAR_HEIGHT,
+    borderRadius: TAB_BAR_HEIGHT / 2,
+  },
+  fabSurface: {
+    flex: 1,
+    borderRadius: TAB_BAR_HEIGHT / 2,
+    borderCurve: "continuous",
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
+  },
+  fabRim: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: TAB_BAR_HEIGHT / 2,
+    borderWidth: 1,
   },
 });

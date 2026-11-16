@@ -1,7 +1,7 @@
-import { Pressable, Text, View } from "react-native";
-
+import { StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { AppIcon } from "./AppIcon";
+import { TactilePressable } from "./TactilePressable";
 
 export type FieldRowProps = {
   label: string;
@@ -11,36 +11,31 @@ export type FieldRowProps = {
   showDivider?: boolean;
 };
 
-export function FieldRow({ label, value, onPress, muted = false, showDivider = false }: FieldRowProps) {
+/**
+ * Interactive grouped setting/form selector row with smooth spring feedback.
+ */
+export function FieldRow({
+  label,
+  value,
+  onPress,
+  muted = false,
+  showDivider = false,
+}: FieldRowProps) {
   const { theme } = useTheme();
   const interactive = Boolean(onPress);
 
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!interactive}
-      accessibilityRole={interactive ? "button" : undefined}
-      accessibilityLabel={value ? `${label}, ${value}` : label}
-      style={({ pressed }) => [
-        {
-          minHeight: 52,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          borderTopWidth: showDivider ? 1 : 0,
-          borderTopColor: theme.colors.border,
-        },
-        pressed && interactive ? { opacity: 0.62 } : null,
-      ]}
-    >
-      <Text style={[theme.text.body, { color: theme.colors.textPrimary }]}>{label}</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
+  const row = (
+    <View style={styles.row}>
+      <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>{label}</Text>
+      <View style={styles.right}>
         {value ? (
           <Text
             style={[
-              theme.text.body,
-              { color: muted ? theme.colors.textTertiary : theme.colors.textSecondary },
+              theme.text.bodyStrong,
+              {
+                color: muted ? theme.colors.textTertiary : theme.colors.textPrimary,
+                textAlign: "right",
+              },
             ]}
             numberOfLines={1}
           >
@@ -48,9 +43,53 @@ export function FieldRow({ label, value, onPress, muted = false, showDivider = f
           </Text>
         ) : null}
         {interactive ? (
-          <AppIcon name="chevronRight" color={theme.colors.textTertiary} size={15} />
+          <AppIcon name="chevronRight" size={14} color={theme.colors.textTertiary} weight="bold" />
         ) : null}
       </View>
-    </Pressable>
+    </View>
+  );
+
+  return (
+    <View>
+      {interactive ? (
+        <TactilePressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={value ? `${label}, ${value}` : label}
+          scaleTo={0.985}
+          radius={12}
+        >
+          {row}
+        </TactilePressable>
+      ) : (
+        row
+      )}
+      {showDivider ? (
+        <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+      ) : null}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  right: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+  },
+});

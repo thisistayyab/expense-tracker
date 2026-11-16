@@ -2,9 +2,9 @@ import Constants from "expo-constants";
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { Card, SectionHeader } from "../../components/ui";
+import { Card, ScreenBackground, SectionHeader, TactilePressable } from "../../components/ui";
 import { DeleteAllSheet } from "../../features/settings/DeleteAllSheet";
 import { SettingsRow } from "../../features/settings/SettingsRow";
 import { getCountry } from "../../constants/countries";
@@ -78,13 +78,15 @@ export default function SettingsScreen() {
   const appearance = data.theme === "system" ? "System" : data.theme === "dark" ? "Dark" : "Light";
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
       <ScrollView
-        style={{ backgroundColor: theme.colors.bg }}
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
       >
         <SectionHeader title="Preferences" />
-        <Card padded={false}>
+        <Card variant="glass" padded={false}>
           <SettingsRow
             label="Country"
             value={country.name}
@@ -111,7 +113,7 @@ export default function SettingsScreen() {
         </Card>
 
         <SectionHeader title="Library" />
-        <Card padded={false}>
+        <Card variant="glass" padded={false}>
           <SettingsRow
             label="Categories"
             value={String(data.categories)}
@@ -138,7 +140,7 @@ export default function SettingsScreen() {
         </Card>
 
         <SectionHeader title="Data" />
-        <Card padded={false}>
+        <Card variant="glass" padded={false}>
           <SettingsRow
             label="Export CSV"
             value="Share"
@@ -171,23 +173,32 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        <Pressable
+        <TactilePressable
           onPress={() => setDeleteOpen(true)}
+          haptic="selection"
+          scaleTo={0.97}
+          radius={theme.radius.card}
           accessibilityRole="button"
           accessibilityLabel="Delete all data"
-          style={({ pressed }) => ({
-            minHeight: 46,
-            marginTop: 16,
+          style={{
+            minHeight: 48,
+            marginTop: 18,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: `${theme.colors.danger}32`,
+            backgroundColor: `${theme.colors.danger}16`,
             alignItems: "center",
             justifyContent: "center",
-            opacity: pressed ? 0.6 : 1,
-          })}
+          }}
         >
-          <Text style={[theme.text.label, { color: theme.colors.danger }]}>Delete all data</Text>
-        </Pressable>
+          <Text style={[theme.text.label, { color: theme.colors.danger, fontWeight: "700" }]}>
+            Delete all data
+          </Text>
+        </TactilePressable>
 
         <SectionHeader title="About" />
-        <Card padded={false}>
+        <Card variant="glass" padded={false}>
           <SettingsRow
             label="About Suffice"
             value={`v${version}`}
@@ -222,6 +233,6 @@ export default function SettingsScreen() {
           load().catch(() => {});
         }}
       />
-    </>
+    </View>
   );
 }

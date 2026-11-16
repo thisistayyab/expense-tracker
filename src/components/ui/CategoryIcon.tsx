@@ -1,3 +1,5 @@
+import { SymbolView, type SFSymbol } from "expo-symbols";
+import { Platform } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 export type CategoryIconName =
@@ -24,147 +26,152 @@ export type CategoryIconProps = {
   size?: number;
 };
 
+const SF_CATEGORY_MAP: Record<CategoryIconName, SFSymbol> = {
+  utensils: "fork.knife",
+  cart: "cart",
+  car: "car",
+  home: "house",
+  bag: "bag",
+  receipt: "doc.text",
+  heart: "heart",
+  sparkles: "sparkles",
+  book: "book",
+  plane: "airplane",
+  gift: "gift",
+  wallet: "wallet.bifold",
+  briefcase: "briefcase",
+  ellipsis: "ellipsis",
+  plus: "plus",
+  transfer: "arrow.left.arrow.right",
+};
+
 const stroke = (color: string) => ({
   stroke: color,
-  strokeWidth: 1.7,
+  strokeWidth: 1.75,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 });
 
-/** One hand-drawn set replaces the emoji map, so category tiles stay monochrome. */
-export function CategoryIcon({ name, color, size = 20 }: CategoryIconProps) {
+function CategoryIconSvg({ name, color, size = 20 }: CategoryIconProps) {
   const s = stroke(color);
+  const key = (name && name in SF_CATEGORY_MAP ? name : "ellipsis") as CategoryIconName;
 
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {name === "utensils" ? (
+      {key === "utensils" ? (
         <>
           <Path d="M7 3.5v7.2M4.6 3.5v4.2c0 1.4 1 2.4 2.4 2.4s2.4-1 2.4-2.4V3.5M7 13.5v7" {...s} />
           <Path d="M16.4 20.5v-7.2M16.4 13.3c1.9 0 3.1-1.4 3.1-3.4 0-2.2-1.1-3.9-3.1-3.9v7.3Z" {...s} />
         </>
       ) : null}
-
-      {name === "cart" ? (
+      {key === "cart" ? (
         <>
-          <Path d="M3.2 4.2h2l2.1 9.6h10.4l2-6.7H6.1" {...s} />
-          <Circle cx="9.2" cy="18.2" r="1.5" {...s} />
-          <Circle cx="17.4" cy="18.2" r="1.5" {...s} />
+          <Path d="M3.5 5h2.4l2.1 10h9.8l2-7.2H6.8" {...s} />
+          <Circle cx={9.5} cy={19} r={1.3} fill={color} />
+          <Circle cx={16.5} cy={19} r={1.3} fill={color} />
         </>
       ) : null}
-
-      {name === "car" ? (
+      {key === "car" ? (
         <>
-          <Path d="M4.2 15.8v2h2.1v-2M17.7 15.8v2h2.1v-2" {...s} />
-          <Path d="M3.6 15.8h16.8v-2.6c0-.6-.3-1.1-.8-1.4l-1.4-.7-1.6-3.2c-.2-.5-.8-.8-1.3-.8H8.7c-.5 0-1.1.3-1.3.8L5.8 11l-1.4.7c-.5.3-.8.8-.8 1.4v2.7Z" {...s} />
-          <Path d="M6.6 11.1h10.8" {...s} />
+          <Path d="M4.5 13 6 7.5c.3-.9 1.1-1.5 2-1.5h8c.9 0 1.7.6 2 1.5L19.5 13" {...s} />
+          <Rect x={3.5} y={13} width={17} height={4.8} rx={1.6} {...s} />
+          <Path d="M6.5 17.8v1.6M17.5 17.8v1.6" {...s} />
+          <Circle cx={7.2} cy={15.4} r={1} fill={color} />
+          <Circle cx={16.8} cy={15.4} r={1} fill={color} />
         </>
       ) : null}
-
-      {name === "home" ? (
+      {key === "home" ? (
         <>
-          <Path d="M3.6 10.6 12 3.5l8.4 7.1" {...s} />
-          <Path d="M6 9.4v10.1h12V9.4M10 19.5v-5.2h4v5.2" {...s} />
+          <Path d="M3.5 10.6 12 3.6l8.5 7" {...s} />
+          <Path d="M6 9.6v9.8a1.1 1.1 0 0 0 1.1 1.1h9.8a1.1 1.1 0 0 0 1.1-1.1V9.6" {...s} />
+          <Path d="M10 20.5v-5.2h4v5.2" {...s} />
         </>
       ) : null}
-
-      {name === "bag" ? (
+      {key === "bag" ? (
         <>
-          <Path d="M5.4 8.2h13.2l-1 12.1H6.4l-1-12.1Z" {...s} />
-          <Path d="M9 8.2V6.6a3 3 0 0 1 6 0v1.6" {...s} />
+          <Path d="M5.2 8.5h13.6l1.1 11.4a1.1 1.1 0 0 1-1.1 1.1H5.2a1.1 1.1 0 0 1-1.1-1.1L5.2 8.5Z" {...s} />
+          <Path d="M8.8 8.5V7a3.2 3.2 0 0 1 6.4 0v1.5" {...s} />
         </>
       ) : null}
-
-      {name === "receipt" ? (
+      {key === "receipt" ? (
         <>
-          <Path d="M6 3.6h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4v-17Z" {...s} />
-          <Path d="M9 8.2h6M9 11.8h6M9 15.4h3.4" {...s} />
+          <Path d="M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4v-17Z" {...s} />
+          <Path d="M9.2 8.5h5.6M9.2 12.2h5.6M9.2 15.8h3.4" {...s} />
         </>
       ) : null}
-
-      {name === "heart" ? (
-        <Path d="M12 20s-7.4-4.4-7.4-9.3A4.1 4.1 0 0 1 12 8.1a4.1 4.1 0 0 1 7.4 2.6C19.4 15.6 12 20 12 20Z" {...s} />
+      {key === "heart" ? (
+        <Path
+          d="M12 20.2S4.5 15.2 4.5 9.6a4.1 4.1 0 0 1 7.5-2.3 4.1 4.1 0 0 1 7.5 2.3c0 5.6-7.5 10.6-7.5 10.6Z"
+          {...s}
+        />
       ) : null}
-
-      {name === "sparkles" ? (
+      {key === "sparkles" ? (
         <>
-          <Path d="M11 3.4 12.7 8l4.6 1.7-4.6 1.7L11 16l-1.7-4.6L4.7 9.7 9.3 8 11 3.4Z" {...s} />
-          <Path d="M17.8 14.4l.9 2.4 2.3.9-2.3.9-.9 2.4-.9-2.4-2.3-.9 2.3-.9.9-2.4Z" {...s} />
+          <Path d="m12 3.5 1.8 5.2 5.2 1.8-5.2 1.8-1.8 5.2-1.8-5.2L5 10.5l5.2-1.8L12 3.5Z" {...s} />
+          <Path d="m18.2 15.5.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" {...s} />
         </>
       ) : null}
-
-      {name === "book" ? (
+      {key === "book" ? (
         <>
-          <Path d="M12 6.4C10.4 5.2 8.2 4.7 4.4 4.7v13.6c3.8 0 6 .5 7.6 1.7 1.6-1.2 3.8-1.7 7.6-1.7V4.7c-3.8 0-6 .5-7.6 1.7Z" {...s} />
-          <Path d="M12 6.4v13.6" {...s} />
+          <Path d="M12 6.5c-2.2-1.6-4.8-2-7.8-1.3v13.3c3-.7 5.6-.3 7.8 1.3" {...s} />
+          <Path d="M12 6.5c2.2-1.6 4.8-2 7.8-1.3v13.3c-3-.7-5.6-.3-7.8 1.3V6.5Z" {...s} />
         </>
       ) : null}
-
-      {name === "plane" ? (
-        <Path d="M20.4 3.6 3.9 10.2l6 2.3 2.3 6 3.4-4.2 4.8-10.7ZM9.9 12.5l10.5-8.9" {...s} />
+      {key === "plane" ? (
+        <Path d="m12 3.5 2 6 6.5 2.5v2l-6.5-1.2V18l2.5 1.8v1.2L12 20l-4.5 1v-1.2L10 18v-5.2L3.5 14v-2L10 9.5l2-6Z" {...s} />
       ) : null}
-
-      {name === "gift" ? (
+      {key === "gift" ? (
         <>
-          <Rect x="4" y="9.4" width="16" height="11" rx="1.8" {...s} />
-          <Path d="M4 13.6h16M12 9.4v11" {...s} />
-          <Path d="M12 9.4C11.2 6.4 9.6 4.6 7.7 4.6a2.2 2.2 0 0 0 0 4.4h4.3M12 9.4c.8-3 2.4-4.8 4.3-4.8a2.2 2.2 0 0 1 0 4.4H12" {...s} />
+          <Rect x={3.8} y={8.8} width={16.4} height={3.5} rx={0.9} {...s} />
+          <Path d="M5.5 12.3v8.2h13v-8.2M12 8.8v11.7" {...s} />
+          <Path d="M12 8.8c0-2-1.1-3.8-2.8-3.8S6.6 6.5 7.4 7.7C8 8.6 9.8 8.8 12 8.8Zm0 0c0-2 1.1-3.8 2.8-3.8s2.6 1.5 1.8 2.7c-.6.9-2.4 1.1-4.6 1.1Z" {...s} />
         </>
       ) : null}
-
-      {name === "wallet" ? (
+      {key === "wallet" ? (
         <>
-          <Rect x="3.4" y="6.4" width="17.2" height="12.2" rx="3" {...s} />
-          <Path d="M3.4 10.4h17.2" {...s} />
-          <Circle cx="16.8" cy="14.5" r="1.1" fill={color} />
+          <Rect x={3.5} y={6} width={17} height={12.5} rx={2.6} {...s} />
+          <Path d="M14.5 12.2h6" {...s} />
+          <Circle cx={16.5} cy={12.2} r={0.8} fill={color} />
         </>
       ) : null}
-
-      {name === "briefcase" ? (
+      {key === "briefcase" ? (
         <>
-          <Rect x="3.4" y="7.4" width="17.2" height="11.8" rx="2.4" {...s} />
-          <Path d="M9 7.4V5.9c0-.8.6-1.4 1.4-1.4h3.2c.8 0 1.4.6 1.4 1.4v1.5M3.4 12.6h17.2" {...s} />
+          <Rect x={3.8} y={7.6} width={16.4} height={12} rx={2.2} {...s} />
+          <Path d="M8.8 7.6V5.8A1.3 1.3 0 0 1 10.1 4.5h3.8a1.3 1.3 0 0 1 1.3 1.3v1.8M3.8 12.6h16.4" {...s} />
         </>
       ) : null}
-
-      {name === "ellipsis" ? (
+      {key === "plus" ? <Path d="M12 5v14M5 12h14" {...s} /> : null}
+      {key === "transfer" ? (
         <>
-          <Circle cx="6" cy="12" r="1.2" fill={color} />
-          <Circle cx="12" cy="12" r="1.2" fill={color} />
-          <Circle cx="18" cy="12" r="1.2" fill={color} />
+          <Path d="M16.5 7.5H5.5M9 4 5.5 7.5 9 11" {...s} />
+          <Path d="M7.5 16.5h11M15 13l3.5 3.5L15 20" {...s} />
         </>
       ) : null}
-
-      {name === "plus" ? <Path d="M12 5v14M5 12h14" {...s} /> : null}
-
-      {name === "transfer" ? (
+      {key === "ellipsis" ? (
         <>
-          <Path d="M4.5 8.5h12.4M14 5.7l2.9 2.8-2.9 2.8" {...s} />
-          <Path d="M19.5 15.5H7.1M10 12.7l-2.9 2.8 2.9 2.8" {...s} />
+          <Circle cx={6.2} cy={12} r={1.4} fill={color} />
+          <Circle cx={12} cy={12} r={1.4} fill={color} />
+          <Circle cx={17.8} cy={12} r={1.4} fill={color} />
         </>
-      ) : null}
-
-      {name == null || !CATEGORY_NAMES.has(name) ? (
-        <Circle cx="12" cy="12" r="3.2" {...s} />
       ) : null}
     </Svg>
   );
 }
 
-const CATEGORY_NAMES = new Set<string>([
-  "utensils",
-  "cart",
-  "car",
-  "home",
-  "bag",
-  "receipt",
-  "heart",
-  "sparkles",
-  "book",
-  "plane",
-  "gift",
-  "wallet",
-  "briefcase",
-  "ellipsis",
-  "plus",
-  "transfer",
-]);
+/** Category glyph: SF Symbol on iOS, uniform vector stroke elsewhere. */
+export function CategoryIcon({ name, color, size = 20 }: CategoryIconProps) {
+  const fallback = <CategoryIconSvg name={name} color={color} size={size} />;
+  if (Platform.OS === "ios" && name && name in SF_CATEGORY_MAP) {
+    return (
+      <SymbolView
+        name={SF_CATEGORY_MAP[name as CategoryIconName]}
+        tintColor={color}
+        size={size}
+        weight="semibold"
+        resizeMode="scaleAspectFit"
+        fallback={fallback}
+      />
+    );
+  }
+  return fallback;
+}

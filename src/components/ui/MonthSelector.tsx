@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View } from "react-native";
-
+import { BlurView } from "expo-blur";
+import { Platform, StyleSheet, View } from "react-native";
+import Animated, { FadeIn, ReduceMotion, useReducedMotion } from "react-native-reanimated";
 import { useTheme } from "../../lib/theme";
 import { AppIcon } from "./AppIcon";
 import { TactilePressable } from "./TactilePressable";
@@ -8,85 +9,129 @@ export type MonthSelectorProps = {
   label: string;
   onPrevious?: () => void;
   onNext?: () => void;
+  onPressLabel?: () => void;
   canGoPrevious?: boolean;
   canGoNext?: boolean;
 };
 
 /**
- * Month browser for Overview. Two chevrons rather than a dropdown: with local data
- * the range is small (first entry → this month) and a tap is faster than a sheet.
- * The chevrons and the label share one hairline pill so the control reads as a
- * single object; the label is a live region so a screen reader announces the month.
+ * Frosted glass month capsule that shows only active navigation arrows and lets
+ * the user tap the month label to pick any month directly.
  */
 export function MonthSelector({
   label,
   onPrevious,
   onNext,
+  onPressLabel,
   canGoPrevious = false,
   canGoNext = false,
 }: MonthSelectorProps) {
   const { theme } = useTheme();
+  const reduceMotion = useReducedMotion();
+
+  const showPrevious = Boolean(canGoPrevious && onPrevious);
+  const showNext = Boolean(canGoNext && onNext);
+  const buttonFill =
+    theme.scheme === "dark" ? "rgba(255, 255, 255, 0.09)" : "rgba(12, 15, 24, 0.06)";
 
   const arrow = (
     direction: "chevronLeft" | "chevronRight",
-    onPress: (() => void) | undefined,
-    enabled: boolean,
+    onPress: () => void,
     accessibilityLabel: string,
   ) => (
     <TactilePressable
       onPress={onPress}
-      disabled={!enabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled: !enabled }}
-      hitSlop={8}
-      haptic="selection"
-      scaleTo={0.9}
-      radius={16}
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: "center",
-        justifyContent: "center",
-        opacity: enabled ? 1 : 0.3,
-      }}
+      hitSlop={10}
+      scaleTo={0.86}
+      radius={999}
+      style={[styles.arrow, { backgroundColor: buttonFill }]}
     >
-      <AppIcon name={direction} color={theme.colors.textPrimary} size={16} />
+      <AppIcon name={direction} size={15} color={theme.colors.textPrimary} weight="bold" />
     </TactilePressable>
+  );
+
+  const labelContent = (
+    <View style={styles.labelWrap}>
+      <Animated.Text
+        key={label}
+        entering={reduceMotion ? undefined : FadeIn.duration(160).reduceMotion(ReduceMotion.System)}
+        accessibilityLiveRegion="polite"
+        style={[theme.text.label, { color: theme.colors.textPrimary }]}
+      >
+        {label}
+      </Animated.Text>
+    </View>
   );
 
   return (
     <View
-      accessibilityRole="header"
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: 3,
-        borderRadius: 999,
-        backgroundColor: theme.colors.surface,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: theme.colors.cardBorder,
-      }}
+      style={[
+        styles.pill,
+        Platform.OS === "ios" ? theme.shadow.chip : null,
+        {
+          paddingLeft: showPrevious ? 5 : 16,
+          paddingRight: showNext ? 5 : 16,
+          backgroundColor:
+            Platform.OS === "android" ? theme.colors.surface : theme.colors.glass,
+          borderColor:
+            theme.scheme === "dark" ? theme.colors.glassBorder : theme.colors.cardBorder,
+        },
+      ]}
     >
-      {arrow("chevronLeft", onPrevious, canGoPrevious, "Previous month")}
-      <Text
-        style={[
-          theme.text.label,
-          {
-            minWidth: 120,
-            textAlign: "center",
-            paddingHorizontal: 4,
-            color: theme.colors.textPrimary,
-            fontVariant: ["tabular-nums"],
-          },
-        ]}
-        numberOfLines={1}
-        accessibilityLiveRegion="polite"
-      >
-        {label}
-      </Text>
-      {arrow("chevronRight", onNext, canGoNext, "Next month")}
+      {Platform.OS === "ios" || Platform.OS === "web" ? (
+        <BlurView
+          pointerEvents="none"
+          tint={theme.colors.blurTint}
+          intensity={44}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      {showPrevious && onPrevious ? arrow("chevronLeft", onPrevious, "Previous month") : null}
+      {onPressLabel ? (
+        <TactilePressable
+          onPress={onPressLabel}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}, select month`}
+          hitSlop={6}
+          haptic="selection"
+          scaleTo={0.96}
+          radius={14}
+        >
+          {labelContent}
+        </TactilePressable>
+      ) : (
+        labelContent
+      )}
+      {showNext && onNext ? arrow("chevronRight", onNext, "Next month") : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    minHeight: 40,
+    borderRadius: 999,
+    borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 5,
+    overflow: "hidden",
+    gap: 4,
+  },
+  arrow: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  labelWrap: {
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

@@ -7,13 +7,28 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 
-import { AppIcon, Button, DatePickerSheet, FieldRow, PickerSheet, Sheet } from "../../components/ui";
+import {
+  AppIcon,
+  Button,
+  DatePickerSheet,
+  FieldRow,
+  PickerSheet,
+  Sheet,
+  TactilePressable,
+} from "../../components/ui";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
 import { getAllSettings, SETTING_KEYS, setSettings } from "../../lib/db/repos/settings";
@@ -35,6 +50,7 @@ import {
 } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
 import { newId } from "../../lib/ids";
+import { SPRING_SNAPPY } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 import { suggestCategoryId } from "./suggestions";
 
@@ -99,10 +115,29 @@ export function AddTransactionSheet({
   const db: Db = useSQLiteContext();
   const today = useMemo(() => toIsoDate(new Date()), []);
   const amountLineHeight = Math.ceil(52 * Math.min(fontScale, 1.3));
+  const reducedMotion = useReducedMotion();
+  const [segmentBarWidth, setSegmentBarWidth] = useState(0);
+  const thumbOffset = useSharedValue(0);
 
   const [type, setType] = useState<TransactionType>(
     existing?.type ?? initialType ?? "expense",
   );
+  const activeTypeIndex = type === "expense" ? 0 : type === "income" ? 1 : 2;
+  const segmentWidth = segmentBarWidth > 0 ? (segmentBarWidth - 6) / 3 : 0;
+
+  useEffect(() => {
+    if (segmentWidth <= 0) return;
+    const target = activeTypeIndex * segmentWidth;
+    if (reducedMotion) {
+      thumbOffset.value = target;
+    } else {
+      thumbOffset.value = withSpring(target, SPRING_SNAPPY);
+    }
+  }, [activeTypeIndex, reducedMotion, segmentWidth, thumbOffset]);
+
+  const segmentThumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: thumbOffset.value }],
+  }));
   const [currency, setCurrency] = useState(existing?.currency ?? "USD");
   const [amountText, setAmountText] = useState(
     existing
@@ -378,10 +413,11 @@ export function AddTransactionSheet({
       style={{
         minHeight: 50,
         paddingVertical: 6,
-        borderRadius: 18,
-        backgroundColor: theme.colors.glassThin,
+        borderRadius: theme.radius.input,
+        borderCurve: "continuous",
+        backgroundColor: theme.colors.surfaceMuted,
         borderWidth: 1,
-        borderColor: theme.colors.glassBorder,
+        borderColor: theme.colors.cardBorder,
         flexDirection: "row",
         alignItems: "center",
         gap: 9,
@@ -422,38 +458,67 @@ export function AddTransactionSheet({
        * scrolls while the sheet is lifted above the keyboard; Save stays pinned. */}
       <View style={{ paddingHorizontal: 20, paddingBottom: 6 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Pressable
+            <TactilePressable
               onPress={requestClose}
               accessibilityRole="button"
               accessibilityLabel="Close"
               hitSlop={8}
-              style={({ pressed }) => ({
+              scaleTo={0.92}
+              radius={19}
+              style={{
                 width: 38,
                 height: 38,
                 borderRadius: 19,
                 alignItems: "center",
                 justifyContent: "center",
                 borderWidth: 1,
-                borderColor: theme.colors.glassBorder,
-                backgroundColor: theme.colors.glassThin,
-                opacity: pressed ? 0.55 : 1,
-              })}
+                borderColor: theme.colors.cardBorder,
+                backgroundColor: theme.colors.surfaceMuted,
+              }}
             >
-              <AppIcon name="close" color={theme.colors.textPrimary} size={16} />
-            </Pressable>
+              <AppIcon name="close" color={theme.colors.textPrimary} size={15} />
+            </TactilePressable>
 
             <View
+              onLayout={(event) => {
+                const width = event.nativeEvent.layout.width;
+                if (width > 0 && Math.abs(width - segmentBarWidth) > 0.5) {
+                  setSegmentBarWidth(width);
+                }
+              }}
               style={{
                 flex: 1,
                 flexDirection: "row",
-                backgroundColor: theme.colors.glassThin,
+                backgroundColor: theme.colors.surfaceMuted,
                 borderWidth: 1,
-                borderColor: theme.colors.glassBorder,
+                borderColor: theme.colors.cardBorder,
                 borderRadius: 19,
+                borderCurve: "continuous",
                 padding: 3,
                 opacity: existing ? 0.55 : 1,
+                position: "relative",
               }}
             >
+              {segmentWidth > 0 ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    {
+                      position: "absolute",
+                      top: 3,
+                      bottom: 3,
+                      left: 3,
+                      width: segmentWidth,
+                      borderRadius: 16,
+                      borderCurve: "continuous",
+                      backgroundColor: theme.colors.accentSoft,
+                      borderWidth: 1,
+                      borderColor: theme.colors.glassHighlight,
+                    },
+                    segmentThumbStyle,
+                  ]}
+                />
+              ) : null}
               {(["expense", "income", "transfer"] as TransactionType[]).map((option) => {
                 const active = option === type;
                 return (
@@ -470,9 +535,9 @@ export function AddTransactionSheet({
                       minHeight: 32,
                       paddingVertical: 4,
                       borderRadius: 16,
+                      borderCurve: "continuous",
                       alignItems: "center",
                       justifyContent: "center",
-                      backgroundColor: active ? theme.colors.accentSoft : "transparent",
                     }}
                   >
                     <Text
@@ -482,7 +547,7 @@ export function AddTransactionSheet({
                         theme.text.caption,
                         {
                           color: active ? theme.colors.accent : theme.colors.textSecondary,
-                          fontWeight: "600",
+                          fontWeight: active ? "700" : "600",
                         },
                       ]}
                     >
@@ -560,7 +625,7 @@ export function AddTransactionSheet({
               {visibleCategories.map((category) => {
                 const active = category.id === categoryId;
                 return (
-                  <Pressable
+                  <TactilePressable
                     key={category.id}
                     onPress={() => {
                       haptics.selection();
@@ -571,50 +636,52 @@ export function AddTransactionSheet({
                     accessibilityLabel={category.name}
                     hitSlop={5}
                     style={{
-                      minHeight: 34,
+                      minHeight: 36,
                       paddingVertical: 6,
                       paddingHorizontal: 14,
-                      borderRadius: 17,
+                      borderRadius: theme.radius.chip,
+                      borderCurve: "continuous",
                       justifyContent: "center",
                       borderWidth: 1,
-                      borderColor: active ? "transparent" : theme.colors.glassBorder,
-                      backgroundColor: active ? theme.colors.accentSoft : theme.colors.glassThin,
+                      borderColor: active ? theme.colors.accent : theme.colors.cardBorder,
+                      backgroundColor: active ? theme.colors.accentSoft : theme.colors.surfaceMuted,
                     }}
                   >
                     <Text
                       style={[
                         theme.text.caption,
                         {
-                          fontWeight: "600",
+                          fontWeight: active ? "700" : "600",
                           color: active ? theme.colors.accent : theme.colors.textSecondary,
                         },
                       ]}
                     >
                       {category.name}
                     </Text>
-                  </Pressable>
+                  </TactilePressable>
                 );
               })}
-              <Pressable
+              <TactilePressable
                 onPress={() => setPicker("category")}
                 accessibilityRole="button"
                 accessibilityLabel="More categories"
                 hitSlop={5}
                 style={{
-                  minHeight: 34,
+                  minHeight: 36,
                   paddingVertical: 6,
                   paddingHorizontal: 14,
-                  borderRadius: 17,
+                  borderRadius: theme.radius.chip,
+                  borderCurve: "continuous",
                   justifyContent: "center",
                   borderWidth: 1,
-                  borderColor: theme.colors.glassBorder,
-                  backgroundColor: theme.colors.glassThin,
+                  borderColor: theme.colors.cardBorder,
+                  backgroundColor: theme.colors.surfaceMuted,
                 }}
               >
                 <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
                   More…
                 </Text>
-              </Pressable>
+              </TactilePressable>
             </ScrollView>
 
             <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>{nameField}</View>
@@ -649,9 +716,12 @@ export function AddTransactionSheet({
                       minHeight: 30,
                       paddingVertical: 5,
                       paddingHorizontal: 12,
-                      borderRadius: 15,
+                      borderRadius: theme.radius.chip,
+                      borderCurve: "continuous",
                       justifyContent: "center",
-                      backgroundColor: theme.colors.surfaceSunken,
+                      borderWidth: 1,
+                      borderColor: theme.colors.cardBorder,
+                      backgroundColor: theme.colors.surfaceMuted,
                     }}
                   >
                     <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
@@ -668,9 +738,12 @@ export function AddTransactionSheet({
           style={{
             marginHorizontal: 20,
             marginTop: 12,
-            backgroundColor: theme.colors.surfaceSunken,
-            borderRadius: 22,
-            paddingHorizontal: 16,
+            backgroundColor: theme.colors.surfaceMuted,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            overflow: "hidden",
           }}
         >
             <FieldRow label={type === "transfer" ? "From account" : "Account"} value={accountLabel} onPress={() => setPicker("account")} />
@@ -714,8 +787,11 @@ export function AddTransactionSheet({
                   minHeight: 46,
                   paddingVertical: 10,
                   paddingHorizontal: 14,
-                  borderRadius: 16,
-                  backgroundColor: theme.colors.surfaceSunken,
+                  borderRadius: theme.radius.input,
+                  borderCurve: "continuous",
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: theme.colors.cardBorder,
+                  backgroundColor: theme.colors.surfaceMuted,
                   color: theme.colors.textPrimary,
                 },
               ]}
@@ -734,8 +810,11 @@ export function AddTransactionSheet({
                   maxHeight: 140,
                   paddingHorizontal: 14,
                   paddingVertical: 12,
-                  borderRadius: 16,
-                  backgroundColor: theme.colors.surfaceSunken,
+                  borderRadius: theme.radius.input,
+                  borderCurve: "continuous",
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: theme.colors.cardBorder,
+                  backgroundColor: theme.colors.surfaceMuted,
                   color: theme.colors.textPrimary,
                 },
               ]}

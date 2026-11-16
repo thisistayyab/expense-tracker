@@ -1,12 +1,10 @@
-import { Text, View } from "react-native";
-
+import { StyleSheet, Text, View } from "react-native";
+import { AppIcon } from "../../components/ui";
 import type { InsightCardData } from "../../lib/domain/insights";
 import { useTheme } from "../../lib/theme";
 
 /**
- * One sentence per card, with only the number bold (07). No gradient dependency is
- * installed, so the card uses the accentSoft surface the gradient was built from;
- * the inset and radius match the design.
+ * Deterministic insight banner with calm tonal tint and SF Symbol badge.
  */
 export function InsightCard({ card }: { card: InsightCardData }) {
   const { theme } = useTheme();
@@ -15,35 +13,33 @@ export function InsightCard({ card }: { card: InsightCardData }) {
     <View
       accessible
       accessibilityLabel={card.segments.map((segment) => segment.text).join("")}
-      style={{
-        flexDirection: "row",
-        alignItems: "flex-start",
-        gap: 12,
-        padding: 16,
-        borderRadius: 22,
-        backgroundColor: theme.colors.accentSoft,
-      }}
+      style={[
+        styles.card,
+        theme.shadow.card,
+        {
+          backgroundColor: theme.colors.insightFrom,
+          borderColor: theme.colors.cardBorder,
+        },
+      ]}
     >
-      <View
-        style={{
-          width: 26,
-          height: 26,
-          borderRadius: 13,
-          backgroundColor: theme.colors.accent,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ color: theme.colors.accentFg, fontSize: 14, fontWeight: "700" }}>✦</Text>
+      <View style={[styles.iconTile, { backgroundColor: theme.colors.accentSoft }]}>
+        <AppIcon name="sparkles" size={16} color={theme.colors.accent} />
       </View>
-      <Text
-        style={[
-          theme.text.body,
-          { flex: 1, fontSize: 13.5, lineHeight: 19, color: theme.colors.textPrimary },
-        ]}
-      >
+
+      <Text style={[theme.text.body, styles.copy, { color: theme.colors.textPrimary }]}>
         {card.segments.map((segment, index) => (
-          <Text key={index} style={segment.strong ? { fontWeight: "700" } : undefined}>
+          <Text
+            key={index}
+            style={
+              segment.strong
+                ? {
+                    fontFamily: theme.text.bodyStrong.fontFamily,
+                    fontWeight: "700",
+                    color: theme.colors.textPrimary,
+                  }
+                : undefined
+            }
+          >
             {segment.text}
           </Text>
         ))}
@@ -51,3 +47,28 @@ export function InsightCard({ card }: { card: InsightCardData }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 20,
+    borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  iconTile: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  copy: {
+    flex: 1,
+    lineHeight: 22,
+  },
+});

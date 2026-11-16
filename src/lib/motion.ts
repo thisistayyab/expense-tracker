@@ -1,24 +1,54 @@
-import type { SharedValue } from "react-native-reanimated";
-import { withSpring, withTiming } from "react-native-reanimated";
+import {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  LinearTransition,
+  ReduceMotion,
+  type SharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import { motion } from "./theme/tokens";
 
-/**
- * The app's physical vocabulary. Every interaction that moves something uses these
- * two curves rather than ad-hoc durations, so a chip, a primary button and a tab
- * all settle at the same rate — that consistency is what reads as "designed"
- * instead of a pile of separate transitions.
- *
- * The writes live here, outside component scope, so the React Compiler treats the
- * handlers as pure calls and the animation stays reproducible.
- */
-
-const PRESS = { damping: 22, stiffness: 340, mass: 0.5 };
-const RELEASE = { damping: 15, stiffness: 240, mass: 0.7 };
+/** Near-critical iOS spring helpers — responsive under the finger, zero rubber bounce. */
+export const SPRING_PRESS = motion.press;
+export const SPRING_RELEASE = motion.release;
+export const SPRING_SETTLE = motion.settle;
+export const SPRING_SHEET = motion.sheetSpring;
+export const SPRING_SNAPPY = motion.snappy;
 
 export function springTo(value: SharedValue<number>, to: number, pressed = false) {
-  value.value = withSpring(to, pressed ? PRESS : RELEASE);
+  value.value = withSpring(to, pressed ? SPRING_PRESS : SPRING_RELEASE);
 }
 
-/** A short cross-fade for highlights that should not carry momentum. */
+export function settleTo(value: SharedValue<number>, to: number) {
+  value.value = withSpring(to, SPRING_SETTLE);
+}
+
+export function snappyTo(value: SharedValue<number>, to: number) {
+  value.value = withSpring(to, SPRING_SNAPPY);
+}
+
 export function fadeTo(value: SharedValue<number>, to: number, duration: number) {
   value.value = withTiming(to, { duration });
 }
+
+/** Staggered UIKit-style entrance for screen blocks and list cards. */
+export function iosEnter(delayMs = 0) {
+  return FadeInDown.springify(360)
+    .dampingRatio(0.92)
+    .delay(delayMs)
+    .reduceMotion(ReduceMotion.System);
+}
+
+export function iosFadeEnter(delayMs = 0) {
+  return FadeIn.duration(240).delay(delayMs).reduceMotion(ReduceMotion.System);
+}
+
+export function iosFadeExit() {
+  return FadeOut.duration(180).reduceMotion(ReduceMotion.System);
+}
+
+export const iosLayout = LinearTransition.springify(280)
+  .dampingRatio(0.92)
+  .reduceMotion(ReduceMotion.System);

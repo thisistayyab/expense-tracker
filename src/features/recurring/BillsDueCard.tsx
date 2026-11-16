@@ -1,9 +1,9 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
-import { Alert, Linking, Pressable, Text, View } from "react-native";
+import { Alert, Linking, StyleSheet, Text, View } from "react-native";
 
-import { Card, Money } from "../../components/ui";
+import { AppIcon, Card, Money, TactilePressable } from "../../components/ui";
 import { listUpcomingRecurringRules } from "../../lib/db/repos/recurring";
 import type { Db, RecurringRule } from "../../lib/db/types";
 import { addDays, daysBetween, toIsoDate } from "../../lib/domain/dates";
@@ -106,21 +106,34 @@ export function BillsDueCard({ currency }: { currency: string }) {
           paddingTop: 14,
         }}
       >
-        <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>Bills due</Text>
-        <Pressable
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <AppIcon name="repeat" size={14} color={theme.colors.accent} />
+          <Text style={[theme.text.caption, { color: theme.colors.textSecondary, fontWeight: "600" }]}>
+            Bills due
+          </Text>
+        </View>
+        <TactilePressable
           onPress={() => router.push("/settings/recurring")}
           accessibilityRole="button"
           accessibilityLabel="Manage recurring bills"
           hitSlop={8}
+          scaleTo={0.94}
+          radius={999}
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: 999,
+            backgroundColor: theme.colors.accentSoft,
+          }}
         >
           <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "600" }]}>
             Manage
           </Text>
-        </Pressable>
+        </TactilePressable>
       </View>
 
       {rules.map((rule, index) => (
-        <Pressable
+        <TactilePressable
           key={rule.id}
           onPress={() => router.push("/settings/recurring")}
           accessibilityRole="button"
@@ -128,16 +141,17 @@ export function BillsDueCard({ currency }: { currency: string }) {
             rule.amountMinor,
             rule.currency,
           )}, ${dueLabel(rule.nextDueAt, today)}${rule.autoPost ? "" : ", unpaid"}`}
-          style={({ pressed }) => ({
+          scaleTo={0.985}
+          radius={14}
+          style={{
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
             paddingHorizontal: 16,
-            paddingVertical: 11,
-            borderTopWidth: index === 0 ? 0 : 1,
+            paddingVertical: 12,
+            borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
             borderTopColor: theme.colors.border,
-            opacity: pressed ? 0.7 : 1,
-          })}
+          }}
         >
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text
@@ -152,34 +166,35 @@ export function BillsDueCard({ currency }: { currency: string }) {
           </View>
           <Money minor={rule.amountMinor} currency={rule.currency} />
           {!rule.autoPost && rule.nextDueAt <= today ? (
-            <Pressable
+            <TactilePressable
               onPress={() => void postNow(rule)}
               disabled={busy}
               accessibilityRole="button"
               accessibilityLabel={`Post ${rule.itemName ?? "bill"} now`}
               hitSlop={8}
-              style={({ pressed }) => ({
+              scaleTo={0.92}
+              radius={999}
+              style={{
                 minHeight: 32,
-                paddingHorizontal: 10,
-                borderRadius: 16,
+                paddingHorizontal: 12,
+                borderRadius: 999,
                 justifyContent: "center",
                 backgroundColor: theme.colors.accentSoft,
-                opacity: pressed || busy ? 0.6 : 1,
-              })}
+              }}
             >
-              <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "600" }]}>
+              <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "700" }]}>
                 Post
               </Text>
-            </Pressable>
+            </TactilePressable>
           ) : null}
-        </Pressable>
+        </TactilePressable>
       ))}
 
       <View
         style={{
           paddingHorizontal: 16,
-          paddingVertical: 10,
-          borderTopWidth: 1,
+          paddingVertical: 11,
+          borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: theme.colors.border,
           flexDirection: "row",
           alignItems: "center",
@@ -194,17 +209,18 @@ export function BillsDueCard({ currency }: { currency: string }) {
               : "Notifications are off. Bills still appear here."}
         </Text>
         {permission === "denied" || permission === "undetermined" ? (
-          <Pressable
+          <TactilePressable
             onPress={() => void enableReminders()}
             disabled={busy}
             accessibilityRole="button"
             accessibilityLabel="Turn on bill reminders"
             hitSlop={8}
+            scaleTo={0.94}
           >
             <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "600" }]}>
               Turn on
             </Text>
-          </Pressable>
+          </TactilePressable>
         ) : null}
       </View>
     </Card>

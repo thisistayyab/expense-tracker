@@ -3,7 +3,15 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
 import { Alert, ScrollView, Text, View } from "react-native";
 
-import { Button, Card, FieldRow, Money, SectionHeader } from "../../components/ui";
+import {
+  Button,
+  Card,
+  CategoryTile,
+  FieldRow,
+  Money,
+  ScreenBackground,
+  SectionHeader,
+} from "../../components/ui";
 import { getAccount } from "../../lib/db/repos/accounts";
 import { getCategory } from "../../lib/db/repos/categories";
 import { deleteTransaction, getTransaction, restoreTransaction } from "../../lib/db/repos/transactions";
@@ -72,16 +80,19 @@ export default function TransactionDetailScreen() {
 
   if (transaction === null) {
     return (
-      <View
-        style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 }}
-      >
-        <Text style={[theme.text.title2, { color: theme.colors.textPrimary }]}>
-          Transaction not found
-        </Text>
-        <Text style={[theme.text.body, { color: theme.colors.textSecondary, textAlign: "center" }]}>
-          It may have been deleted. Your other entries are untouched.
-        </Text>
-        <Button label="Back" variant="ghost" size="sm" onPress={() => router.back()} />
+      <View style={{ flex: 1 }}>
+        <ScreenBackground />
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 }}
+        >
+          <Text style={[theme.text.title2, { color: theme.colors.textPrimary }]}>
+            Transaction not found
+          </Text>
+          <Text style={[theme.text.body, { color: theme.colors.textSecondary, textAlign: "center" }]}>
+            It may have been deleted. Your other entries are untouched.
+          </Text>
+          <Button label="Back" variant="ghost" size="sm" onPress={() => router.back()} />
+        </View>
       </View>
     );
   }
@@ -92,54 +103,76 @@ export default function TransactionDetailScreen() {
     .join(" · ");
 
   return (
-    <ScrollView
-      contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 4 }}
-      style={{ backgroundColor: theme.colors.bg }}
-    >
-      <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
-        {transaction.type}
-      </Text>
-      <Text style={[theme.text.title1, { color: theme.colors.textPrimary }]}>{title}</Text>
-      <Text style={[theme.text.body, { color: theme.colors.textSecondary, marginTop: 2 }]}>
-        {subtitle}
-      </Text>
-      <View style={{ marginTop: 12 }}>
-        <Money
-          minor={transaction.amountMinor}
-          currency={transaction.currency}
-          size="amountXL"
-          tone={transaction.type === "income" ? "income" : "default"}
-        />
-      </View>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 6 }}
+      >
+        <Card variant="glass" style={{ padding: 20 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <CategoryTile
+              icon={transaction.type === "transfer" ? null : (category?.icon ?? null)}
+              appIcon={transaction.type === "transfer" ? "transfer" : undefined}
+              color={category?.color ?? null}
+              size={46}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
+                {transaction.type}
+              </Text>
+              <Text
+                style={[theme.text.title2, { color: theme.colors.textPrimary, marginTop: 2 }]}
+                numberOfLines={2}
+              >
+                {title}
+              </Text>
+            </View>
+          </View>
+          <View style={{ marginTop: 18 }}>
+            <Money
+              minor={transaction.amountMinor}
+              currency={transaction.currency}
+              size="amountXL"
+              tone={transaction.type === "income" ? "income" : "default"}
+            />
+          </View>
+          <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 6 }]}>
+            {subtitle}
+          </Text>
+        </Card>
 
-      <SectionHeader title="Details" />
-      <Card>
-        {category ? <FieldRow label="Category" value={category.name} /> : null}
-        {transaction.place ? (
-          <FieldRow label="Place" value={transaction.place} showDivider={Boolean(category)} />
-        ) : null}
-        {transaction.note ? (
-          <FieldRow label="Note" value={transaction.note} showDivider />
-        ) : null}
-        {account ? <FieldRow label="Account" value={account.name} showDivider /> : null}
-        <FieldRow label="Date" value={transaction.localDate} showDivider />
-        <FieldRow label="Currency" value={transaction.currency} showDivider />
-      </Card>
+        <SectionHeader title="Details" />
+        <Card variant="glass" padded={false}>
+          {category ? <FieldRow label="Category" value={category.name} /> : null}
+          {transaction.place ? (
+            <FieldRow label="Place" value={transaction.place} showDivider={Boolean(category)} />
+          ) : null}
+          {transaction.note ? (
+            <FieldRow label="Note" value={transaction.note} showDivider />
+          ) : null}
+          {account ? <FieldRow label="Account" value={account.name} showDivider /> : null}
+          <FieldRow label="Date" value={transaction.localDate} showDivider />
+          <FieldRow label="Currency" value={transaction.currency} showDivider />
+        </Card>
 
-      <View style={{ gap: 10, marginTop: 20 }}>
-        <Button
-          label="Edit transaction"
-          onPress={() =>
-            router.push({ pathname: "/add", params: { id: transaction.id } })
-          }
-        />
-        <Button
-          label={busy ? "Deleting…" : "Delete transaction"}
-          variant="danger"
-          disabled={busy}
-          onPress={remove}
-        />
-      </View>
-    </ScrollView>
+        <View style={{ gap: 10, marginTop: 20 }}>
+          <Button
+            label="Edit transaction"
+            onPress={() =>
+              router.push({ pathname: "/add", params: { id: transaction.id } })
+            }
+          />
+          <Button
+            label={busy ? "Deleting…" : "Delete transaction"}
+            variant="danger"
+            leftIcon="trash"
+            disabled={busy}
+            onPress={remove}
+          />
+        </View>
+      </ScrollView>
+    </View>
   );
 }

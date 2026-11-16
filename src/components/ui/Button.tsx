@@ -1,9 +1,14 @@
-import { GlassView } from "expo-glass-effect";
-import { LinearGradient } from "expo-linear-gradient";
-import { ActivityIndicator, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
-
+import type { ReactNode } from "react";
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { useTheme } from "../../lib/theme";
-import { liquidGlass } from "./Glass";
 import { TactilePressable } from "./TactilePressable";
 
 export type ButtonVariant = "primary" | "accent" | "ghost" | "danger";
@@ -16,15 +21,12 @@ export type ButtonProps = {
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
+  leftIcon?: ReactNode;
   style?: StyleProp<ViewStyle>;
 };
 
 /**
- * A filled capsule is layered glass, not a flat fill: a tinted vertical gradient
- * (light at the top edge, deep at the bottom), a white specular wash across the
- * upper half, a hairline rim where the light catches the edge, and a coloured
- * shadow underneath. Those four layers read as glass on any device — the native
- * `GlassView` is added on iOS 26 rather than being the only source of the effect.
+ * Tactile Apple-style pill button with clean matte surfaces and spring press physics.
  */
 export function Button({
   label,
@@ -34,90 +36,109 @@ export function Button({
   disabled = false,
   loading = false,
   fullWidth = true,
+  leftIcon,
   style,
 }: ButtonProps) {
   const { theme } = useTheme();
-  const { colors } = theme;
-  const filled = variant === "primary" || variant === "accent";
+  const { colors, text, radius, shadow } = theme;
 
-  const foregroundColor = filled
-    ? colors.accentFg
-    : variant === "danger"
+  const isGhost = variant === "ghost";
+  const isAccent = variant === "accent";
+  const isDanger = variant === "danger";
+  const height = size === "sm" ? 42 : 54;
+
+  const textColor = isGhost
+    ? colors.textPrimary
+    : isAccent || isDanger
+      ? colors.accentFg
+      : colors.solidFg;
+
+  const fillColor = isAccent
+    ? colors.accentFill
+    : isDanger
       ? colors.danger
-      : colors.accent;
+      : isGhost
+        ? colors.surfaceMuted
+        : colors.solid;
 
-  const height = size === "md" ? 50 : 40;
-  const corner = height / 2;
-  const isInactive = disabled || loading;
+  const buttonShadow =
+    Platform.OS === "ios"
+      ? isAccent
+        ? shadow.button
+        : isGhost
+          ? undefined
+          : shadow.card
+      : isAccent
+        ? shadow.button
+        : undefined;
 
   return (
     <TactilePressable
-      onPress={onPress}
-      disabled={isInactive}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: isInactive, busy: loading }}
-      haptic={isInactive ? "none" : "tick"}
-      radius={corner}
-      flashColor={filled ? "rgba(255,255,255,0.22)" : "rgba(20,23,19,0.06)"}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      onPress={onPress}
+      disabled={disabled || loading}
+      scaleTo={0.975}
+      radius={radius.pill}
+      flashColor={
+        isGhost
+          ? theme.scheme === "dark"
+            ? "rgba(255,255,255,0.06)"
+            : "rgba(10,18,36,0.05)"
+          : "rgba(255,255,255,0.14)"
+      }
       style={[
+        styles.base,
         {
-          minHeight: height,
-          paddingVertical: 8,
-          borderRadius: corner,
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "row",
-          gap: 8,
-          paddingHorizontal: 22,
-          alignSelf: fullWidth ? "stretch" : "flex-start",
-          overflow: "hidden",
-          backgroundColor: filled
-            ? colors.accentFill
-            : variant === "danger"
-              ? colors.accentSoft
-              : "transparent",
-          borderWidth: filled ? StyleSheet.hairlineWidth : 0,
-          borderColor: filled ? colors.accentRim : "transparent",
-          opacity: isInactive ? 0.4 : 1,
+          height,
+          borderRadius: radius.pill,
+          borderCurve: "continuous",
+          backgroundColor: fillColor,
+          borderWidth: isGhost ? StyleSheet.hairlineWidth : 0,
+          borderColor: isGhost ? colors.cardBorder : "transparent",
         },
-        filled ? theme.shadow.button : null,
+        fullWidth ? styles.full : styles.fit,
+        buttonShadow,
         style,
       ]}
     >
-      {filled ? (
-        <LinearGradient
-          colors={[colors.accentTop, colors.accentBottom]}
-          start={{ x: 0.15, y: 0 }}
-          end={{ x: 0.85, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
-
-      {filled && liquidGlass ? (
-        <GlassView
-          pointerEvents="none"
-          glassEffectStyle="clear"
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
-
-      {filled ? (
-        // The specular runs the full capsule and fades through three stops, so
-        // there is no edge where the highlight stops — a hard band across the
-        // middle is what made the previous version read as glossy plastic.
-        <LinearGradient
-          colors={["rgba(255,255,255,0.30)", "rgba(255,255,255,0.08)", "rgba(255,255,255,0)"]}
-          locations={[0, 0.55, 1]}
-          start={{ x: 0.15, y: 0 }}
-          end={{ x: 0.85, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
-
-      {loading ? <ActivityIndicator color={foregroundColor} /> : null}
-      <Text style={[theme.text.label, { color: foregroundColor }]}>{label}</Text>
+      {loading ? (
+        <ActivityIndicator color={textColor} size="small" />
+      ) : (
+        <View style={styles.contentRow}>
+          {leftIcon}
+          <Text
+            style={[
+              size === "sm" ? text.caption : text.label,
+              {
+                color: textColor,
+                fontWeight: "600",
+                fontSize: size === "sm" ? 14 : 16,
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+        </View>
+      )}
     </TactilePressable>
   );
 }
 
+const styles = StyleSheet.create({
+  base: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  full: { width: "100%" },
+  fit: { alignSelf: "flex-start" },
+  contentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+});

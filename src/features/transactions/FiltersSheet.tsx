@@ -123,9 +123,12 @@ export function FiltersSheet({
           <View
             style={{
               marginTop: 10,
-              paddingHorizontal: 14,
-              borderRadius: 20,
-              backgroundColor: theme.colors.surfaceSunken,
+              borderRadius: theme.radius.card,
+              borderCurve: "continuous",
+              borderWidth: 1,
+              borderColor: theme.colors.cardBorder,
+              overflow: "hidden",
+              backgroundColor: theme.colors.surfaceMuted,
             }}
           >
             <FieldRow
@@ -163,9 +166,12 @@ export function FiltersSheet({
         <GroupLabel>Account and category</GroupLabel>
         <View
           style={{
-            paddingHorizontal: 14,
-            borderRadius: 20,
-            backgroundColor: theme.colors.surfaceSunken,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            overflow: "hidden",
+            backgroundColor: theme.colors.surfaceMuted,
           }}
         >
           <FieldRow label="Account" value={accountLabel} onPress={() => setPicker("account")} />

@@ -8,7 +8,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "expensetracker",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#121317",
+    "backgroundColor": "#0B0C10",
     "ios": {
       "bundleIdentifier": "com.suffice.money",
       "buildNumber": "1",
@@ -19,7 +19,7 @@
       "package": "com.suffice.money",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#121317",
+        "backgroundColor": "#0B0C10",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
@@ -38,7 +38,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#121317",
+          "backgroundColor": "#0B0C10",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 96
         }
@@ -49,7 +49,7 @@
       [
         "expo-notifications",
         {
-          "color": "#5B5BF7",
+          "color": "#0A84FF",
           "defaultChannel": "bills",
           "enableRemoteNotifications": false
         }

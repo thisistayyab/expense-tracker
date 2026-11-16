@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react";
-import { FlatList, Text, View } from "react-native";
-
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { AppIcon } from "./AppIcon";
-import { ListRow } from "./ListRow";
 import { Sheet } from "./Sheet";
-import { TextField } from "./TextField";
+import { TactilePressable } from "./TactilePressable";
 
 export type PickerOption = {
   value: string;
@@ -24,6 +22,9 @@ export type PickerSheetProps = {
   searchPlaceholder?: string;
 };
 
+/**
+ * Frosted modal option selector with SF Symbol search field and active highlight pills.
+ */
 export function PickerSheet({
   visible,
   title,
@@ -37,76 +38,172 @@ export function PickerSheet({
   const { theme } = useTheme();
   const [query, setQuery] = useState("");
 
-  // Reset the filter as the sheet closes, not in an effect: every close path goes
-  // through `close`, so the next open always starts from the full list.
   const close = () => {
     setQuery("");
     onClose();
   };
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return options;
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return options;
     return options.filter(
       (option) =>
-        option.label.toLowerCase().includes(needle) ||
-        option.secondary?.toLowerCase().includes(needle),
+        option.label.toLowerCase().includes(trimmed) ||
+        option.value.toLowerCase().includes(trimmed) ||
+        (option.secondary?.toLowerCase().includes(trimmed) ?? false),
     );
   }, [options, query]);
 
   return (
     <Sheet visible={visible} onClose={close} title={title}>
-      <View style={{ flexShrink: 1, paddingHorizontal: 20 }}>
-        {searchable ? (
-          <View style={{ paddingBottom: 8 }}>
-            <TextField
+      {searchable ? (
+        <View style={styles.searchWrap}>
+          <View
+            style={[
+              styles.searchField,
+              {
+                backgroundColor: theme.colors.surfaceMuted,
+                borderColor: theme.colors.cardBorder,
+                borderRadius: theme.radius.input,
+              },
+            ]}
+          >
+            <AppIcon name="search" size={16} color={theme.colors.textTertiary} />
+            <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder={searchPlaceholder}
-              autoCorrect={false}
+              placeholderTextColor={theme.colors.textTertiary}
+              selectionColor={theme.colors.accent}
               autoCapitalize="none"
-              returnKeyType="search"
-              accessibilityLabel={searchPlaceholder}
+              autoCorrect={false}
+              style={[theme.text.body, styles.searchInput, { color: theme.colors.textPrimary }]}
             />
+            {query.length > 0 ? (
+              <TactilePressable
+                onPress={() => setQuery("")}
+                hitSlop={8}
+                scaleTo={0.86}
+                accessibilityLabel="Clear search"
+              >
+                <AppIcon name="close" size={14} color={theme.colors.textTertiary} />
+              </TactilePressable>
+            ) : null}
           </View>
-        ) : null}
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.value}
-          keyboardShouldPersistTaps="handled"
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ paddingBottom: 8 }}
-          renderItem={({ item, index }) => (
-            <ListRow
-              title={item.label}
-              subtitle={item.secondary}
-              showDivider={index > 0}
-              onPress={() => {
-                onSelect(item.value);
-                close();
-              }}
-              accessibilityLabel={
-                item.value === selected ? `${item.label}, selected` : item.label
-              }
-              trailing={
-                item.value === selected ? (
-                  <AppIcon name="check" color={theme.colors.accent} size={16} />
-                ) : undefined
-              }
-            />
-          )}
-          ListEmptyComponent={
-            <Text
-              style={[
-                theme.text.body,
-                { color: theme.colors.textTertiary, paddingVertical: 24, textAlign: "center" },
-              ]}
-            >
-              Nothing matches “{query.trim()}”.
+        </View>
+      ) : null}
+
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.list}
+      >
+        {filtered.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+              No matches found.
             </Text>
-          }
-        />
-      </View>
+          </View>
+        ) : (
+          filtered.map((option) => {
+            const active = option.value === selected;
+            return (
+              <TactilePressable
+                key={option.value}
+                onPress={() => {
+                  onSelect(option.value);
+                  close();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={option.label}
+                accessibilityState={{ selected: active }}
+                haptic="selection"
+                scaleTo={0.98}
+                radius={16}
+                style={[
+                  styles.optionRow,
+                  {
+                    backgroundColor: active ? theme.colors.accentSoft : theme.colors.surface,
+                    borderColor: active ? `${theme.colors.accent}42` : theme.colors.cardBorder,
+                  },
+                ]}
+              >
+                <View style={styles.optionText}>
+                  <Text
+                    style={[
+                      theme.text.bodyStrong,
+                      { color: active ? theme.colors.accent : theme.colors.textPrimary },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                  {option.secondary ? (
+                    <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
+                      {option.secondary}
+                    </Text>
+                  ) : null}
+                </View>
+                {active ? (
+                  <View style={[styles.checkCircle, { backgroundColor: theme.colors.accent }]}>
+                    <AppIcon name="check" size={13} color={theme.colors.accentFg} weight="bold" />
+                  </View>
+                ) : null}
+              </TactilePressable>
+            );
+          })
+        )}
+      </ScrollView>
     </Sheet>
   );
 }
+
+const styles = StyleSheet.create({
+  searchWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  searchField: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 13,
+    minHeight: 44,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: "continuous",
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 9,
+  },
+  list: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+    gap: 8,
+  },
+  emptyWrap: {
+    paddingVertical: 28,
+    alignItems: "center",
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  optionText: {
+    flex: 1,
+    gap: 2,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

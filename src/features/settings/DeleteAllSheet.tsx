@@ -1,8 +1,8 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text } from "react-native";
+import { Text, View } from "react-native";
 
-import { Sheet, TextField } from "../../components/ui";
+import { AppIcon, Button, Sheet, TextField } from "../../components/ui";
 import { resetAllData } from "../../lib/db/repos/backup";
 import type { Db } from "../../lib/db/types";
 import { haptics } from "../../lib/haptics";
@@ -58,64 +58,53 @@ export function DeleteAllSheet({
 
   return (
     <Sheet visible={visible} onClose={close} title="Delete all data?">
-      <Text
-        style={[
-          theme.text.body,
-          { color: theme.colors.textSecondary, paddingHorizontal: 20, paddingBottom: 12 },
-        ]}
-      >
-        This removes every transaction, budget, account, category and recurring rule on this
-        device. Your settings (country, currency, theme) stay. This cannot be undone — export a
-        backup first if you might want the data.
-      </Text>
-
-      <TextField
-        label="Type DELETE to confirm"
-        value={typed}
-        onChangeText={(value) => setTyped(value.toUpperCase())}
-        autoCapitalize="characters"
-        autoCorrect={false}
-        placeholder="DELETE"
-        editable={!busy}
-        error={error ?? undefined}
-      />
-
-      <Pressable
-        onPress={() => void remove()}
-        disabled={typed !== "DELETE" || busy}
-        accessibilityRole="button"
-        accessibilityLabel="Delete all data permanently"
-        accessibilityState={{ disabled: typed !== "DELETE" || busy, busy }}
-        style={({ pressed }) => ({
-          marginHorizontal: 20,
-          marginTop: 8,
-          marginBottom: 10,
-          height: 52,
-          borderRadius: 26,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: theme.colors.danger,
-          opacity: typed !== "DELETE" || busy ? 0.4 : pressed ? 0.85 : 1,
-        })}
-      >
-        {busy ? (
-          <ActivityIndicator color={theme.colors.accentFg} />
-        ) : (
-          <Text style={[theme.text.title3, { color: theme.colors.accentFg }]}>
-            Delete everything
+      <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 14 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: 12,
+            padding: 14,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: `${theme.colors.danger}32`,
+            backgroundColor:
+              theme.scheme === "dark"
+                ? "rgba(255, 82, 102, 0.14)"
+                : "rgba(224, 40, 64, 0.08)",
+          }}
+        >
+          <AppIcon name="exclamation" size={20} color={theme.colors.danger} />
+          <Text style={[theme.text.body, { flex: 1, color: theme.colors.textSecondary }]}>
+            This removes every transaction, budget, account, category and recurring rule on this
+            device. Your settings (country, currency, theme) stay. This cannot be undone — export a
+            backup first if you might want the data.
           </Text>
-        )}
-      </Pressable>
+        </View>
 
-      <Pressable
-        onPress={close}
-        disabled={busy}
-        accessibilityRole="button"
-        accessibilityLabel="Cancel"
-        style={{ height: 44, alignItems: "center", justifyContent: "center" }}
-      >
-        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>Cancel</Text>
-      </Pressable>
+        <TextField
+          label="Type DELETE to confirm"
+          value={typed}
+          onChangeText={(value) => setTyped(value.toUpperCase())}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          placeholder="DELETE"
+          editable={!busy}
+          error={error ?? undefined}
+        />
+
+        <View style={{ gap: 8, paddingTop: 4 }}>
+          <Button
+            label="Delete everything"
+            variant="danger"
+            onPress={() => void remove()}
+            loading={busy}
+            disabled={typed !== "DELETE" || busy}
+          />
+          <Button label="Cancel" variant="ghost" onPress={close} disabled={busy} />
+        </View>
+      </View>
     </Sheet>
   );
 }

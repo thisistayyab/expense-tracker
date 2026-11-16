@@ -1,6 +1,7 @@
-import { Pressable, Text, View } from "react-native";
-
+import { StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
+import { AppIcon } from "./AppIcon";
+import { TactilePressable } from "./TactilePressable";
 
 export type SectionHeaderProps = {
   title: string;
@@ -9,45 +10,67 @@ export type SectionHeaderProps = {
 };
 
 /**
- * iOS grouped-list section header: sentence case, 13 pt, secondary grey, aligned
- * with the text inside the sections below it. Uppercase tracked headers are a
- * web/Android habit and read as a template rather than a system list.
+ * Clean iOS grouped-list section header paired with a translucent frosted action pill.
  */
 export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderProps) {
   const { theme } = useTheme();
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingTop: 24,
-        paddingBottom: 8,
-        // Matches the padded cards below (16 pt inset), so the label sits on the
-        // same vertical line as the text inside them instead of floating 20 pt in.
-        paddingHorizontal: 16,
-      }}
-    >
+    <View style={styles.row}>
       <Text
+        accessibilityRole="header"
         style={[
           theme.text.caption,
-          { color: theme.colors.textSecondary, fontWeight: "600", letterSpacing: 0 },
+          {
+            color: theme.colors.textSecondary,
+            fontWeight: "600",
+            fontSize: 13.5,
+          },
         ]}
       >
         {title}
       </Text>
       {actionLabel && onAction ? (
-        <Pressable
-          onPress={onAction}
+        <TactilePressable
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
+          onPress={onAction}
+          scaleTo={0.94}
+          radius={999}
           hitSlop={8}
-          style={({ pressed }) => (pressed ? { opacity: 0.55 } : null)}
+          style={[styles.actionPill, { backgroundColor: theme.colors.accentSoft }]}
         >
-          <Text style={[theme.text.caption, { color: theme.colors.accent }]}>{actionLabel}</Text>
-        </Pressable>
+          <Text
+            style={[
+              theme.text.caption,
+              { color: theme.colors.accent, fontWeight: "600", fontSize: 12.5 },
+            ]}
+          >
+            {actionLabel}
+          </Text>
+          <AppIcon name="chevronRight" size={11} color={theme.colors.accent} weight="bold" />
+        </TactilePressable>
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 22,
+    paddingBottom: 9,
+    paddingHorizontal: 16,
+  },
+  actionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderCurve: "continuous",
+  },
+});

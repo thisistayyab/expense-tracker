@@ -1,45 +1,79 @@
+import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../../lib/theme";
 
 export type CardProps = {
   children: ReactNode;
-  variant?: "surface" | "ink" | "muted";
+  variant?: "surface" | "ink" | "muted" | "glass";
   padded?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
 /**
- * A flat block with a hairline edge: no drop shadow at all. A shadow on every
- * white card is what makes a screen read as a template — depth here comes from the
- * warm canvas around the card and from glass chrome above it, so the only lift in
- * the app is the floating bar, the sheets and the hero.
+ * Clean continuous-corner surface card (or smoked obsidian hero card for "ink").
+ * Uses opaque stepped tonal surfaces so edges stay velvet-smooth on iOS and Android.
  */
 export function Card({ children, variant = "surface", padded = true, style }: CardProps) {
   const { theme } = useTheme();
+  const flat = StyleSheet.flatten(style);
+  const corner =
+    typeof flat?.borderRadius === "number"
+      ? flat.borderRadius
+      : variant === "ink"
+        ? theme.radius.hero
+        : theme.radius.card;
 
-  const backgroundColor =
-    variant === "ink"
-      ? theme.colors.ink
-      : variant === "muted"
-        ? theme.colors.surfaceMuted
-        : theme.colors.surface;
+  const isInk = variant === "ink";
+  const isMuted = variant === "muted";
+
+  const shadowStyle = isInk
+    ? Platform.OS === "ios"
+      ? theme.shadow.lift
+      : undefined
+    : isMuted
+      ? undefined
+      : theme.shadow.card;
 
   return (
     <View
       style={[
+        shadowStyle,
         {
-          backgroundColor,
-          borderRadius: theme.radius.card,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: variant === "ink" ? "rgba(255,255,255,0.10)" : theme.colors.cardBorder,
-          padding: padded ? 16 : 0,
-          overflow: "hidden",
+          borderRadius: corner,
+          borderCurve: "continuous",
+          backgroundColor: isInk
+            ? theme.colors.ink
+            : isMuted
+              ? theme.colors.surfaceMuted
+              : theme.colors.surface,
+          padding: padded ? theme.space.xl : 0,
         },
         style,
       ]}
     >
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            borderRadius: corner,
+            borderCurve: "continuous",
+            overflow: "hidden",
+            borderWidth: isMuted ? 0 : StyleSheet.hairlineWidth,
+            borderColor: isInk ? theme.colors.inkBorder : theme.colors.cardBorder,
+          },
+        ]}
+      >
+        {isInk ? (
+          <LinearGradient
+            colors={[theme.colors.heroFrom, theme.colors.heroTo]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null}
+      </View>
       {children}
     </View>
   );

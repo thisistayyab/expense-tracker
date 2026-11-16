@@ -1,3 +1,4 @@
+import { BlurView } from "expo-blur";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -5,9 +6,10 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
-  Pressable,
+  Platform,
   ScrollView,
   SectionList,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -19,8 +21,9 @@ import {
   AppIcon,
   ChoiceChip,
   EmptyState,
+  Glass,
   PickerSheet,
-  ScreenBackground,
+  TactilePressable,
 } from "../../components/ui";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
@@ -88,16 +91,27 @@ function DayHeader({
   return (
     <View
       style={{
-        backgroundColor: theme.colors.bg,
+        overflow: "hidden",
         paddingHorizontal: 36,
-        paddingTop: 16,
+        paddingTop: 14,
         paddingBottom: 6,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         gap: 12,
+        backgroundColor:
+          Platform.OS === "android"
+            ? theme.scheme === "dark"
+              ? "rgba(11, 12, 16, 0.94)"
+              : "rgba(242, 243, 247, 0.95)"
+            : theme.scheme === "dark"
+              ? "rgba(11, 12, 16, 0.78)"
+              : "rgba(242, 243, 247, 0.80)",
       }}
     >
+      {Platform.OS === "ios" || Platform.OS === "web" ? (
+        <BlurView tint={theme.colors.blurTint} intensity={40} style={StyleSheet.absoluteFill} />
+      ) : null}
       <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
         {dayLabel(section.date, today)}
       </Text>
@@ -124,25 +138,32 @@ function SearchBar({
   onClear: () => void;
 }) {
   const { theme } = useTheme();
+  const [focused, setFocused] = useState(false);
+
   return (
-    <View
-      style={[
-        {
-          height: 46,
-          borderRadius: 23,
-          backgroundColor: theme.colors.surface,
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 16,
-          gap: 9,
-        },
-        theme.shadow.chip,
-      ]}
+    <Glass
+      tone="regular"
+      radius={theme.radius.input}
+      style={{
+        height: 46,
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 14,
+        gap: 9,
+        borderWidth: focused ? 1 : StyleSheet.hairlineWidth,
+        borderColor: focused ? theme.colors.accent : theme.colors.cardBorder,
+      }}
     >
-      <AppIcon name="search" color={theme.colors.textTertiary} size={18} />
+      <AppIcon
+        name="search"
+        color={focused ? theme.colors.accent : theme.colors.textTertiary}
+        size={17}
+      />
       <TextInput
         value={value}
         onChangeText={onChange}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder="Search item, place, note"
         placeholderTextColor={theme.colors.textTertiary}
         accessibilityLabel="Search transactions"
@@ -152,25 +173,26 @@ function SearchBar({
         style={[theme.text.body, { flex: 1, color: theme.colors.textPrimary, paddingVertical: 0 }]}
       />
       {value ? (
-        <Pressable
+        <TactilePressable
           onPress={onClear}
           accessibilityRole="button"
           accessibilityLabel="Clear search"
           hitSlop={8}
-          style={({ pressed }) => ({
-            width: 22,
-            height: 22,
-            borderRadius: 11,
+          scaleTo={0.86}
+          radius={12}
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: theme.colors.surfaceSunken,
-            opacity: pressed ? 0.6 : 1,
-          })}
+            backgroundColor: theme.colors.surfaceMuted,
+          }}
         >
           <AppIcon name="close" color={theme.colors.textSecondary} size={13} />
-        </Pressable>
+        </TactilePressable>
       ) : null}
-    </View>
+    </Glass>
   );
 }
 
@@ -514,14 +536,16 @@ export default function ActivityScreen() {
   const noResults = showEmpty && hasAny;
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <ScreenBackground />
+    <View style={{ flex: 1 }}>
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
           <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
             {monthLabel}
           </Text>
-          <Text style={[theme.text.title1, { color: theme.colors.textPrimary, marginTop: 4 }]}>
+          <Text
+            accessibilityRole="header"
+            style={[theme.text.title1, { color: theme.colors.textPrimary, marginTop: 4 }]}
+          >
             Activity
           </Text>
 
@@ -561,7 +585,7 @@ export default function ActivityScreen() {
               onPress={openFilters}
               leading={
                 <AppIcon
-                  name="settings"
+                  name="sliders"
                   color={filterCount ? theme.colors.accent : theme.colors.textSecondary}
                   size={15}
                 />

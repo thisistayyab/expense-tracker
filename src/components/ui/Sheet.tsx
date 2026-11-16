@@ -1,144 +1,299 @@
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { BlurView } from "expo-blur";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  Dimensions,
   Keyboard,
   Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import Animated, {
-  Easing,
+  Extrapolation,
+  interpolate,
+  runOnJS,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { haptics } from "../../lib/haptics";
+import { SPRING_SHEET } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
+import { AppIcon } from "./AppIcon";
+import { TactilePressable } from "./TactilePressable";
 
 export type SheetProps = {
   visible: boolean;
   onClose: () => void;
   title?: string;
+  subtitle?: string;
   children: ReactNode;
-  /**
-   * Render in the current screen instead of a second RN Modal. Use this when the
-   * route is already a native transparent modal: nesting a Modal inside a modal
-   * window is what breaks keyboard focus and avoidance on Android.
-   */
+  footer?: ReactNode;
+  maxHeightRatio?: number;
   embedded?: boolean;
 };
 
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const INITIAL_OFFSET = Math.min(SCREEN_HEIGHT, 640);
+
 /**
- * Bottom sheet with keyboard handling we own.
- *
- * `KeyboardAvoidingView` does not move this sheet in the add route, so the sheet is
- * translated directly by the reported keyboard height. Translating (instead of
- * resizing) keeps the focused TextInput mounted, which is what stops the keyboard
- * from blurring the field. The height is clamped at the same time so the header and
- * Save stay on screen while the body scrolls.
+ * Interactive iOS frosted-glass bottom sheet with blur scrim, rubber-banding
+ * swipe-to-dismiss handle, and synchronized keyboard lift.
  */
 export function Sheet({
   visible,
   onClose,
   title,
+  subtitle,
   children,
+  footer,
+  maxHeightRatio = 0.88,
   embedded = false,
 }: SheetProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { height: windowHeight } = useWindowDimensions();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const translateY = useSharedValue(0);
+
+  const [mounted, setMounted] = useState(visible);
+  if (visible && !mounted) {
+    setMounted(true);
+  }
+
+  const progress = useSharedValue(0);
+  const dragY = useSharedValue(0);
+  const keyboardShift = useSharedValue(0);
+  const handleActive = useSharedValue(0);
+
+  const finishClose = useCallback(() => {
+    setMounted(false);
+    onClose();
+  }, [onClose]);
+
+  const dismissInteractive = useCallback(() => {
+    haptics.tick();
+    if (reduceMotion) {
+      progress.set(0);
+      dragY.set(0);
+      finishClose();
+      return;
+    }
+    progress.set(
+      withTiming(0, { duration: 220 }, (finished) => {
+        if (finished) runOnJS(finishClose)();
+      }),
+    );
+  }, [dragY, finishClose, progress, reduceMotion]);
+
+  useEffect(() => {
+    if (visible) {
+      dragY.set(0);
+      if (reduceMotion) {
+        progress.set(1);
+      } else {
+        progress.set(0);
+        progress.set(withSpring(1, SPRING_SHEET));
+      }
+    } else if (mounted) {
+      progress.set(
+        withTiming(0, { duration: reduceMotion ? 1 : 200 }, (finished) => {
+          if (finished) runOnJS(setMounted)(false);
+        }),
+      );
+    }
+  }, [dragY, mounted, progress, reduceMotion, visible]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-    const show = Keyboard.addListener(showEvent, (event) => {
-      const height = event.endCoordinates?.height ?? 0;
-      if (height <= 0) return;
-      setKeyboardHeight(height);
-      translateY.value = withTiming(-height, {
-        duration: reduceMotion ? 0 : event.duration || 240,
-        easing: Easing.out(Easing.cubic),
-      });
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const target = -Math.max(0, event.endCoordinates.height - insets.bottom);
+      keyboardShift.set(
+        reduceMotion ? target : withTiming(target, { duration: event.duration || 250 }),
+      );
     });
-
-    const hide = Keyboard.addListener(hideEvent, (event) => {
-      setKeyboardHeight(0);
-      translateY.value = withTiming(0, {
-        duration: reduceMotion ? 0 : event.duration || 220,
-        easing: Easing.out(Easing.cubic),
-      });
+    const hideSub = Keyboard.addListener(hideEvent, (event) => {
+      keyboardShift.set(
+        reduceMotion ? 0 : withTiming(0, { duration: event.duration || 220 }),
+      );
     });
 
     return () => {
-      show.remove();
-      hide.remove();
+      showSub.remove();
+      hideSub.remove();
     };
-  }, [reduceMotion, translateY]);
+  }, [insets.bottom, keyboardShift, reduceMotion]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  const keyboardVisible = keyboardHeight > 0;
-  const availableHeight = Math.max(
-    320,
-    keyboardVisible
-      ? windowHeight - keyboardHeight - insets.top - 8
-      : windowHeight * 0.88,
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(5)
+        .onBegin(() => {
+          handleActive.set(withTiming(1, { duration: 100 }));
+        })
+        .onUpdate((event) => {
+          const y = event.translationY;
+          dragY.set(y >= 0 ? y : -Math.pow(-y, 0.72) * 0.42);
+        })
+        .onEnd((event) => {
+          handleActive.set(withTiming(0, { duration: 150 }));
+          if (event.translationY > 105 || event.velocityY > 720) {
+            runOnJS(dismissInteractive)();
+          } else {
+            dragY.set(reduceMotion ? 0 : withSpring(0, SPRING_SHEET));
+          }
+        })
+        .onFinalize(() => {
+          handleActive.set(withTiming(0, { duration: 150 }));
+        }),
+    [dismissInteractive, dragY, handleActive, reduceMotion],
   );
 
-  const sheet = (
+  const backdropStyle = useAnimatedStyle(() => {
+    const dragFade = interpolate(dragY.value, [0, 320], [1, 0.2], Extrapolation.CLAMP);
+    return {
+      opacity: progress.value * dragFade,
+    };
+  });
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => {
+    const entranceY = (1 - progress.value) * INITIAL_OFFSET;
+    return {
+      transform: [{ translateY: entranceY + dragY.value + keyboardShift.value }],
+    };
+  });
+
+  const grabberStyle = useAnimatedStyle(() => ({
+    width: interpolate(handleActive.value, [0, 1], [38, 48]),
+    opacity: interpolate(handleActive.value, [0, 1], [0.32, 0.6]),
+  }));
+
+  if (!mounted && !visible) return null;
+
+  const maxHeight = Math.round(SCREEN_HEIGHT * maxHeightRatio);
+  const sheetSurfaceColor =
+    Platform.OS === "android"
+      ? theme.colors.sheet
+      : theme.scheme === "dark"
+        ? "rgba(21, 23, 31, 0.88)"
+        : "rgba(249, 250, 252, 0.90)";
+
+  const sheetCard = (
     <Animated.View
       style={[
         styles.sheet,
+        theme.shadow.sheet,
         {
-          maxHeight: availableHeight,
-          backgroundColor: theme.colors.sheet,
-          paddingBottom: keyboardVisible ? 16 : insets.bottom + 16,
+          maxHeight,
+          paddingBottom: Math.max(insets.bottom, theme.space.lg),
+          backgroundColor: sheetSurfaceColor,
+          borderColor:
+            theme.scheme === "dark" ? theme.colors.glassBorder : theme.colors.cardBorder,
         },
-        animatedStyle,
+        sheetAnimatedStyle,
       ]}
     >
-      <View style={styles.grabberRow}>
-        <View style={[styles.grabber, { backgroundColor: theme.colors.textTertiary }]} />
+      <View pointerEvents="none" style={styles.sheetGlassClip}>
+        {Platform.OS === "ios" || Platform.OS === "web" ? (
+          <BlurView tint={theme.colors.blurTint} intensity={82} style={StyleSheet.absoluteFill} />
+        ) : null}
       </View>
-      {title ? (
-        <Text
-          style={[
-            theme.text.title2,
-            {
-              color: theme.colors.textPrimary,
-              paddingHorizontal: 22,
-              paddingBottom: 14,
-            },
-          ]}
-        >
-          {title}
-        </Text>
+
+      <GestureDetector gesture={panGesture}>
+        <View>
+          <View style={styles.grabberRow}>
+            <Animated.View
+              style={[
+                styles.grabber,
+                { backgroundColor: theme.colors.textTertiary },
+                grabberStyle,
+              ]}
+            />
+          </View>
+
+          {title || subtitle ? (
+            <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+              <View style={styles.headerText}>
+                {title ? (
+                  <Text style={[theme.text.title2, { color: theme.colors.textPrimary }]}>
+                    {title}
+                  </Text>
+                ) : null}
+                {subtitle ? (
+                  <Text
+                    style={[
+                      theme.text.caption,
+                      { color: theme.colors.textSecondary, marginTop: 2 },
+                    ]}
+                  >
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </View>
+              <TactilePressable
+                onPress={dismissInteractive}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={10}
+                radius={999}
+                scaleTo={0.9}
+                style={[
+                  styles.closeButton,
+                  {
+                    backgroundColor: theme.colors.surfaceMuted,
+                    borderColor: theme.colors.cardBorder,
+                  },
+                ]}
+              >
+                <AppIcon name="close" size={16} color={theme.colors.textSecondary} weight="bold" />
+              </TactilePressable>
+            </View>
+          ) : null}
+        </View>
+      </GestureDetector>
+
+      <View style={styles.body}>{children}</View>
+
+      {footer ? (
+        <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>{footer}</View>
       ) : null}
-      {children}
     </Animated.View>
   );
 
   const overlay = (
-    <View style={[styles.root, { backgroundColor: theme.colors.scrim }]}>
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        onPress={onClose}
-        accessibilityRole="button"
-        accessibilityLabel="Close"
-      />
-      {sheet}
+    <View style={styles.overlay}>
+      <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+        {Platform.OS === "ios" || Platform.OS === "web" ? (
+          <BlurView
+            tint={theme.scheme === "dark" ? "dark" : "light"}
+            intensity={18}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null}
+        <Pressable
+          accessibilityLabel="Close sheet"
+          accessibilityRole="button"
+          onPress={dismissInteractive}
+          style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.scrim }]}
+        />
+      </Animated.View>
+      {sheetCard}
     </View>
   );
 
@@ -146,41 +301,72 @@ export function Sheet({
 
   return (
     <Modal
-      visible={visible}
+      visible={mounted}
       transparent
-      animationType={reduceMotion ? "none" : "slide"}
-      onRequestClose={onClose}
       statusBarTranslucent
+      animationType="none"
+      onRequestClose={dismissInteractive}
     >
-      {overlay}
+      <GestureHandlerRootView style={styles.flexOne}>{overlay}</GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  flexOne: { flex: 1 },
+  overlay: {
     flex: 1,
     justifyContent: "flex-end",
   },
   sheet: {
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
-    borderWidth: 0,
+    borderCurve: "continuous",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
     paddingTop: 6,
-    shadowColor: "#000000",
-    shadowOpacity: 0.14,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: -8 },
-    elevation: 16,
+  },
+  sheetGlassClip: {
+    ...StyleSheet.absoluteFill,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    borderCurve: "continuous",
+    overflow: "hidden",
   },
   grabberRow: {
     alignItems: "center",
-    paddingBottom: 12,
+    paddingVertical: 9,
   },
   grabber: {
-    width: 36,
     height: 5,
-    borderRadius: 3,
-    opacity: 0.35,
+    borderRadius: 999,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  headerText: {
+    flex: 1,
+  },
+  closeButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  body: {
+    flexShrink: 1,
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

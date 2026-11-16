@@ -1,15 +1,15 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
-import { Alert, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, Platform, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ScreenBackground } from "../../components/ui";
 import { RegionEditor, type RegionValue } from "../../features/settings/RegionEditor";
 import { applyRegionSelection } from "../../lib/db/onboarding";
 import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import { listCurrenciesInUse } from "../../lib/db/repos/transactions";
 import type { Db } from "../../lib/db/types";
-import { useTheme } from "../../lib/theme";
 
 /**
  * Same editor as onboarding, mounted from Settings. Changing the currency never
@@ -17,7 +17,7 @@ import { useTheme } from "../../lib/theme";
  * them, so the confirmation spells that out before anything is written (09 flow 11).
  */
 export default function SettingsRegionScreen() {
-  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const db: Db = useSQLiteContext();
   const [value, setValue] = useState<RegionValue | null>(null);
   const [original, setOriginal] = useState<RegionValue | null>(null);
@@ -89,11 +89,16 @@ export default function SettingsRegionScreen() {
   };
 
   if (!value) {
-    return <View style={{ flex: 1, backgroundColor: theme.colors.bg }} />;
+    return (
+      <View style={{ flex: 1 }}>
+        <ScreenBackground />
+      </View>
+    );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
       <SafeAreaView edges={["bottom"]} style={{ flex: 1 }}>
         <RegionEditor
           value={value}
@@ -102,6 +107,7 @@ export default function SettingsRegionScreen() {
           continueLabel="Save"
           busy={busy}
           error={error}
+          top={<View style={{ height: Platform.OS === "ios" ? insets.top + 46 : 8 }} />}
         />
       </SafeAreaView>
     </View>

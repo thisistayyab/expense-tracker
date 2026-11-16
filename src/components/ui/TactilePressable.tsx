@@ -2,15 +2,18 @@ import type { ReactNode } from "react";
 import {
   Pressable,
   StyleSheet,
-  type GestureResponderEvent,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
-
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+} from "react-native-reanimated";
 import { haptics } from "../../lib/haptics";
 import { fadeTo, springTo } from "../../lib/motion";
+import { useTheme } from "../../lib/theme";
 
 export type TactilePressableProps = Omit<
   PressableProps,
@@ -18,77 +21,94 @@ export type TactilePressableProps = Omit<
 > & {
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
-  /** Scale reached while the finger is down. 1 turns the squish off. */
+  /** Scale reached while the finger is down. 1 turns the compression off. */
   scaleTo?: number;
   haptic?: "tick" | "selection" | "none";
   /** Radius of the press flash, so it follows the shape being pressed. */
   radius?: number;
-  /** Tint of the press flash: white on filled shapes, ink on light ones. */
   flashColor?: string;
-  onPressIn?: (event: GestureResponderEvent) => void;
-  onPressOut?: (event: GestureResponderEvent) => void;
+  onPressIn?: PressableProps["onPressIn"];
+  onPressOut?: PressableProps["onPressOut"];
 };
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 /**
- * Every tappable surface in the app. The press is a spring, not a fade: the shape
- * contracts under the finger and settles back with a little overshoot while a soft
- * flash crosses it, which is what gives a glass button the feel of weight. A
- * selection haptic fires on touch-down so the hand and the eye agree.
- *
- * A transparent Pressable covers the shape so the tap target never shrinks with
- * the animation — the drawing scales, the hit area stays honest.
+ * UIKit-tuned tactile surface: smooth critically damped micro-scale and
+ * adaptive theme highlight on press without rubber bounce.
  */
 export function TactilePressable({
   children,
   style,
-  scaleTo = 0.96,
+  scaleTo = 0.97,
   haptic = "tick",
   radius = 999,
-  flashColor = "rgba(16,18,23,0.07)",
+  flashColor,
   onPressIn,
   onPressOut,
   disabled,
   ...rest
 }: TactilePressableProps) {
+  const { theme } = useTheme();
   const scale = useSharedValue(1);
   const flash = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
 
-  const pressStyle = useAnimatedStyle(() => ({
+  const resolvedFlash =
+    flashColor ??
+    (theme.scheme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(10,18,36,0.055)");
+
+  const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
-  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
+  const flashStyle = useAnimatedStyle(() => ({
+    opacity: flash.value,
+  }));
 
   return (
-    <Animated.View style={[style, pressStyle]}>
+    <AnimatedPressable
+      {...rest}
+      disabled={disabled}
+      onPressIn={(event) => {
+        if (!disabled) {
+          if (haptic === "tick") haptics.tick();
+          else if (haptic === "selection") haptics.selection();
+          if (!reduceMotion && scaleTo !== 1) springTo(scale, scaleTo, true);
+          fadeTo(flash, 1, reduceMotion ? 0 : 75);
+        }
+        onPressIn?.(event);
+      }}
+      onPressOut={(event) => {
+        if (!disabled) {
+          if (!reduceMotion && scaleTo !== 1) springTo(scale, 1, false);
+          fadeTo(flash, 0, reduceMotion ? 0 : 190);
+        }
+        onPressOut?.(event);
+      }}
+      style={[
+        style,
+        animatedStyle,
+        disabled ? styles.disabled : null,
+      ]}
+    >
       {children}
-
-      <Pressable
-        {...rest}
-        disabled={disabled}
-        onPressIn={(event) => {
-          springTo(scale, disabled ? 1 : scaleTo, true);
-          fadeTo(flash, disabled ? 0 : 1, 90);
-          if (!disabled && haptic === "tick") haptics.tick();
-          else if (!disabled && haptic === "selection") haptics.selection();
-          onPressIn?.(event);
-        }}
-        onPressOut={(event) => {
-          springTo(scale, 1);
-          fadeTo(flash, 0, 220);
-          onPressOut?.(event);
-        }}
-        style={StyleSheet.absoluteFill}
-      />
-
       <Animated.View
         pointerEvents="none"
         style={[
           StyleSheet.absoluteFill,
-          { backgroundColor: flashColor, borderRadius: radius },
+          {
+            backgroundColor: resolvedFlash,
+            borderRadius: radius,
+            borderCurve: "continuous",
+          },
           flashStyle,
         ]}
       />
-    </Animated.View>
+    </AnimatedPressable>
   );
 }
+
+const styles = StyleSheet.create({
+  disabled: { opacity: 0.45 },
+});

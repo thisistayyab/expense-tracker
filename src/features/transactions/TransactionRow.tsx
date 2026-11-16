@@ -1,16 +1,15 @@
 import { memo, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
-
-import { CategoryTile, Money } from "../../components/ui";
+import { AppIcon, type AppIconName, CategoryTile, Money } from "../../components/ui";
 import type { Account, Category, Transaction } from "../../lib/db/types";
 import { formatMoneySpoken } from "../../lib/format/money";
 import { useTheme } from "../../lib/theme";
 
 const ACTION_WIDTH = 76;
-export const TRANSACTION_ROW_HEIGHT = 64;
+export const TRANSACTION_ROW_HEIGHT = 66;
 
 export type TransactionRowProps = {
   transaction: Transaction;
@@ -38,7 +37,7 @@ function RowAmount({ transaction }: { transaction: Transaction }) {
   }
   return (
     <Money
-      minor={transaction.type === "expense" ? -transaction.amountMinor : transaction.amountMinor}
+      minor={transaction.amountMinor}
       currency={transaction.currency}
       tone={transaction.type === "income" ? "income" : "default"}
       showPlus={transaction.type === "income"}
@@ -49,15 +48,18 @@ function RowAmount({ transaction }: { transaction: Transaction }) {
 
 function SwipeAction({
   label,
+  icon,
   backgroundColor,
   foregroundColor,
   onPress,
 }: {
   label: string;
+  icon: AppIconName;
   backgroundColor: string;
   foregroundColor: string;
   onPress: () => void;
 }) {
+  const { theme } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -66,13 +68,17 @@ function SwipeAction({
       style={({ pressed }) => ({
         width: ACTION_WIDTH,
         height: "100%",
-        backgroundColor,
         alignItems: "center",
         justifyContent: "center",
-        opacity: pressed ? 0.75 : 1,
+        gap: 3,
+        backgroundColor,
+        opacity: pressed ? 0.85 : 1,
       })}
     >
-      <Text style={{ color: foregroundColor, fontSize: 12.5, fontWeight: "700" }}>{label}</Text>
+      <AppIcon name={icon} size={17} color={foregroundColor} weight="semibold" />
+      <Text style={[theme.text.caption, { color: foregroundColor, fontWeight: "700", fontSize: 11.5 }]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -93,6 +99,7 @@ function SwipeActions({
     return (
       <SwipeAction
         label="Edit"
+        icon="sliders"
         backgroundColor={theme.colors.accent}
         foregroundColor={theme.colors.accentFg}
         onPress={() => {
@@ -105,8 +112,9 @@ function SwipeActions({
   return (
     <SwipeAction
       label="Delete"
+      icon="trash"
       backgroundColor={theme.colors.danger}
-      foregroundColor={theme.colors.onInk}
+      foregroundColor={theme.colors.accentFg}
       onPress={() => {
         close();
         onDelete();
@@ -116,10 +124,7 @@ function SwipeActions({
 }
 
 /**
- * One fixed-height Activity row. The Swipeable lives outside the content
- * Pressable, so a horizontal drag never triggers the row and a tap never opens an
- * action. `memo` matters at five thousand rows: the screen passes stable maps and
- * callbacks, so only rows whose data changed re-render.
+ * Interactive frosted-group activity row with swipe actions and continuous corner rounding.
  */
 export const TransactionRow = memo(function TransactionRow({
   transaction,
@@ -139,18 +144,13 @@ export const TransactionRow = memo(function TransactionRow({
     transaction.place?.trim() ||
     category?.name ||
     (transaction.type === "transfer" ? "Transfer" : "Uncategorized");
+
   const subtitle =
     transaction.type === "transfer"
       ? `${account?.name ?? "Account"} → ${transferAccount?.name ?? "Account"}`
       : `${category?.name ?? "Uncategorized"} · ${account?.name ?? "Account"}`;
-  const hasNote = Boolean(transaction.note?.trim());
-  const spokenAmount = formatMoneySpoken(
-    transaction.type === "expense"
-      ? -Math.abs(transaction.amountMinor)
-      : Math.abs(transaction.amountMinor),
-    transaction.currency,
-    { showPlus: transaction.type === "income" },
-  );
+
+  const spokenAmount = formatMoneySpoken(transaction.amountMinor, transaction.currency);
 
   const left = (methods: SwipeableMethods) => (
     <SwipeActions
@@ -171,61 +171,88 @@ export const TransactionRow = memo(function TransactionRow({
 
   return (
     <ReanimatedSwipeable
-      friction={2}
-      leftThreshold={ACTION_WIDTH * 0.6}
-      rightThreshold={ACTION_WIDTH * 0.6}
+      friction={1.8}
+      leftThreshold={ACTION_WIDTH * 0.55}
+      rightThreshold={ACTION_WIDTH * 0.55}
       overshootLeft={false}
       overshootRight={false}
-      renderLeftActions={(_, __, methods) => left(methods)}
-      renderRightActions={(_, __, methods) => right(methods)}
+      renderLeftActions={(_progress, _drag, methods) => left(methods)}
+      renderRightActions={(_progress, _drag, methods) => right(methods)}
       containerStyle={{
-        marginHorizontal: 20,
-        backgroundColor: theme.colors.surface,
+        overflow: "hidden",
         borderTopLeftRadius: isFirst ? theme.radius.card : 0,
         borderTopRightRadius: isFirst ? theme.radius.card : 0,
         borderBottomLeftRadius: isLast ? theme.radius.card : 0,
         borderBottomRightRadius: isLast ? theme.radius.card : 0,
+        borderCurve: "continuous",
       }}
     >
       <Pressable
         onPress={() => onPress(transaction)}
         onLongPress={() => onLongPress(transaction)}
-        delayLongPress={350}
         accessibilityRole="button"
         accessibilityLabel={`${title}, ${spokenAmount}, ${subtitle}`}
         accessibilityHint="Opens transaction details. Swipe right to edit or left to delete."
-        style={({ pressed }) => ({
-          minHeight: TRANSACTION_ROW_HEIGHT,
-          paddingHorizontal: 16,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          borderTopWidth: isFirst ? 0 : 1,
-          borderTopColor: theme.colors.border,
-          backgroundColor: pressed ? theme.colors.surfaceMuted : "transparent",
-        })}
+        style={({ pressed }) => [
+          styles.row,
+          {
+            backgroundColor: pressed ? theme.colors.surfaceMuted : "transparent",
+          },
+        ]}
       >
         <CategoryTile
           icon={transaction.type === "transfer" ? "transfer" : category?.icon}
           color={transaction.type === "transfer" ? theme.colors.transfer : category?.color}
         />
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.textCol}>
           <Text
-            numberOfLines={1}
             style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]}
+            numberOfLines={1}
           >
             {title}
           </Text>
           <Text
-            numberOfLines={1}
             style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}
+            numberOfLines={1}
           >
-            {hasNote ? "Note · " : null}
             {subtitle}
           </Text>
         </View>
         <RowAmount transaction={transaction} />
+        {!isLast ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.divider,
+              {
+                backgroundColor: theme.colors.border,
+              },
+            ]}
+          />
+        ) : null}
       </Pressable>
     </ReanimatedSwipeable>
   );
+});
+
+const styles = StyleSheet.create({
+  row: {
+    minHeight: TRANSACTION_ROW_HEIGHT,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  textCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  divider: {
+    position: "absolute",
+    bottom: 0,
+    left: 70,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+  },
 });

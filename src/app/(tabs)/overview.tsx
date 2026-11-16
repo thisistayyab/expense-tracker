@@ -1,7 +1,8 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
@@ -11,13 +12,14 @@ import {
   Card,
   CategoryTile,
   EmptyState,
+  Glass,
   Money,
   MonthSelector,
+  PickerSheet,
   ProgressBar,
-  ScreenBackground,
   SectionHeader,
+  TactilePressable,
 } from "../../components/ui";
-import { TactilePressable } from "../../components/ui/TactilePressable";
 import { useBudgetPlan } from "../../features/budgets/useBudgetPlan";
 import { SafeToSpendSheet } from "../../features/overview/SafeToSpendSheet";
 import { SpendBars } from "../../features/overview/SpendBars";
@@ -29,9 +31,11 @@ import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import { countTransactions, listTransactions } from "../../lib/db/repos/transactions";
 import type { Db, Transaction } from "../../lib/db/types";
 import { closestToLimit } from "../../lib/domain/budget-plan";
+import { periodWindow, windowLabel } from "../../lib/domain/budget-period";
 import { addDays, toIsoDate } from "../../lib/domain/dates";
 import { formatMoney, formatMoneySpoken } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
+import { iosEnter } from "../../lib/motion";
 import { useOnboarding } from "../../lib/onboarding";
 import { useTheme } from "../../lib/theme";
 
@@ -125,6 +129,7 @@ export default function OverviewScreen() {
     refresh: refreshAnalytics,
   } = useOverviewAnalytics(data?.currency ?? null, monthOffset);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [count, setCount] = useState<number | null>(null);
   const firstFocus = useRef(true);
@@ -165,6 +170,19 @@ export default function OverviewScreen() {
   }, [db, data]);
 
   const plan = data?.plan;
+  const minMonthOffset = data?.minMonthOffset ?? -24;
+  const monthOptions = useMemo(() => {
+    const count = Math.abs(minMonthOffset) + 1;
+    return Array.from({ length: count }, (_, index) => {
+      const offset = -index;
+      const win = periodWindow("monthly", today, today, offset);
+      return {
+        value: String(offset),
+        label: windowLabel("monthly", win),
+        secondary: offset === 0 ? "Current month" : undefined,
+      };
+    });
+  }, [minMonthOffset, today]);
   const currency = data?.currency ?? "USD";
   const rows = closestToLimit(plan?.rows ?? [], 3);
   const categoryById = new Map((data?.categories ?? []).map((category) => [category.id, category]));
@@ -221,10 +239,10 @@ export default function OverviewScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <ScreenBackground />
+    <View style={{ flex: 1 }}>
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
         <ScrollView
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             padding: 20,
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
@@ -242,8 +260,15 @@ export default function OverviewScreen() {
             {data?.period === "monthly" ? (
               <MonthSelector
                 label={data.label}
-                onPrevious={data.canGoPrevious ? () => setMonthOffset((value) => value - 1) : undefined}
-                onNext={data.canGoNext ? () => setMonthOffset((value) => value + 1) : undefined}
+                onPrevious={
+                  data.canGoPrevious
+                    ? () => setMonthOffset((value) => Math.max(data.minMonthOffset, value - 1))
+                    : undefined
+                }
+                onNext={
+                  data.canGoNext ? () => setMonthOffset((value) => Math.min(0, value + 1)) : undefined
+                }
+                onPressLabel={() => setMonthPickerOpen(true)}
                 canGoPrevious={data.canGoPrevious}
                 canGoNext={data.canGoNext}
               />
@@ -253,7 +278,9 @@ export default function OverviewScreen() {
               <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
                 {data.label}
               </Text>
-            ) : null}
+            ) : (
+              <View />
+            )}
             <TactilePressable
               onPress={() => router.push("/settings")}
               accessibilityRole="button"
@@ -261,20 +288,20 @@ export default function OverviewScreen() {
               hitSlop={8}
               haptic="selection"
               scaleTo={0.9}
-              radius={18}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: -4,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: theme.colors.cardBorder,
-                backgroundColor: theme.colors.surface,
-              }}
+              radius={19}
             >
-              <AppIcon name="settings" color={theme.colors.textPrimary} size={18} />
+              <Glass
+                tone="regular"
+                radius={19}
+                style={{
+                  width: 38,
+                  height: 38,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <AppIcon name="settings" color={theme.colors.textPrimary} size={18} />
+              </Glass>
             </TactilePressable>
           </View>
 
@@ -299,152 +326,194 @@ export default function OverviewScreen() {
 
           {data && plan ? (
             <>
-              <Pressable
-                onPress={() => {
-                  if (plan.overallLimitMinor === null) router.push("/(tabs)/budget");
-                  else setBreakdownOpen(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  plan.overallLimitMinor === null
-                    ? "Set a budget"
-                    : `${
-                        data.isCurrentPeriod ? "Safe to spend" : "Left over"
-                      } ${formatMoneySpoken(heroAmount, currency)}${
-                        data.isCurrentPeriod ? " per day" : ""
-                      }. Opens the breakdown.`
-                }
-                style={({ pressed }) => ({ opacity: pressed ? 0.94 : 1 })}
-              >
-                <Card variant="ink" style={{ marginTop: 16, padding: 18 }}>
-                  {plan.overallLimitMinor === null ? (
-                    <>
-                      <Text style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}>
-                        Safe to spend
-                      </Text>
-                      <Text
-                        style={[theme.text.title2, { color: theme.colors.onInk, marginTop: 8 }]}
-                      >
-                        Set a budget to see it
-                      </Text>
-                      <Text
-                        style={[
-                          theme.text.body,
-                          { color: theme.colors.onInkMuted, marginTop: 6, maxWidth: 260 },
-                        ]}
-                      >
-                        One limit turns everything you spend into a daily number you can act
-                        on.
-                      </Text>
-                      {/* A bare text label on the hero read as a link, not an action.
-                          On ink, a translucent pill is the button. */}
-                      <View
-                        style={{
-                          marginTop: 16,
-                          alignSelf: "flex-start",
-                          paddingHorizontal: 18,
-                          paddingVertical: 10,
-                          borderRadius: 999,
-                          backgroundColor: "rgba(255,255,255,0.12)",
-                          borderWidth: StyleSheet.hairlineWidth,
-                          borderColor: "rgba(255,255,255,0.24)",
-                        }}
-                      >
-                        <Text style={[theme.text.label, { color: theme.colors.onInk }]}>
-                          Set a budget
-                        </Text>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 12,
-                        }}
-                      >
+              <Animated.View entering={iosEnter(0)}>
+                <TactilePressable
+                  onPress={() => {
+                    if (plan.overallLimitMinor === null) router.push("/(tabs)/budget");
+                    else setBreakdownOpen(true);
+                  }}
+                  haptic="selection"
+                  scaleTo={0.985}
+                  radius={theme.radius.hero}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    plan.overallLimitMinor === null
+                      ? "Set a budget"
+                      : `${
+                          data.isCurrentPeriod ? "Safe to spend" : "Left over"
+                        } ${formatMoneySpoken(heroAmount, currency)}${
+                          data.isCurrentPeriod ? " per day" : ""
+                        }. Opens the breakdown.`
+                  }
+                  style={{ marginTop: 16 }}
+                >
+                  <Card variant="ink" style={{ padding: 22 }}>
+                    {plan.overallLimitMinor === null ? (
+                      <>
                         <Text style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}>
-                          {data.isCurrentPeriod ? "Safe to spend" : "Left over"}
+                          Safe to spend
                         </Text>
-                        <Text style={[theme.text.caption, { color: theme.colors.onInkMuted }]}>
-                          {`${pct}% of budget`}
+                        <Text
+                          style={[theme.text.title2, { color: theme.colors.onInk, marginTop: 8 }]}
+                        >
+                          Set a budget to see it
                         </Text>
-                      </View>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "flex-end",
-                          gap: 6,
-                          marginTop: 8,
-                        }}
-                      >
-                        <Money
-                          minor={heroAmount}
-                          currency={currency}
-                          tone="onInk"
-                          size="hero"
-                          style={{ flexShrink: 1 }}
-                        />
-                        {data.isCurrentPeriod ? (
+                        <Text
+                          style={[
+                            theme.text.body,
+                            { color: theme.colors.onInkMuted, marginTop: 6, maxWidth: 260 },
+                          ]}
+                        >
+                          One limit turns everything you spend into a daily number you can act
+                          on.
+                        </Text>
+                        <View
+                          style={{
+                            marginTop: 18,
+                            alignSelf: "flex-start",
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            paddingHorizontal: 16,
+                            paddingVertical: 10,
+                            borderRadius: 999,
+                            backgroundColor: "rgba(255,255,255,0.10)",
+                            borderWidth: StyleSheet.hairlineWidth,
+                            borderColor: "rgba(255,255,255,0.14)",
+                          }}
+                        >
+                          <Text style={[theme.text.label, { color: theme.colors.onInk }]}>
+                            Set a budget
+                          </Text>
+                          <AppIcon name="chevronRight" color={theme.colors.onInk} size={13} />
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                          }}
+                        >
+                          <Text style={[theme.text.eyebrow, { color: theme.colors.onInkMuted }]}>
+                            {data.isCurrentPeriod ? "Safe to spend" : "Left over"}
+                          </Text>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 4,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 999,
+                              backgroundColor: "rgba(255,255,255,0.10)",
+                              borderWidth: StyleSheet.hairlineWidth,
+                              borderColor: "rgba(255,255,255,0.18)",
+                            }}
+                          >
+                            <Text
+                              style={[
+                                theme.text.caption,
+                                {
+                                  color: theme.colors.onInkMuted,
+                                  fontWeight: "600",
+                                  fontVariant: ["tabular-nums"],
+                                },
+                              ]}
+                            >
+                              {`${pct}% of budget`}
+                            </Text>
+                            <AppIcon
+                              name="chevronRight"
+                              color={theme.colors.onInkMuted}
+                              size={11}
+                            />
+                          </View>
+                        </View>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "flex-end",
+                            gap: 6,
+                            marginTop: 8,
+                          }}
+                        >
+                          <Money
+                            minor={heroAmount}
+                            currency={currency}
+                            tone="onInk"
+                            size="hero"
+                            style={{ flexShrink: 1 }}
+                          />
+                          {data.isCurrentPeriod ? (
+                            <Text
+                              style={[
+                                theme.text.caption,
+                                { color: theme.colors.onInkMuted, paddingBottom: 7 },
+                              ]}
+                            >
+                              per day
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={{ marginTop: 14 }}>
+                          <ProgressBar
+                            value={plan.progress}
+                            state={plan.state === "ok" ? "normal" : plan.state}
+                            color={overColor}
+                            trackColor={theme.colors.inkTrack}
+                          />
+                        </View>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            marginTop: 10,
+                          }}
+                        >
+                          <Text
+                            style={[theme.text.caption, { color: theme.colors.onInkMuted }]}
+                            numberOfLines={1}
+                          >
+                            {data.isCurrentPeriod
+                              ? `${plan.daysRemaining} ${plan.daysRemaining === 1 ? "day" : "days"} left`
+                              : data.label}
+                          </Text>
                           <Text
                             style={[
                               theme.text.caption,
-                              { color: theme.colors.onInkMuted, paddingBottom: 7 },
+                              {
+                                color: theme.colors.onInkMuted,
+                                fontVariant: ["tabular-nums"],
+                              },
                             ]}
+                            numberOfLines={1}
                           >
-                            per day
+                            {`${formatMoney(plan.spentMinor, currency)} of ${formatMoney(
+                              plan.overallLimitMinor,
+                              currency,
+                            )}`}
                           </Text>
-                        ) : null}
-                      </View>
-                      <View style={{ marginTop: 14 }}>
-                        <ProgressBar
-                          value={plan.progress}
-                          state={plan.state === "ok" ? "normal" : plan.state}
-                          color={overColor}
-                          trackColor={theme.colors.inkTrack}
-                        />
-                      </View>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 12,
-                          marginTop: 8,
-                        }}
-                      >
-                        <Text
-                          style={[theme.text.caption, { color: theme.colors.onInkMuted }]}
-                          numberOfLines={1}
-                        >
-                          {data.isCurrentPeriod
-                            ? `${plan.daysRemaining} ${plan.daysRemaining === 1 ? "day" : "days"} left`
-                            : data.label}
-                        </Text>
-                        <Text
-                          style={[theme.text.caption, { color: theme.colors.onInkMuted }]}
-                          numberOfLines={1}
-                        >
-                          {`${formatMoney(plan.spentMinor, currency)} of ${formatMoney(
-                            plan.overallLimitMinor,
-                            currency,
-                          )}`}
-                        </Text>
-                      </View>
-                    </>
-                  )}
-                </Card>
-              </Pressable>
+                        </View>
+                      </>
+                    )}
+                  </Card>
+                </TactilePressable>
+              </Animated.View>
 
               {otherCurrency && otherTotal > 0 ? (
-                <Pressable
+                <TactilePressable
                   onPress={openCurrency}
                   accessibilityRole="button"
                   accessibilityLabel={`Show ${otherTotal} entries in ${otherCurrency}`}
                   hitSlop={6}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  scaleTo={0.98}
+                  haptic="selection"
                 >
                   <Text
                     style={[
@@ -458,7 +527,7 @@ export default function OverviewScreen() {
                         : `${otherCurrencies.length} currencies`
                     } not included — nothing is converted.`}
                   </Text>
-                </Pressable>
+                </TactilePressable>
               ) : plan.committedCount > 0 && data.isCurrentPeriod ? (
                 <Text
                   style={[
@@ -487,11 +556,11 @@ export default function OverviewScreen() {
               ) : null}
 
               {analytics ? (
-                <>
+                <Animated.View entering={iosEnter(60)}>
                   <SectionHeader
                     title={analytics.window.isCurrent ? "This month" : analytics.monthLabel}
                   />
-                  <Card>
+                  <Card variant="glass">
                     <View
                       style={{
                         flexDirection: "row",
@@ -573,7 +642,7 @@ export default function OverviewScreen() {
                         actionLabel="Insights"
                         onAction={() => router.push("/(tabs)/insights")}
                       />
-                      <Card padded={false}>
+                      <Card variant="glass" padded={false}>
                         {analytics.categories.map((row, index) => (
                           <Fragment key={row.key}>
                             {index > 0 ? (
@@ -638,23 +707,11 @@ export default function OverviewScreen() {
                                   {`${Math.round(row.share * 100)}%`}
                                 </Text>
                               </View>
-                              <View
-                                style={{
-                                  marginTop: 8,
-                                  marginLeft: 20,
-                                  height: 4,
-                                  borderRadius: 2,
-                                  backgroundColor: theme.colors.surfaceMuted,
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <View
-                                  style={{
-                                    width: `${Math.max(2, Math.round(row.share * 100))}%`,
-                                    height: "100%",
-                                    borderRadius: 2,
-                                    backgroundColor: row.color ?? theme.colors.textTertiary,
-                                  }}
+                              <View style={{ marginTop: 8, marginLeft: 20 }}>
+                                <ProgressBar
+                                  value={row.share}
+                                  height={5}
+                                  color={row.color ?? theme.colors.accent}
                                 />
                               </View>
                             </View>
@@ -663,7 +720,7 @@ export default function OverviewScreen() {
                       </Card>
                     </>
                   ) : null}
-                </>
+                </Animated.View>
               ) : null}
 
               <BillsDueCard currency={currency} />
@@ -686,7 +743,7 @@ export default function OverviewScreen() {
                   />
 
                   {rows.length ? (
-                    <Card padded={false}>
+                    <Card variant="glass" padded={false}>
                       {rows.map((row, index) => (
                         <Fragment key={row.budgetId}>
                           {index > 0 ? (
@@ -698,17 +755,19 @@ export default function OverviewScreen() {
                               }}
                             />
                           ) : null}
-                          <Pressable
+                          <TactilePressable
                             onPress={openBudgets}
+                            haptic="selection"
+                            scaleTo={0.985}
+                            radius={14}
                             accessibilityRole="button"
                             accessibilityLabel={`${row.name} budget, ${Math.round(
                               row.progress * 100,
                             )}% used`}
-                            style={({ pressed }) => ({
+                            style={{
                               paddingHorizontal: 16,
                               paddingVertical: 12,
-                              opacity: pressed ? 0.7 : 1,
-                            })}
+                            }}
                           >
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                             <CategoryTile icon={row.icon} color={row.color} size={36} />
@@ -752,12 +811,12 @@ export default function OverviewScreen() {
                                 state={row.state === "ok" ? "normal" : row.state}
                               />
                             </View>
-                          </Pressable>
+                          </TactilePressable>
                         </Fragment>
                       ))}
                     </Card>
                   ) : (
-                    <Card style={{ padding: 16, gap: 10 }}>
+                    <Card variant="glass" style={{ padding: 16, gap: 10 }}>
                       <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
                         No category limits yet. The overall budget already drives safe to
                         spend.
@@ -777,7 +836,7 @@ export default function OverviewScreen() {
                     onAction={() => router.push("/(tabs)/transactions")}
                   />
 
-                  <Card padded={false}>
+                  <Card variant="glass" padded={false}>
                     {recent.map((transaction, index) => {
                       const category = transaction.categoryId
                         ? categoryById.get(transaction.categoryId)
@@ -804,28 +863,31 @@ export default function OverviewScreen() {
                               }}
                             />
                           ) : null}
-                          <Pressable
+                          <TactilePressable
                             onPress={() => router.push(`/transaction/${transaction.id}`)}
+                            haptic="selection"
+                            scaleTo={0.985}
+                            radius={14}
                             accessibilityRole="button"
                             accessibilityLabel={`${title}, ${formatMoneySpoken(
                               transaction.amountMinor,
                               transaction.currency,
                             )}, ${subtitle}`}
-                            style={({ pressed }) => ({
+                            style={{
                               flexDirection: "row",
                               alignItems: "center",
                               gap: 12,
                               paddingHorizontal: 16,
                               paddingVertical: 12,
-                              opacity: pressed ? 0.7 : 1,
-                            })}
+                            }}
                           >
                           <CategoryTile
                             icon={
                               transaction.type === "transfer"
-                                ? "ellipsis"
+                                ? null
                                 : (category?.icon ?? null)
                             }
+                            appIcon={transaction.type === "transfer" ? "transfer" : undefined}
                             color={category?.color ?? null}
                             size={36}
                           />
@@ -851,7 +913,7 @@ export default function OverviewScreen() {
                               currency={transaction.currency}
                               tone={transaction.type === "income" ? "income" : "default"}
                             />
-                          </Pressable>
+                          </TactilePressable>
                         </Fragment>
                       );
                     })}
@@ -875,6 +937,15 @@ export default function OverviewScreen() {
           onOpenBudgets={openBudgets}
         />
       ) : null}
+
+      <PickerSheet
+        visible={monthPickerOpen}
+        title="Select month"
+        options={monthOptions}
+        selected={String(monthOffset)}
+        onSelect={(value) => setMonthOffset(Number(value))}
+        onClose={() => setMonthPickerOpen(false)}
+      />
 
     </View>
   );

@@ -1,8 +1,11 @@
-import { Pressable, Text, View } from "react-native";
-
-import { AppIcon } from "../../components/ui/AppIcon";
-import { SettingsIcon, type SettingsIconName } from "../../components/ui/SettingsIcon";
-import { useTheme, type ToneName } from "../../lib/theme";
+import { StyleSheet, Text, View } from "react-native";
+import {
+  AppIcon,
+  SettingsIcon,
+  TactilePressable,
+  type SettingsIconName,
+} from "../../components/ui";
+import { type ToneName, useTheme } from "../../lib/theme";
 
 export type SettingsRowProps = {
   label: string;
@@ -15,7 +18,9 @@ export type SettingsRowProps = {
   danger?: boolean;
 };
 
-/** A settings row with the 30 pt tinted leading tile from 07 §8. */
+/**
+ * Grouped iOS settings row with frosted squircle SF Symbol badge and crisp press physics.
+ */
 export function SettingsRow({
   label,
   value,
@@ -27,44 +32,33 @@ export function SettingsRow({
   danger = false,
 }: SettingsRowProps) {
   const { theme } = useTheme();
+  const palette = theme.tones[tone];
 
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={value ? `${label}, ${value}` : label}
-      style={({ pressed }) => ({
-        minHeight: 54,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingHorizontal: 16,
-        borderTopWidth: showDivider ? 1 : 0,
-        borderTopColor: theme.colors.border,
-        backgroundColor: pressed && onPress ? theme.colors.surfaceMuted : "transparent",
-      })}
+  const leading = icon || glyph ? (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[
+        styles.iconTile,
+        { backgroundColor: palette.background },
+      ]}
     >
-      <View
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: 9,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: theme.tones[tone].foreground,
-        }}
-      >
-        {icon ? (
-          <SettingsIcon name={icon} color="#FFFFFF" size={17} />
-        ) : (
-          <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "600" }}>{glyph}</Text>
-        )}
-      </View>
+      {icon ? (
+        <SettingsIcon name={icon} color={palette.foreground} size={17} />
+      ) : (
+        <Text style={[styles.glyph, { color: palette.foreground }]}>{glyph}</Text>
+      )}
+    </View>
+  ) : null;
+
+  const content = (
+    <View style={styles.row}>
+      {leading}
       <Text
         style={[
-          theme.text.body,
-          { color: danger ? theme.colors.danger : theme.colors.textPrimary, flex: 1 },
+          theme.text.bodyStrong,
+          styles.label,
+          { color: danger ? theme.colors.danger : theme.colors.textPrimary },
         ]}
         numberOfLines={1}
       >
@@ -72,17 +66,74 @@ export function SettingsRow({
       </Text>
       {value ? (
         <Text
-          style={[theme.text.label, { color: theme.colors.textSecondary, fontWeight: "400" }]}
+          style={[theme.text.body, { color: theme.colors.textSecondary }]}
           numberOfLines={1}
         >
           {value}
         </Text>
       ) : null}
       {onPress ? (
-        <AppIcon name="chevronRight" color={theme.colors.textTertiary} size={15} />
+        <AppIcon name="chevronRight" size={14} color={theme.colors.textTertiary} weight="bold" />
+      ) : null}
+    </View>
+  );
+
+  return (
+    <View>
+      {onPress ? (
+        <TactilePressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={value ? `${label}, ${value}` : label}
+          scaleTo={0.985}
+          radius={14}
+        >
+          {content}
+        </TactilePressable>
       ) : (
-        <View style={{ width: 6 }} />
+        content
       )}
-    </Pressable>
+      {showDivider ? (
+        <View
+          style={[
+            styles.divider,
+            {
+              backgroundColor: theme.colors.border,
+              marginLeft: leading ? 60 : 16,
+            },
+          ]}
+        />
+      ) : null}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 54,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  iconTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  glyph: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  label: {
+    flex: 1,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+  },
+});

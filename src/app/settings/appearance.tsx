@@ -1,8 +1,8 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { AppIcon, Card, SectionHeader } from "../../components/ui";
+import { AppIcon, Card, ScreenBackground, SectionHeader, TactilePressable } from "../../components/ui";
 import { setSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import type { Db } from "../../lib/db/types";
 import { haptics } from "../../lib/haptics";
@@ -10,8 +10,8 @@ import { useTheme, type ThemePreference } from "../../lib/theme";
 
 const OPTIONS: { value: ThemePreference; label: string; body: string }[] = [
   { value: "system", label: "System", body: "Follow the device's light or dark setting." },
-  { value: "light", label: "Light", body: "System grey background with white cards." },
-  { value: "dark", label: "Dark", body: "True black background with dark cards." },
+  { value: "light", label: "Light", body: "Daylight ambient canvas with frosted glass." },
+  { value: "dark", label: "Dark", body: "Deep midnight obsidian canvas with smoked glass." },
 ];
 
 export default function AppearanceScreen() {
@@ -37,55 +37,65 @@ export default function AppearanceScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg, padding: 20 }}>
-      <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
-        Appearance is a display preference only; no amount, date or currency changes with it.
-      </Text>
-
-      <SectionHeader title="Theme" />
-      <Card padded={false}>
-        {OPTIONS.map((option, index) => {
-          const selected = option.value === preference;
-          return (
-            <Pressable
-              key={option.value}
-              onPress={() => void choose(option.value)}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              accessibilityLabel={`${option.label} theme`}
-              style={({ pressed }) => ({
-                minHeight: 64,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-                paddingHorizontal: 16,
-                borderTopWidth: index === 0 ? 0 : 1,
-                borderTopColor: theme.colors.border,
-                opacity: pressed ? 0.65 : 1,
-              })}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]}>
-                  {option.label}
-                </Text>
-                <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
-                  {option.body}
-                </Text>
-              </View>
-              {selected ? (
-                <AppIcon name="check" color={theme.colors.accent} size={17} />
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </Card>
-
-      {error ? (
-        <Text style={[theme.text.caption, { color: theme.colors.danger, marginTop: 14 }]}>
-          {error}
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
+      >
+        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+          Appearance is a display preference only; no amount, date or currency changes with it.
         </Text>
-      ) : null}
+
+        <SectionHeader title="Theme" />
+        <Card variant="glass" padded={false}>
+          {OPTIONS.map((option, index) => {
+            const selected = option.value === preference;
+            return (
+              <TactilePressable
+                key={option.value}
+                onPress={() => void choose(option.value)}
+                disabled={busy}
+                haptic="selection"
+                scaleTo={0.985}
+                radius={14}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${option.label} theme`}
+                style={{
+                  minHeight: 66,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                  borderTopColor: theme.colors.border,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]}>
+                    {option.label}
+                  </Text>
+                  <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
+                    {option.body}
+                  </Text>
+                </View>
+                {selected ? (
+                  <AppIcon name="checkmarkCircle" color={theme.colors.accent} size={20} />
+                ) : null}
+              </TactilePressable>
+            );
+          })}
+        </Card>
+
+        {error ? (
+          <Text style={[theme.text.caption, { color: theme.colors.danger, marginTop: 14 }]}>
+            {error}
+          </Text>
+        ) : null}
+      </ScrollView>
     </View>
   );
 }

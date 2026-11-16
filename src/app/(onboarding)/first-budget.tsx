@@ -3,15 +3,23 @@ import { useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   Text,
   TextInput,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AppIcon, Button } from "../../components/ui";
+import {
+  AppIcon,
+  Button,
+  Card,
+  Glass,
+  ScreenBackground,
+  TactilePressable,
+} from "../../components/ui";
 import { getCurrency, isCurrencyCode } from "../../constants/currencies";
+import { Pager } from "../../features/onboarding/Pager";
 import { toIsoDate } from "../../lib/domain/dates";
 import {
   decimalPlaces,
@@ -19,10 +27,10 @@ import {
   sanitizeMoneyInput,
 } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
+import { iosEnter } from "../../lib/motion";
 import { useOnboarding } from "../../lib/onboarding";
 import { detectRegionDefaults } from "../../lib/region";
 import { useTheme } from "../../lib/theme";
-import { Pager } from "../../features/onboarding/Pager";
 
 function validCountry(value: string | string[] | undefined): string | null {
   const code = typeof value === "string" ? value.toUpperCase() : "";
@@ -52,6 +60,7 @@ export default function FirstBudgetScreen() {
     (typeof params.locale === "string" && params.locale.trim()) || defaults.locale;
 
   const [text, setText] = useState("");
+  const [focused, setFocused] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,33 +89,41 @@ export default function FirstBudgetScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
       <SafeAreaView edges={["top", "left", "right", "bottom"]} style={{ flex: 1 }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={{ flex: 1, paddingHorizontal: 20 }}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 4 }}>
               {/* Back is a real control: nothing is saved yet, so there is nothing
                   to lose by returning to the region step. */}
-              <Pressable
+              <TactilePressable
                 onPress={() => router.back()}
                 accessibilityRole="button"
                 accessibilityLabel="Back to region"
-                hitSlop={12}
-                style={{ width: 34, height: 34, justifyContent: "center" }}
+                hitSlop={10}
+                scaleTo={0.92}
+                radius={18}
               >
-                <AppIcon name="chevronLeft" color={theme.colors.textTertiary} size={22} />
-              </Pressable>
+                <Glass
+                  tone="regular"
+                  radius={18}
+                  style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
+                >
+                  <AppIcon name="chevronLeft" color={theme.colors.textPrimary} size={18} />
+                </Glass>
+              </TactilePressable>
               <View style={{ flex: 1 }}>
                 <Pager active={2} total={3} />
               </View>
-              <View style={{ width: 34 }} />
+              <View style={{ width: 36 }} />
             </View>
 
-            <View style={{ marginTop: 18 }}>
-              <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
+            <Animated.View entering={iosEnter(20)} style={{ marginTop: 18 }}>
+              <Text style={[theme.text.eyebrow, { color: theme.colors.accent }]}>
                 Step 3 of 3
               </Text>
               <Text
@@ -123,67 +140,67 @@ export default function FirstBudgetScreen() {
                 One monthly limit is all Overview needs to turn spending into a daily
                 number. Category limits can wait.
               </Text>
-            </View>
+            </Animated.View>
 
-            <View
-              style={[
-                {
-                  marginTop: 22,
-                  padding: 20,
-                  borderRadius: 26,
-                  backgroundColor: theme.colors.surface,
-                  borderWidth: 1,
-                  borderColor: theme.colors.cardBorder,
-                },
-                theme.shadow.card,
-              ]}
-            >
-              <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
-                Monthly limit · {currency}
-              </Text>
-              <View
+            <Animated.View entering={iosEnter(90)}>
+              <Card
+                variant="glass"
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                  marginTop: 10,
+                  marginTop: 22,
+                  padding: 22,
+                  borderRadius: theme.radius.hero,
+                  borderColor: focused ? theme.colors.accent : undefined,
                 }}
               >
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  style={[
-                    theme.text.display,
-                    { color: theme.colors.textSecondary, lineHeight: 60 },
-                  ]}
-                >
-                  {symbol}
+                <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
+                  Monthly limit · {currency}
                 </Text>
-                <TextInput
-                  value={text}
-                  onChangeText={(next) => setText(sanitizeMoneyInput(next, currency))}
-                  keyboardType={decimalPlaces(currency) === 0 ? "number-pad" : "decimal-pad"}
-                  inputMode={decimalPlaces(currency) === 0 ? "numeric" : "decimal"}
-                  accessibilityLabel={`Monthly budget in ${currency}`}
-                  placeholder={
-                    decimalPlaces(currency) === 0
-                      ? "0"
-                      : decimalPlaces(currency) === 3
-                        ? "0.000"
-                        : "0.00"
-                  }
-                  placeholderTextColor={theme.colors.textTertiary}
-                  maxLength={12}
-                  maxFontSizeMultiplier={1.3}
-                  style={[
-                    theme.text.display,
-                    { color: theme.colors.textPrimary, flex: 1, minWidth: 80, lineHeight: 60 },
-                  ]}
-                />
-              </View>
-              <Text style={[theme.text.caption, { color: theme.colors.textTertiary, marginTop: 10 }]}>
-                Bills you log later are counted automatically. Nothing leaves this device.
-              </Text>
-            </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    marginTop: 10,
+                  }}
+                >
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    style={[
+                      theme.text.display,
+                      { color: theme.colors.textSecondary, lineHeight: 60 },
+                    ]}
+                  >
+                    {symbol}
+                  </Text>
+                  <TextInput
+                    value={text}
+                    onChangeText={(next) => setText(sanitizeMoneyInput(next, currency))}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setFocused(false)}
+                    keyboardType={decimalPlaces(currency) === 0 ? "number-pad" : "decimal-pad"}
+                    inputMode={decimalPlaces(currency) === 0 ? "numeric" : "decimal"}
+                    accessibilityLabel={`Monthly budget in ${currency}`}
+                    placeholder={
+                      decimalPlaces(currency) === 0
+                        ? "0"
+                        : decimalPlaces(currency) === 3
+                          ? "0.000"
+                          : "0.00"
+                    }
+                    placeholderTextColor={theme.colors.textTertiary}
+                    maxLength={12}
+                    maxFontSizeMultiplier={1.3}
+                    style={[
+                      theme.text.display,
+                      { color: theme.colors.textPrimary, flex: 1, minWidth: 80, lineHeight: 60 },
+                    ]}
+                  />
+                </View>
+                <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                  Bills you log later are counted automatically. Nothing leaves this device.
+                </Text>
+              </Card>
+            </Animated.View>
 
             <View style={{ flex: 1 }} />
 
@@ -206,15 +223,18 @@ export default function FirstBudgetScreen() {
                 disabled={!valid || busy}
                 loading={busy && valid}
               />
-              <Pressable
+              <TactilePressable
                 onPress={() => complete(false)}
                 disabled={busy}
+                scaleTo={0.97}
+                haptic="selection"
+                radius={14}
                 accessibilityRole="button"
                 accessibilityLabel="Skip the budget for now"
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  opacity: pressed || busy ? 0.5 : 1,
-                })}
+                style={{
+                  paddingVertical: 11,
+                  opacity: busy ? 0.5 : 1,
+                }}
               >
                 <Text
                   style={[
@@ -224,7 +244,7 @@ export default function FirstBudgetScreen() {
                 >
                   Not now, start without a budget
                 </Text>
-              </Pressable>
+              </TactilePressable>
             </View>
           </View>
         </KeyboardAvoidingView>

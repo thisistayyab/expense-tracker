@@ -2,6 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { View } from "react-native";
 
 import { FloatingTabBar } from "../../components/navigation/FloatingTabBar";
+import { ScreenBackground } from "../../components/ui";
 import { useOnboarding } from "../../lib/onboarding";
 
 const DESTINATIONS = [
@@ -11,12 +12,8 @@ const DESTINATIONS = [
   { name: "insights", label: "Insights" },
 ] as const;
 
-// Tab switches are deliberately instant, the way iOS tab bars behave. Each screen
-// paints its own full-bleed gradient canvas, so any page-level slide or fade moves
-// the background along with the content and reads as a panel sliding over the app —
-// and re-compositing that gradient every frame is exactly what made it stutter.
-// Motion lives in the chrome and the controls instead: the capsule, the selection
-// pill, the add button and every press.
+// Mount one shared atmospheric Liquid Glass canvas behind all tabs so switching
+// tabs cross-fades only foreground glass cards without re-rasterizing gradients.
 export default function TabsLayout() {
   const { onboarded } = useOnboarding();
 
@@ -27,10 +24,12 @@ export default function TabsLayout() {
 
   return (
     <View style={{ flex: 1 }}>
+      <ScreenBackground />
       <Tabs
         tabBar={() => null}
         screenOptions={{
           headerShown: false,
+          animation: "fade",
           sceneStyle: { backgroundColor: "transparent" },
         }}
       >

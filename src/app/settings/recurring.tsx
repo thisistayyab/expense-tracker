@@ -4,14 +4,22 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
   View,
 } from "react-native";
 
-import { Button, Card, EmptyState, Money, SectionHeader } from "../../components/ui";
+import {
+  Button,
+  Card,
+  EmptyState,
+  Money,
+  ScreenBackground,
+  SectionHeader,
+  TactilePressable,
+} from "../../components/ui";
 import { RecurringEditorSheet } from "../../features/recurring/RecurringEditorSheet";
 import { postNextOccurrence } from "../../features/recurring/processDue";
 import {
@@ -113,7 +121,7 @@ export default function RecurringScreen() {
       <View
         key={rule.id}
         style={{
-          borderTopWidth: index === 0 ? 0 : 1,
+          borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
           borderTopColor: theme.colors.border,
           paddingHorizontal: 16,
           paddingVertical: 12,
@@ -121,18 +129,20 @@ export default function RecurringScreen() {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Pressable
+          <TactilePressable
             onPress={() => setEditing(rule)}
+            haptic="selection"
+            scaleTo={0.985}
+            radius={12}
             accessibilityRole="button"
             accessibilityLabel={`${rule.itemName ?? "Recurring rule"}, ${nextLabel(rule)}`}
-            style={({ pressed }) => ({
+            style={{
               flex: 1,
               minWidth: 0,
               flexDirection: "row",
               alignItems: "center",
               gap: 12,
-              opacity: pressed ? 0.65 : 1,
-            })}
+            }}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
@@ -157,7 +167,7 @@ export default function RecurringScreen() {
                 </Text>
               ) : null}
             </View>
-          </Pressable>
+          </TactilePressable>
           <Switch
             value={rule.isActive}
             onValueChange={(value) => void toggle(rule, value)}
@@ -168,40 +178,53 @@ export default function RecurringScreen() {
           />
         </View>
         {!rule.autoPost && due && rule.isActive ? (
-          <Pressable
+          <TactilePressable
             onPress={() => void post(rule)}
             disabled={busyId === rule.id}
+            haptic="selection"
+            scaleTo={0.95}
+            radius={999}
             accessibilityRole="button"
             accessibilityLabel={`Post ${rule.itemName ?? "bill"} now`}
-            style={({ pressed }) => ({
+            style={{
               alignSelf: "flex-start",
-              height: 30,
-              paddingHorizontal: 12,
-              borderRadius: 15,
+              height: 32,
+              paddingHorizontal: 14,
+              borderRadius: 999,
               justifyContent: "center",
               backgroundColor: theme.colors.accentSoft,
-              opacity: pressed || busyId === rule.id ? 0.6 : 1,
-            })}
+              opacity: busyId === rule.id ? 0.6 : 1,
+            }}
           >
-            <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "600" }]}>
+            <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "700" }]}>
               Post this occurrence · {formatMoney(rule.amountMinor, rule.currency)}
             </Text>
-          </Pressable>
+          </TactilePressable>
         ) : null}
       </View>
     );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
+      >
         <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
           Bills and income that repeat. Auto-post catches up every missed occurrence exactly once
           when you open the app; manual rules wait for you.
         </Text>
 
         <View style={{ marginTop: 14 }}>
-          <Button label="+ New recurring rule" variant="accent" onPress={() => setAdding(true)} />
+          <Button
+            label="New recurring rule"
+            variant="accent"
+            leftIcon="plus"
+            onPress={() => setAdding(true)}
+          />
         </View>
 
         {loading && !rules.length ? (
@@ -211,6 +234,7 @@ export default function RecurringScreen() {
         {!loading && !rules.length ? (
           <View style={{ marginTop: 24 }}>
             <EmptyState
+              icon="repeat"
               title="Add your first bill"
               body="Rent, a phone bill or a salary. Auto-post keeps it current even after a month away."
               actionLabel="Add a recurring rule"
@@ -222,14 +246,14 @@ export default function RecurringScreen() {
         {active.length ? (
           <>
             <SectionHeader title="Active" />
-            <Card padded={false}>{active.map(row)}</Card>
+            <Card variant="glass" padded={false}>{active.map(row)}</Card>
           </>
         ) : null}
 
         {paused.length ? (
           <>
             <SectionHeader title="Paused" />
-            <Card padded={false}>{paused.map(row)}</Card>
+            <Card variant="glass" padded={false}>{paused.map(row)}</Card>
           </>
         ) : null}
 

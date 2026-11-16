@@ -1,6 +1,12 @@
-import { useState } from "react";
-import { Text, TextInput, View, type TextInputProps } from "react-native";
-
+import { useEffect, useState } from "react";
+import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useTheme } from "../../lib/theme";
 
 export type TextFieldProps = Omit<TextInputProps, "style"> & {
@@ -9,59 +15,80 @@ export type TextFieldProps = Omit<TextInputProps, "style"> & {
   error?: string | null;
 };
 
+/**
+ * Frosted iOS input field with smooth focus ring transition and continuous squircle frame.
+ */
 export function TextField({ label, helper, error, ...input }: TextFieldProps) {
   const { theme } = useTheme();
+  const reduceMotion = useReducedMotion();
   const [focused, setFocused] = useState(false);
+  const focusProgress = useSharedValue(0);
   const invalid = Boolean(error);
 
+  useEffect(() => {
+    focusProgress.value = withTiming(focused ? 1 : 0, { duration: reduceMotion ? 0 : 160 });
+  }, [focusProgress, focused, reduceMotion]);
+
+  const idleBorder = theme.colors.cardBorder;
+  const activeBorder = invalid ? theme.colors.danger : theme.colors.accent;
+
+  const boxAnimatedStyle = useAnimatedStyle(() => ({
+    borderColor: invalid
+      ? theme.colors.danger
+      : interpolateColor(focusProgress.value, [0, 1], [idleBorder, activeBorder]),
+  }));
+
   return (
-    <View style={{ gap: 6 }}>
+    <View style={styles.wrap}>
       {label ? (
-        <Text style={[theme.text.label, { color: theme.colors.textSecondary }]}>{label}</Text>
-      ) : null}
-      <TextInput
-        {...input}
-        onFocus={(event) => {
-          setFocused(true);
-          input.onFocus?.(event);
-        }}
-        onBlur={(event) => {
-          setFocused(false);
-          input.onBlur?.(event);
-        }}
-        placeholderTextColor={theme.colors.textTertiary}
-        accessibilityLabel={input.accessibilityLabel ?? label}
-        accessibilityState={{ disabled: input.editable === false }}
-        style={[
-          theme.text.body,
-          {
-            minHeight: 50,
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            borderRadius: theme.radius.input,
-            backgroundColor: theme.colors.surface,
-            borderWidth: 1,
-            borderColor: invalid
-              ? theme.colors.danger
-              : focused
-                ? theme.colors.accent
-                : theme.colors.cardBorder === "transparent"
-                  ? theme.colors.border
-                  : theme.colors.cardBorder,
-            color: theme.colors.textPrimary,
-          },
-        ]}
-      />
-      {invalid || helper ? (
-        <Text
-          style={[
-            theme.text.caption,
-            { color: invalid ? theme.colors.danger : theme.colors.textTertiary },
-          ]}
-        >
-          {error ?? helper}
+        <Text style={[theme.text.caption, { color: theme.colors.textSecondary, fontWeight: "600" }]}>
+          {label}
         </Text>
+      ) : null}
+      <Animated.View
+        style={[
+          styles.inputBox,
+          {
+            borderRadius: theme.radius.input,
+            backgroundColor: focused ? theme.colors.surface : theme.colors.surfaceMuted,
+          },
+          boxAnimatedStyle,
+        ]}
+      >
+        <TextInput
+          {...input}
+          onFocus={(event) => {
+            setFocused(true);
+            input.onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            setFocused(false);
+            input.onBlur?.(event);
+          }}
+          placeholderTextColor={theme.colors.textTertiary}
+          selectionColor={theme.colors.accent}
+          style={[theme.text.body, styles.input, { color: theme.colors.textPrimary }]}
+        />
+      </Animated.View>
+      {error ? (
+        <Text style={[theme.text.caption, { color: theme.colors.danger }]}>{error}</Text>
+      ) : helper ? (
+        <Text style={[theme.text.caption, { color: theme.colors.textTertiary }]}>{helper}</Text>
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  wrap: { gap: 6 },
+  inputBox: {
+    borderWidth: 1,
+    borderCurve: "continuous",
+    overflow: "hidden",
+  },
+  input: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+});

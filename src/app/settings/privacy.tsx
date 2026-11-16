@@ -1,7 +1,7 @@
 import { router } from "expo-router";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { Card, SectionHeader } from "../../components/ui";
+import { AppIcon, Card, ScreenBackground, SectionHeader, TactilePressable } from "../../components/ui";
 import { useTheme } from "../../lib/theme";
 
 const SECTIONS: { title: string; body: string }[] = [
@@ -31,35 +31,55 @@ export default function PrivacyScreen() {
   const { theme } = useTheme();
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.colors.bg }}
-      contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
-    >
-      <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
-        A plain-language summary of what the app does with your data.
-      </Text>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
+      >
+        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+          A plain-language summary of what the app does with your data.
+        </Text>
 
-      {SECTIONS.map((section) => (
-        <View key={section.title}>
-          <SectionHeader title={section.title} />
-          <Card>
-            <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
-              {section.body}
-            </Text>
-          </Card>
-        </View>
-      ))}
+        {SECTIONS.map((section) => (
+          <View key={section.title}>
+            <SectionHeader title={section.title} />
+            <Card variant="glass">
+              <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+                {section.body}
+              </Text>
+            </Card>
+          </View>
+        ))}
 
-      <View style={{ marginTop: 20 }}>
-        <Text
+        <TactilePressable
           onPress={() => router.push("/settings/data")}
+          haptic="selection"
+          scaleTo={0.97}
+          radius={999}
           accessibilityRole="link"
           accessibilityLabel="Open data export and deletion"
-          style={[theme.text.label, { color: theme.colors.accent, textAlign: "center" }]}
+          style={{
+            marginTop: 20,
+            alignSelf: "center",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 18,
+            paddingVertical: 11,
+            borderRadius: 999,
+            backgroundColor: theme.colors.accentSoft,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: `${theme.colors.accent}28`,
+          }}
         >
-          Export or delete your data →
-        </Text>
-      </View>
-    </ScrollView>
+          <Text style={[theme.text.label, { color: theme.colors.accent }]}>
+            Export or delete your data
+          </Text>
+          <AppIcon name="chevronRight" color={theme.colors.accent} size={13} />
+        </TactilePressable>
+      </ScrollView>
+    </View>
   );
 }

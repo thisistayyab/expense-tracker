@@ -1,64 +1,66 @@
-import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withDelay,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
-
+import { Money } from "../../components/ui";
 import type { SpendBucket } from "../../lib/domain/overview-analytics";
 import { formatMoneySpoken } from "../../lib/format/money";
+import { haptics } from "../../lib/haptics";
+import { SPRING_SETTLE } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 
-const PLOT_HEIGHT = 72;
+const PLOT_HEIGHT = 82;
 
 function Bar({
   height,
-  color,
   highlighted,
   delay,
 }: {
   height: number;
-  color: string;
   highlighted: boolean;
   delay: number;
 }) {
-  const progress = useSharedValue(0);
+  const { theme } = useTheme();
+  const reduceMotion = useReducedMotion();
+  const currentHeight = useSharedValue(reduceMotion ? height : 0);
 
   useEffect(() => {
-    // A spring per bar, 35 ms apart: the chart fills like a row of switches being
-    // thrown, not like a CSS transition of everything at once.
-    progress.value = withDelay(
-      delay,
-      withSpring(1, { damping: 18, stiffness: 170, mass: 0.9 }),
-    );
-  }, [delay, progress]);
+    if (reduceMotion) {
+      currentHeight.value = withTiming(height, { duration: 0 });
+    } else {
+      currentHeight.value = withDelay(delay, withSpring(height, SPRING_SETTLE));
+    }
+  }, [currentHeight, delay, height, reduceMotion]);
 
-  const style = useAnimatedStyle(() => ({
-    height: Math.max(1, progress.value * height),
+  const barStyle = useAnimatedStyle(() => ({
+    height: currentHeight.value,
   }));
 
   return (
     <Animated.View
       style={[
+        styles.bar,
+        barStyle,
         {
-          width: "100%",
-          maxWidth: 32,
-          borderRadius: 4,
-          backgroundColor: color,
-          opacity: highlighted ? 1 : 0.24,
+          backgroundColor: highlighted
+            ? theme.colors.accentFill
+            : theme.scheme === "dark"
+              ? "rgba(255, 255, 255, 0.16)"
+              : "rgba(12, 15, 24, 0.12)",
         },
-        style,
       ]}
     />
   );
 }
 
 /**
- * Spending across the month in seven-day buckets. The whole chart is one
- * accessible image and the labels below carry the dates, so nothing depends on
- * reading a bar's height.
+ * Interactive Apple-style rounded spend cadence bars with frosted inspection pill.
  */
 export function SpendBars({
   buckets,
@@ -70,82 +72,154 @@ export function SpendBars({
   averageMinor: number;
 }) {
   const { theme } = useTheme();
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const max = Math.max(1, ...buckets.map((bucket) => bucket.spentMinor));
-  const currentIndex = buckets.findIndex((bucket) => bucket.isCurrent);
-  const highlightIndex = currentIndex >= 0 ? currentIndex : Math.max(0, buckets.length - 1);
-  const averageBottom =
-    averageMinor > 0 ? Math.min(PLOT_HEIGHT, (averageMinor / max) * PLOT_HEIGHT) : null;
+  const avgHeight =
+    averageMinor > 0 ? Math.min(PLOT_HEIGHT - 2, (averageMinor / max) * PLOT_HEIGHT) : 0;
 
-  const summary = buckets
-    .map((bucket) => `${bucket.rangeLabel}: ${formatMoneySpoken(bucket.spentMinor, currency)}`)
-    .join(". ");
+  const activeBucket =
+    buckets.find((b) => b.key === selectedKey) ??
+    buckets.find((b) => b.isCurrent) ??
+    buckets[buckets.length - 1];
 
   return (
-    <View
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={`Spending by week. ${summary}`}
-      style={{ marginTop: 16 }}
-    >
-      <View style={{ height: PLOT_HEIGHT }}>
-        {averageBottom !== null ? (
-          <View
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: averageBottom,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderStyle: "dashed",
-              borderTopColor: theme.colors.textTertiary,
-            }}
+    <View style={styles.root}>
+      {activeBucket ? (
+        <View
+          style={[
+            styles.readoutPill,
+            {
+              backgroundColor: theme.colors.surfaceMuted,
+              borderColor: theme.colors.cardBorder,
+            },
+          ]}
+        >
+          <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
+            {activeBucket.rangeLabel}
+          </Text>
+          <Money
+            minor={activeBucket.spentMinor}
+            currency={currency}
+            tone="default"
+            style={[theme.text.caption, { color: theme.colors.textPrimary, fontWeight: "700" }]}
           />
-        ) : null}
-        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8, height: PLOT_HEIGHT }}>
-          {buckets.map((bucket, index) => (
-            <View
-              key={bucket.key}
-              style={{
-                flex: 1,
-                height: PLOT_HEIGHT,
-                justifyContent: "flex-end",
-                alignItems: "center",
-              }}
-            >
-              <Bar
-                height={Math.max(3, Math.round((bucket.spentMinor / max) * PLOT_HEIGHT))}
-                color={theme.colors.accent}
-                highlighted={index === highlightIndex}
-                delay={index * 35}
-              />
-            </View>
-          ))}
         </View>
-      </View>
+      ) : null}
 
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-        {buckets.map((bucket, index) => (
-          <Text
-            key={bucket.key}
+      <View style={styles.plotWrap}>
+        {avgHeight > 4 ? (
+          <View
+            pointerEvents="none"
             style={[
-              theme.text.caption,
+              styles.averageLine,
               {
-                flex: 1,
-                textAlign: "center",
-                fontSize: 11,
-                lineHeight: 14,
-                fontVariant: ["tabular-nums"],
-                color:
-                  index === highlightIndex
-                    ? theme.colors.textSecondary
-                    : theme.colors.textTertiary,
+                bottom: avgHeight,
+                borderColor:
+                  theme.scheme === "dark" ? "rgba(255,255,255,0.16)" : "rgba(10,18,36,0.14)",
               },
             ]}
-          >
-            {bucket.label}
-          </Text>
-        ))}
+          />
+        ) : null}
+
+        <View style={styles.barsRow}>
+          {buckets.map((bucket, index) => {
+            const rawHeight = Math.round((bucket.spentMinor / max) * PLOT_HEIGHT);
+            const barHeight = bucket.spentMinor > 0 ? Math.max(7, rawHeight) : 4;
+            const highlighted = activeBucket?.key === bucket.key;
+
+            return (
+              <Pressable
+                key={bucket.key}
+                onPress={() => {
+                  haptics.selection();
+                  setSelectedKey((prev) => (prev === bucket.key ? null : bucket.key));
+                }}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={`${bucket.rangeLabel}: ${formatMoneySpoken(
+                  bucket.spentMinor,
+                  currency,
+                )}`}
+                style={styles.column}
+              >
+                <View style={styles.barSlot}>
+                  <Bar
+                    height={barHeight}
+                    highlighted={highlighted}
+                    delay={Math.min(index, 6) * 28}
+                  />
+                </View>
+                <Text
+                  style={[
+                    theme.text.caption,
+                    {
+                      marginTop: 6,
+                      color: highlighted ? theme.colors.accent : theme.colors.textTertiary,
+                      fontWeight: highlighted ? "700" : "500",
+                      fontSize: 11.5,
+                      fontVariant: ["tabular-nums"],
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {bucket.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    marginTop: 12,
+    gap: 10,
+  },
+  readoutPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  plotWrap: {
+    position: "relative",
+    height: PLOT_HEIGHT + 24,
+    justifyContent: "flex-end",
+  },
+  averageLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    marginBottom: 22,
+    borderTopWidth: 1,
+    borderStyle: "dashed",
+  },
+  barsRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  column: {
+    flex: 1,
+    alignItems: "center",
+  },
+  barSlot: {
+    width: "100%",
+    height: PLOT_HEIGHT,
+    justifyContent: "flex-end",
+  },
+  bar: {
+    width: "100%",
+    borderRadius: 8,
+    borderCurve: "continuous",
+    overflow: "hidden",
+  },
+});

@@ -1,11 +1,20 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
-import { Card, EmptyState, Money, ScreenBackground, SectionHeader } from "../../components/ui";
+import {
+  AppIcon,
+  Card,
+  EmptyState,
+  Glass,
+  Money,
+  SectionHeader,
+  TactilePressable,
+} from "../../components/ui";
 import { BreakdownBars } from "../../features/insights/BreakdownBars";
 import { InsightCard } from "../../features/insights/InsightCard";
 import { PeriodControl } from "../../features/insights/PeriodControl";
@@ -15,6 +24,7 @@ import { exportCsv } from "../../features/settings/dataIO";
 import type { Db } from "../../lib/db/types";
 import type { BreakdownRow, InsightPeriod } from "../../lib/domain/insights";
 import { formatMoney } from "../../lib/format/money";
+import { iosEnter } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 
 export default function InsightsScreen() {
@@ -73,10 +83,10 @@ export default function InsightsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <ScreenBackground />
+    <View style={{ flex: 1 }}>
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
         <ScrollView
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             padding: 20,
             paddingTop: 10,
@@ -95,25 +105,44 @@ export default function InsightsScreen() {
               {data ? `Insights · ${data.currency}` : "Insights"}
             </Text>
             {data?.hasAnyTransaction ? (
-              <Pressable
+              <TactilePressable
                 onPress={() => void exportLedger()}
                 disabled={exporting}
                 hitSlop={8}
+                scaleTo={0.94}
+                radius={999}
+                haptic="selection"
                 accessibilityRole="button"
                 accessibilityLabel="Export transactions as CSV"
               >
-                <Text
-                  style={[
-                    theme.text.caption,
-                    { color: theme.colors.accent, fontWeight: "600" },
-                  ]}
+                <Glass
+                  tone="regular"
+                  radius={999}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                  }}
                 >
-                  {exporting ? "Exporting…" : "Export CSV"}
-                </Text>
-              </Pressable>
+                  <AppIcon name="share" size={13} color={theme.colors.accent} />
+                  <Text
+                    style={[
+                      theme.text.caption,
+                      { color: theme.colors.accent, fontWeight: "700" },
+                    ]}
+                  >
+                    {exporting ? "Exporting…" : "Export CSV"}
+                  </Text>
+                </Glass>
+              </TactilePressable>
             ) : null}
           </View>
-          <Text style={[theme.text.title1, { color: theme.colors.textPrimary, marginTop: 4 }]}>
+          <Text
+            accessibilityRole="header"
+            style={[theme.text.title1, { color: theme.colors.textPrimary, marginTop: 4 }]}
+          >
             Where it went
           </Text>
 
@@ -132,132 +161,142 @@ export default function InsightsScreen() {
           ) : null}
 
           {data && !data.hasAnyTransaction ? (
-            <Card style={{ marginTop: 16 }}>
-              <EmptyState
-                title="Nothing to read yet"
-                body="Log a few expenses and this tab turns them into a breakdown, a six-month trend and your top items."
-                actionLabel="Log your first expense"
-                onAction={() => router.push("/add")}
-              />
-            </Card>
+            <Animated.View entering={iosEnter(40)}>
+              <Card variant="glass" style={{ marginTop: 16 }}>
+                <EmptyState
+                  icon="chart"
+                  title="Nothing to read yet"
+                  body="Log a few expenses and this tab turns them into a breakdown, a six-month trend and your top items."
+                  actionLabel="Log your first expense"
+                  onAction={() => router.push("/add")}
+                />
+              </Card>
+            </Animated.View>
           ) : null}
 
           {data && data.hasAnyTransaction ? (
             <>
-              <Card style={{ marginTop: 14 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
-                >
-                  <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
-                    Where it went
-                  </Text>
-                  <Money
-                    minor={data.totalSpentMinor}
-                    currency={data.currency}
-                    size="title3"
-                  />
-                </View>
-                <Text
-                  style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 4 }]}
-                >
-                  {`${data.ranges.rangeLabel} · ${data.breakdown.length ? "tap a category to see its entries" : "no spending recorded"}`}
-                </Text>
-
-                {data.breakdown.length ? (
-                  <BreakdownBars
-                    rows={data.breakdown}
-                    currency={data.currency}
-                    onPressCategory={openCategory}
-                  />
-                ) : (
-                  <Text
-                    style={[
-                      theme.text.body,
-                      { color: theme.colors.textSecondary, marginTop: 12 },
-                    ]}
+              <Animated.View entering={iosEnter(40)}>
+                <Card variant="glass" style={{ marginTop: 14 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
                   >
-                    {`No spending in ${data.ranges.rangeLabel.toLowerCase()}.`}
+                    <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
+                      Where it went
+                    </Text>
+                    <Money
+                      minor={data.totalSpentMinor}
+                      currency={data.currency}
+                      size="title3"
+                    />
+                  </View>
+                  <Text
+                    style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 4 }]}
+                  >
+                    {`${data.ranges.rangeLabel} · ${data.breakdown.length ? "tap a category to see its entries" : "no spending recorded"}`}
                   </Text>
-                )}
-              </Card>
 
-              <Card style={{ marginTop: 12 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
-                >
-                  <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
-                    Last 6 months
-                  </Text>
-                  {monthsWithData >= 2 && data.trendDelta ? (
-                    <View
-                      style={{
-                        paddingHorizontal: 9,
-                        paddingVertical: 3,
-                        borderRadius: 999,
-                        backgroundColor: theme.colors.surfaceSunken,
-                      }}
+                  {data.breakdown.length ? (
+                    <BreakdownBars
+                      rows={data.breakdown}
+                      currency={data.currency}
+                      onPressCategory={openCategory}
+                    />
+                  ) : (
+                    <Text
+                      style={[
+                        theme.text.body,
+                        { color: theme.colors.textSecondary, marginTop: 12 },
+                      ]}
                     >
+                      {`No spending in ${data.ranges.rangeLabel.toLowerCase()}.`}
+                    </Text>
+                  )}
+                </Card>
+              </Animated.View>
+
+              <Animated.View entering={iosEnter(90)}>
+                <Card variant="glass" style={{ marginTop: 12 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
+                      Last 6 months
+                    </Text>
+                    {monthsWithData >= 2 && data.trendDelta ? (
+                      <View
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 999,
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: theme.colors.cardBorder,
+                          backgroundColor: theme.colors.surfaceMuted,
+                        }}
+                      >
+                        <Text
+                          style={[
+                            theme.text.caption,
+                            {
+                              fontWeight: "700",
+                              fontVariant: ["tabular-nums"],
+                              color:
+                                data.trendDelta.pct > 0
+                                  ? theme.colors.expense
+                                  : data.trendDelta.pct < 0
+                                    ? theme.colors.income
+                                    : theme.colors.textSecondary,
+                            },
+                          ]}
+                        >
+                          {`${data.trendDelta.pct > 0 ? "+" : ""}${data.trendDelta.pct}% vs ${data.trendDelta.monthLabel}`}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {monthsWithData >= 2 ? (
+                    <>
+                      <TrendChart points={data.trend} currency={data.currency} />
                       <Text
                         style={[
                           theme.text.caption,
-                          {
-                            fontWeight: "600",
-                            color:
-                              data.trendDelta.pct > 0
-                                ? theme.colors.expense
-                                : data.trendDelta.pct < 0
-                                  ? theme.colors.income
-                                  : theme.colors.textSecondary,
-                          },
+                          { color: theme.colors.textTertiary, marginTop: 8 },
                         ]}
                       >
-                        {`${data.trendDelta.pct > 0 ? "+" : ""}${data.trendDelta.pct}% vs ${data.trendDelta.monthLabel}`}
+                        {`${data.trend[data.trend.length - 1]?.label ?? "This month"} so far: ${formatMoney(
+                          data.trend[data.trend.length - 1]?.expenseMinor ?? 0,
+                          data.currency,
+                        )}`}
                       </Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                {monthsWithData >= 2 ? (
-                  <>
-                    <TrendChart points={data.trend} currency={data.currency} />
+                    </>
+                  ) : (
                     <Text
                       style={[
-                        theme.text.caption,
-                        { color: theme.colors.textTertiary, marginTop: 6 },
+                        theme.text.body,
+                        { color: theme.colors.textSecondary, marginTop: 10 },
                       ]}
                     >
-                      {`${data.trend[data.trend.length - 1]?.label ?? "This month"} so far: ${formatMoney(
-                        data.trend[data.trend.length - 1]?.expenseMinor ?? 0,
-                        data.currency,
-                      )}`}
+                      Trend unlocks after next month — it needs two months of spending to compare.
                     </Text>
-                  </>
-                ) : (
-                  <Text
-                    style={[
-                      theme.text.body,
-                      { color: theme.colors.textSecondary, marginTop: 10 },
-                    ]}
-                  >
-                    Trend unlocks after next month — it needs two months of spending to compare.
-                  </Text>
-                )}
-              </Card>
+                  )}
+                </Card>
+              </Animated.View>
 
               {data.topItems.length ? (
-                <>
+                <Animated.View entering={iosEnter(140)}>
                   <SectionHeader title="Top items" />
-                  <Card padded={false}>
+                  <Card variant="glass" padded={false}>
                     {data.topItems.map((item, index) => (
                       <View
                         key={item.key}
@@ -267,10 +306,36 @@ export default function InsightsScreen() {
                           gap: 12,
                           paddingHorizontal: 16,
                           paddingVertical: 12,
-                          borderTopWidth: index === 0 ? 0 : 1,
+                          borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
                           borderTopColor: theme.colors.border,
                         }}
                       >
+                        <View
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 9,
+                            borderCurve: "continuous",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor:
+                              index === 0 ? theme.colors.accentSoft : theme.colors.surfaceMuted,
+                          }}
+                        >
+                          <Text
+                            style={[
+                              theme.text.caption,
+                              {
+                                fontWeight: "700",
+                                fontVariant: ["tabular-nums"],
+                                color:
+                                  index === 0 ? theme.colors.accent : theme.colors.textSecondary,
+                              },
+                            ]}
+                          >
+                            {index + 1}
+                          </Text>
+                        </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text
                             numberOfLines={1}
@@ -294,18 +359,18 @@ export default function InsightsScreen() {
                       </View>
                     ))}
                   </Card>
-                </>
+                </Animated.View>
               ) : null}
 
               {data.cards.length ? (
-                <>
+                <Animated.View entering={iosEnter(180)}>
                   <SectionHeader title="Patterns" />
                   <View style={{ gap: 10 }}>
                     {data.cards.map((card) => (
                       <InsightCard key={card.id} card={card} />
                     ))}
                   </View>
-                </>
+                </Animated.View>
               ) : null}
 
               {otherTotal > 0 ? (

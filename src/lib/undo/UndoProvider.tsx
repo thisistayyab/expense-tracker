@@ -1,16 +1,27 @@
+import { BlurView } from "expo-blur";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  ReduceMotion,
+  SlideInDown,
+  SlideOutDown,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
+import { AppIcon } from "../../components/ui/AppIcon";
+import { TactilePressable } from "../../components/ui/TactilePressable";
 import { haptics } from "../haptics";
 import { useTheme } from "../theme";
 
@@ -21,9 +32,8 @@ type UndoAction = {
 
 type UndoContextValue = (action: UndoAction) => void;
 
-const UndoContext = createContext<UndoContextValue>(() => {});
+const UndoContext = createContext<UndoContextValue>(() => { });
 
-/** The undo window from 03: long enough to notice, short enough not to linger. */
 const UNDO_MS = 4000;
 
 export function useUndo(): UndoContextValue {
@@ -31,15 +41,16 @@ export function useUndo(): UndoContextValue {
 }
 
 /**
- * One snackbar for the whole app. Writers call `showUndo` after a destructive or
- * additive action; the callback is the inverse. Only the latest action is kept, so
- * two quick deletes cannot stack two contradictory undo bars.
+ * Floating iOS frosted-glass undo capsule with smooth countdown indicator.
  */
 export function UndoProvider({ children }: { children: ReactNode }) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const [action, setAction] = useState<UndoAction | null>(null);
+  const reduceMotion = useReducedMotion();
+  const [action, setAction] = useState<(UndoAction & { id: number }) | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const counter = useRef(0);
+  const progress = useSharedValue(1);
 
   const clearTimer = useCallback(() => {
     if (timer.current) {
@@ -48,82 +59,177 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const dismiss = useCallback(() => {
+    clearTimer();
+    setAction(null);
+  }, [clearTimer]);
+
   const showUndo = useCallback<UndoContextValue>(
     (next) => {
       clearTimer();
-      setAction(next);
-      timer.current = setTimeout(() => setAction(null), UNDO_MS);
+      counter.current += 1;
+      setAction({ ...next, id: counter.current });
+      progress.set(1);
+      progress.set(withTiming(0, { duration: UNDO_MS }));
+      timer.current = setTimeout(() => {
+        setAction(null);
+        timer.current = null;
+      }, UNDO_MS);
     },
-    [clearTimer],
+    [clearTimer, progress],
   );
 
   useEffect(() => clearTimer, [clearTimer]);
 
-  const value = useMemo(() => showUndo, [showUndo]);
+  const handleUndo = async () => {
+    if (!action) return;
+    const fn = action.onUndo;
+    dismiss();
+    haptics.success();
+    await fn();
+  };
+
+  const progressStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: progress.value }],
+  }));
 
   return (
-    <UndoContext.Provider value={value}>
-      <View style={styles.host}>
-        {children}
-        {action ? (
+    <UndoContext.Provider value={showUndo}>
+      {children}
+      {action ? (
+        <Animated.View
+          key={action.id}
+          entering={
+            reduceMotion
+              ? undefined
+              : SlideInDown.springify(300)
+                .dampingRatio(0.92)
+                .reduceMotion(ReduceMotion.System)
+          }
+          exiting={
+            reduceMotion
+              ? undefined
+              : SlideOutDown.duration(180).reduceMotion(ReduceMotion.System)
+          }
+          pointerEvents="box-none"
+          style={[
+            styles.wrapper,
+            { bottom: Math.max(insets.bottom, 8) + TAB_BAR_CLEARANCE },
+          ]}
+        >
           <View
-            pointerEvents="box-none"
-            style={[styles.bar, { bottom: insets.bottom + 84 }]}
             accessibilityLiveRegion="polite"
+            style={[
+              styles.bar,
+              Platform.OS === "ios" ? theme.shadow.lift : null,
+              {
+                backgroundColor:
+                  Platform.OS === "android"
+                    ? theme.scheme === "dark"
+                      ? "#1E222D"
+                      : "#161922"
+                    : theme.scheme === "dark"
+                      ? "rgba(22, 25, 34, 0.88)"
+                      : "rgba(18, 22, 32, 0.90)",
+                borderColor: "rgba(255, 255, 255, 0.12)",
+              },
+            ]}
           >
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: theme.colors.solid,
-                  borderColor: theme.colors.cardBorder,
-                },
-              ]}
-            >
-              <Text style={[theme.text.bodyStrong, { color: theme.colors.solidFg, flex: 1 }]}>
+            {Platform.OS === "ios" || Platform.OS === "web" ? (
+              <BlurView
+                pointerEvents="none"
+                tint="dark"
+                intensity={55}
+                style={StyleSheet.absoluteFill}
+              />
+            ) : null}
+
+            <View style={styles.contentRow}>
+              <View style={[styles.iconBadge, { backgroundColor: "rgba(50, 215, 148, 0.18)" }]}>
+                <AppIcon name="checkmarkCircle" size={16} color="#32D794" />
+              </View>
+              <Text
+                style={[theme.text.bodyStrong, styles.message, { color: "#F8FAFF" }]}
+                numberOfLines={1}
+              >
                 {action.message}
               </Text>
-              <Pressable
+              <TactilePressable
                 accessibilityRole="button"
                 accessibilityLabel="Undo"
-                hitSlop={8}
-                onPress={() => {
-                  clearTimer();
-                  setAction(null);
-                  haptics.selection();
-                  void Promise.resolve(action.onUndo()).catch(() => {});
-                }}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: 6 })}
+                onPress={handleUndo}
+                scaleTo={0.94}
+                style={[styles.undoPill, { backgroundColor: theme.colors.accentSoft }]}
               >
-                <Text style={[theme.text.bodyStrong, { color: theme.colors.accent }]}>Undo</Text>
-              </Pressable>
+                <Text style={[theme.text.label, { color: theme.colors.accentAlt }]}>Undo</Text>
+              </TactilePressable>
+            </View>
+
+            <View pointerEvents="none" style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  { backgroundColor: theme.colors.accentAlt },
+                  progressStyle,
+                ]}
+              />
             </View>
           </View>
-        ) : null}
-      </View>
+        </Animated.View>
+      ) : null}
     </UndoContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
-  host: { flex: 1 },
-  bar: {
+  wrapper: {
     position: "absolute",
-    left: 20,
-    right: 20,
+    left: 16,
+    right: 16,
+    zIndex: 100,
+    alignItems: "center",
   },
-  card: {
-    minHeight: 52,
-    borderRadius: 18,
-    borderWidth: 1,
+  bar: {
+    width: "100%",
+    maxWidth: 480,
+    borderRadius: 999,
+    borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  contentRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 9,
+    gap: 10,
+  },
+  iconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  message: {
+    flex: 1,
+    fontSize: 15,
+  },
+  undoPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderCurve: "continuous",
+  },
+  progressTrack: {
+    height: 2,
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  progressFill: {
+    height: "100%",
+    width: "100%",
+    transformOrigin: "left",
   },
 });

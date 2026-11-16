@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -57,9 +57,18 @@ function Navigation() {
 
   const detailOptions = {
     headerShown: true,
-    headerStyle: { backgroundColor: theme.colors.bg },
+    headerTransparent: Platform.OS === "ios",
+    headerBlurEffect:
+      theme.scheme === "dark"
+        ? ("systemChromeMaterialDark" as const)
+        : ("systemChromeMaterialLight" as const),
+    headerStyle:
+      Platform.OS === "ios"
+        ? { backgroundColor: "transparent" }
+        : { backgroundColor: theme.colors.bgTop },
     headerTintColor: theme.colors.textPrimary,
     headerTitleStyle: { ...theme.text.title3, color: theme.colors.textPrimary },
+    headerBackButtonDisplayMode: "minimal" as const,
     headerShadowVisible: false,
   };
 
@@ -68,16 +77,17 @@ function Navigation() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.colors.bg },
+        animation: "ios_from_right",
       }}
     >
       <Stack.Screen name="index" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="(onboarding)" />
+      <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+      <Stack.Screen name="(onboarding)" options={{ animation: "fade" }} />
       <Stack.Screen
         name="add"
         options={{
           presentation: "transparentModal",
-          animation: "slide_from_bottom",
+          animation: "fade",
           headerShown: false,
           gestureEnabled: false,
           contentStyle: { backgroundColor: "transparent" },

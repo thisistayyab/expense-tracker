@@ -1,9 +1,18 @@
 import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { Button, CategoryTile, ChoiceChip, SectionHeader } from "../../components/ui";
+import {
+  AppIcon,
+  Button,
+  Card,
+  CategoryTile,
+  ChoiceChip,
+  ScreenBackground,
+  SectionHeader,
+  TactilePressable,
+} from "../../components/ui";
 import { CategoryEditorSheet } from "../../features/categories/CategoryEditorSheet";
 import { listCategories, reorderCategories } from "../../lib/db/repos/categories";
 import type { Category, CategoryKind, Db } from "../../lib/db/types";
@@ -109,7 +118,7 @@ export default function CategoriesScreen() {
 
   const renderCategoryRow = (
     category: Category,
-    options: { indented?: boolean; childIndex?: number; parent?: CategoryNode } = {},
+    options: { indented?: boolean; childIndex?: number; parent?: CategoryNode; isFirst?: boolean } = {},
   ) => {
     const child = options.childIndex !== undefined;
     return (
@@ -122,23 +131,24 @@ export default function CategoriesScreen() {
           alignItems: "center",
           gap: 12,
           paddingHorizontal: 16,
-          backgroundColor: theme.colors.surface,
-          borderTopWidth: 1,
+          borderTopWidth: options.isFirst ? 0 : StyleSheet.hairlineWidth,
           borderTopColor: theme.colors.border,
         }}
       >
-        <Pressable
+        <TactilePressable
           onPress={() => setEditing(category)}
+          haptic="selection"
+          scaleTo={0.985}
+          radius={12}
           accessibilityRole="button"
           accessibilityLabel={`${category.name}${category.isArchived ? ", archived" : ""}`}
-          style={({ pressed }) => ({
+          style={{
             flex: 1,
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
             paddingVertical: 10,
-            opacity: pressed ? 0.62 : 1,
-          })}
+          }}
         >
           <CategoryTile icon={category.icon} color={category.color} size={38} />
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -152,12 +162,12 @@ export default function CategoriesScreen() {
               {options.indented ? "Subcategory" : "Category"} · {category.sortOrder + 1}
             </Text>
           </View>
-        </Pressable>
+        </TactilePressable>
 
         {reorderMode ? (
-          <View style={{ flexDirection: "row", gap: 4 }}>
+          <View style={{ flexDirection: "row", gap: 6 }}>
             <ReorderButton
-              label="↑"
+              direction="up"
               disabled={child ? options.childIndex === 0 : activeNodes.findIndex((node) => node.category.id === category.id) === 0}
               onPress={() =>
                 child && options.parent
@@ -166,7 +176,7 @@ export default function CategoriesScreen() {
               }
             />
             <ReorderButton
-              label="↓"
+              direction="down"
               disabled={
                 child
                   ? options.childIndex === (options.parent?.children.length ?? 1) - 1
@@ -181,30 +191,40 @@ export default function CategoriesScreen() {
             />
           </View>
         ) : !options.indented ? (
-          <Pressable
+          <TactilePressable
             onPress={() => setNewCategory({ parentId: category.id })}
+            haptic="selection"
+            scaleTo={0.93}
+            radius={999}
             accessibilityRole="button"
             accessibilityLabel={`Add subcategory to ${category.name}`}
             hitSlop={6}
-            style={({ pressed }) => ({
-              paddingHorizontal: 8,
-              height: 34,
+            style={{
+              paddingHorizontal: 10,
+              height: 32,
+              borderRadius: 999,
+              backgroundColor: theme.colors.accentSoft,
               justifyContent: "center",
-              opacity: pressed ? 0.6 : 1,
-            })}
+            }}
           >
-            <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "600" }]}>
+            <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "700" }]}>
               + Sub
             </Text>
-          </Pressable>
+          </TactilePressable>
         ) : null}
       </View>
     );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
+      >
+        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
           Rename, recolor, nest one level, reorder and archive. Archived categories disappear from
           pickers but stay on history.
         </Text>
@@ -231,9 +251,10 @@ export default function CategoriesScreen() {
 
         <View style={{ marginTop: 12 }}>
           <Button
-            label={`+ New ${kind} category`}
+            label={`New ${kind} category`}
             variant="accent"
             size="sm"
+            leftIcon="plus"
             onPress={() => setNewCategory({ parentId: null })}
           />
         </View>
@@ -243,18 +264,11 @@ export default function CategoriesScreen() {
         ) : null}
 
         <SectionHeader title={`${kind === "expense" ? "Expense" : "Income"} categories`} />
-        <View
-          style={{
-            borderRadius: theme.radius.card,
-            overflow: "hidden",
-            borderWidth: 1,
-            borderColor: theme.colors.cardBorder,
-          }}
-        >
+        <Card variant="glass" padded={false}>
           {activeNodes.length ? (
-            activeNodes.map((node) => (
+            activeNodes.map((node, nodeIndex) => (
               <View key={node.category.id}>
-                {renderCategoryRow(node.category)}
+                {renderCategoryRow(node.category, { isFirst: nodeIndex === 0 })}
                 {node.children.map((child, index) =>
                   renderCategoryRow(child, {
                     indented: true,
@@ -274,34 +288,30 @@ export default function CategoriesScreen() {
               No active categories. Add one above.
             </Text>
           )}
-        </View>
+        </Card>
 
         {archived.length ? (
           <>
             <SectionHeader title="Archived" />
-            <View
-              style={{
-                borderRadius: theme.radius.card,
-                overflow: "hidden",
-                backgroundColor: theme.colors.surfaceMuted,
-              }}
-            >
-              {archived.map((category) => (
-                <Pressable
+            <Card variant="muted" padded={false}>
+              {archived.map((category, index) => (
+                <TactilePressable
                   key={category.id}
                   onPress={() => setEditing(category)}
+                  haptic="selection"
+                  scaleTo={0.985}
+                  radius={14}
                   accessibilityRole="button"
                   accessibilityLabel={`${category.name}, archived`}
-                  style={({ pressed }) => ({
+                  style={{
                     minHeight: 56,
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 12,
                     paddingHorizontal: 16,
-                    borderTopWidth: 1,
+                    borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
                     borderTopColor: theme.colors.border,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
+                  }}
                 >
                   <CategoryTile icon={category.icon} color={category.color} size={34} />
                   <Text
@@ -313,9 +323,9 @@ export default function CategoriesScreen() {
                   <Text style={[theme.text.caption, { color: theme.colors.textTertiary }]}>
                     {category.isArchived ? "Archived" : "Hidden with parent"}
                   </Text>
-                </Pressable>
+                </TactilePressable>
               ))}
-            </View>
+            </Card>
           </>
         ) : null}
 
@@ -356,33 +366,42 @@ export default function CategoriesScreen() {
 }
 
 function ReorderButton({
-  label,
+  direction,
   disabled,
   onPress,
 }: {
-  label: string;
+  direction: "up" | "down";
   disabled: boolean;
   onPress: () => void;
 }) {
   const { theme } = useTheme();
   return (
-    <Pressable
+    <TactilePressable
       onPress={onPress}
       disabled={disabled}
+      haptic="selection"
+      scaleTo={0.9}
+      radius={16}
       accessibilityRole="button"
-      accessibilityLabel={label === "↑" ? "Move up" : "Move down"}
+      accessibilityLabel={direction === "up" ? "Move up" : "Move down"}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => ({
+      style={{
         width: 32,
         height: 32,
         borderRadius: 16,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: theme.colors.surfaceSunken,
-        opacity: disabled ? 0.25 : pressed ? 0.6 : 1,
-      })}
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: theme.colors.cardBorder,
+        backgroundColor: theme.colors.surfaceMuted,
+        opacity: disabled ? 0.28 : 1,
+      }}
     >
-      <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>{label}</Text>
-    </Pressable>
+      <AppIcon
+        name={direction === "up" ? "arrowUp" : "arrowDown"}
+        color={theme.colors.textSecondary}
+        size={14}
+      />
+    </TactilePressable>
   );
 }

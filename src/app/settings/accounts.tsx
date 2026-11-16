@@ -1,12 +1,22 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { AppIcon, CategoryTile, EmptyState, Money, SectionHeader } from "../../components/ui";
+import {
+  AppIcon,
+  Button,
+  Card,
+  CategoryTile,
+  EmptyState,
+  Money,
+  ScreenBackground,
+  SectionHeader,
+  TactilePressable,
+} from "../../components/ui";
 import { AccountEditorSheet } from "../../features/accounts/AccountEditorSheet";
 import {
-  accountGlyph,
+  accountIcon,
   accountTypeLabel,
   COIN_TONES,
 } from "../../features/accounts/accountMeta";
@@ -70,51 +80,39 @@ export default function AccountsScreen() {
   const canTransfer = groups.some(([, currencyAccounts]) => currencyAccounts.length >= 2);
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
+      >
+        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
           Balances include each account&apos;s opening balance and every transaction in its own
           currency. Nothing is converted.
         </Text>
 
         <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
           <View style={{ flex: 1 }}>
-            <Pressable
+            <Button
+              label="Add account"
+              variant="accent"
+              size="sm"
+              leftIcon="plus"
               onPress={() => setAdding(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Add account"
-              style={({ pressed }) => ({
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: theme.colors.solid,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Text style={[theme.text.label, { color: theme.colors.solidFg }]}>+ Add account</Text>
-            </Pressable>
+            />
           </View>
           <View style={{ flex: 1 }}>
-            <Pressable
+            <Button
+              label="Transfer"
+              variant="ghost"
+              size="sm"
+              leftIcon="transfer"
+              disabled={!canTransfer}
               onPress={() =>
                 router.push({ pathname: "/add", params: { type: "transfer" } })
               }
-              disabled={!canTransfer}
-              accessibilityRole="button"
-              accessibilityLabel="Transfer between accounts"
-              style={({ pressed }) => ({
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: !canTransfer ? 0.4 : pressed ? 0.7 : 1,
-              })}
-            >
-              <Text style={[theme.text.label, { color: theme.colors.accent }]}>⇄ Transfer</Text>
-            </Pressable>
+            />
           </View>
         </View>
 
@@ -125,6 +123,7 @@ export default function AccountsScreen() {
         {!loading && !accounts.length ? (
           <View style={{ marginTop: 24 }}>
             <EmptyState
+              icon="wallet"
               title="Add your first account"
               body="A cash wallet is enough. You can add bank, card and savings accounts later."
               actionLabel="Add account"
@@ -136,34 +135,28 @@ export default function AccountsScreen() {
         {groups.map(([currency, currencyAccounts]) => (
           <View key={currency}>
             <SectionHeader title={`${currency} accounts`} />
-            <View
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderRadius: theme.radius.card,
-                borderWidth: 1,
-                borderColor: theme.colors.cardBorder,
-                overflow: "hidden",
-              }}
-            >
+            <Card variant="glass" padded={false}>
               {currencyAccounts.map((account, index) => (
-                <Pressable
+                <TactilePressable
                   key={account.id}
                   onPress={() => setEditing(account)}
+                  haptic="selection"
+                  scaleTo={0.985}
+                  radius={14}
                   accessibilityRole="button"
                   accessibilityLabel={`${account.name}, ${accountTypeLabel(account.type)}, ${account.currency}`}
-                  style={({ pressed }) => ({
+                  style={{
                     minHeight: 64,
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 12,
                     paddingHorizontal: 16,
-                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
                     borderTopColor: theme.colors.border,
-                    opacity: pressed ? 0.65 : 1,
-                  })}
+                  }}
                 >
                   <CategoryTile
-                    glyph={accountGlyph(account.type)}
+                    appIcon={accountIcon(account.type)}
                     color={theme.tones[COIN_TONES[account.type]].foreground}
                   />
                   <View style={{ flex: 1, minWidth: 0 }}>
@@ -186,9 +179,9 @@ export default function AccountsScreen() {
                     tone={account.balanceMinor < 0 ? "danger" : "default"}
                   />
                   <AppIcon name="chevronRight" color={theme.colors.textTertiary} size={15} />
-                </Pressable>
+                </TactilePressable>
               ))}
-            </View>
+            </Card>
           </View>
         ))}
 
@@ -206,29 +199,25 @@ export default function AccountsScreen() {
         {archived.length ? (
           <View>
             <SectionHeader title="Archived accounts" />
-            <View
-              style={{
-                backgroundColor: theme.colors.surfaceMuted,
-                borderRadius: theme.radius.card,
-                overflow: "hidden",
-              }}
-            >
+            <Card variant="muted" padded={false}>
               {archived.map((account, index) => (
-                <Pressable
+                <TactilePressable
                   key={account.id}
                   onPress={() => setEditing(account)}
+                  haptic="selection"
+                  scaleTo={0.985}
+                  radius={14}
                   accessibilityRole="button"
                   accessibilityLabel={`${account.name}, archived`}
-                  style={({ pressed }) => ({
+                  style={{
                     minHeight: 58,
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 12,
                     paddingHorizontal: 16,
-                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
                     borderTopColor: theme.colors.border,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
+                  }}
                 >
                   <Text style={[theme.text.body, { color: theme.colors.textSecondary, flex: 1 }]}>
                     {account.name}
@@ -236,9 +225,9 @@ export default function AccountsScreen() {
                   <Text style={[theme.text.caption, { color: theme.colors.textTertiary }]}>
                     Archived · {account.currency}
                   </Text>
-                </Pressable>
+                </TactilePressable>
               ))}
-            </View>
+            </Card>
           </View>
         ) : null}
 

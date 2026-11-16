@@ -1,9 +1,9 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Button, Card, SectionHeader } from "../components/ui";
+import { Button, Card, ScreenBackground, SectionHeader } from "../components/ui";
 import { clearTransactions, insertFixtureTransactions } from "../lib/db/fixtures";
 import { migrate } from "../lib/db/migrate";
 import { listAccounts } from "../lib/db/repos/accounts";
@@ -153,9 +153,14 @@ export default function DevDataScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
       <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
+        >
           <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
             Phase 1 · data layer
           </Text>
@@ -179,7 +184,7 @@ export default function DevDataScreen() {
           ) : null}
 
           <SectionHeader title="Recent rows" />
-          <Card>
+          <Card variant="glass">
             {snapshot.recent.length ? (
               snapshot.recent.map((row, index) => (
                 <View
@@ -188,7 +193,7 @@ export default function DevDataScreen() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     paddingVertical: 8,
-                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
                     borderTopColor: theme.colors.border,
                   }}
                 >

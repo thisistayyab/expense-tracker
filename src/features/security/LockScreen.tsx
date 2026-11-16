@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-import { Button } from "../../components/ui";
+import { AppIcon, Button, Glass, ScreenBackground } from "../../components/ui";
+import { iosEnter } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 import { useAppLock } from "./appLockContext";
 
 /**
- * Opaque lock surface. It never unmounts the app underneath (so returning from the
- * lock keeps the screen and scroll position), but hides it from accessibility.
- * Authentication is attempted once automatically; every failure leaves an explicit
- * Unlock button, and a device without any screen lock can turn the setting off.
+ * Full-screen frosted biometric lock overlay preserving navigation & scroll underneath.
  */
 export function LockScreen() {
   const { theme } = useTheme();
@@ -34,92 +32,154 @@ export function LockScreen() {
   };
 
   useEffect(() => {
-    if (attempted.current) return;
+    if (attempted.current || capability === null || !capability.available) return;
     attempted.current = true;
     void attempt();
-    // The first prompt is allowed to run once per mount by design.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [capability]);
 
   const unavailable = capability?.available === false;
 
   return (
-    <View
-      style={{
-        ...({ position: "absolute", inset: 0 } as const),
-        backgroundColor: theme.colors.bg,
-      }}
-    >
-      <SafeAreaView style={{ flex: 1, padding: 28, justifyContent: "center", gap: 16 }}>
-        <View
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: 20,
-            backgroundColor: theme.colors.accent,
-            alignItems: "center",
-            justifyContent: "center",
-            alignSelf: "center",
-            marginBottom: 8,
-          }}
-        >
-          <Text style={{ fontSize: 32, fontWeight: "700", color: theme.colors.accentFg }}>S</Text>
-        </View>
+    <View style={[styles.root, { backgroundColor: theme.colors.bg }]}>
+      <ScreenBackground />
+      <SafeAreaView style={styles.safe}>
+        <Animated.View entering={iosEnter(0)} style={styles.center}>
+          <Glass
+            tone="regular"
+            radius={28}
+            style={[styles.emblem, Platform.OS === "ios" ? theme.shadow.lift : null]}
+          >
+            <View
+              style={[
+                styles.emblemCore,
+                { backgroundColor: theme.colors.accentSoft },
+              ]}
+            >
+              <AppIcon
+                name={Platform.OS === "ios" ? "faceid" : "lock"}
+                size={32}
+                color={theme.colors.accent}
+                weight="semibold"
+              />
+            </View>
+          </Glass>
 
-        <Text style={[theme.text.title1, { color: theme.colors.textPrimary, textAlign: "center" }]}>
-          Suffice is locked
-        </Text>
-        <Text
-          style={[
-            theme.text.body,
-            { color: theme.colors.textSecondary, textAlign: "center", maxWidth: 300, alignSelf: "center" },
-          ]}
-        >
-          {unavailable
-            ? capability?.reason ?? "This device cannot verify you right now."
-            : `Use ${capability?.label ?? "your device lock"} to open it. After a failed scan, choose “Use device passcode”.`}
-        </Text>
-
-        {error ? (
-          <Text style={[theme.text.caption, { color: theme.colors.danger, textAlign: "center" }]}>
-            {error}
+          <Text style={[theme.text.title1, styles.title, { color: theme.colors.textPrimary }]}>
+            Suffice is locked
           </Text>
-        ) : null}
+          <Text style={[theme.text.body, styles.subtitle, { color: theme.colors.textSecondary }]}>
+            {unavailable
+              ? capability?.reason ?? "This device cannot verify you right now."
+              : "Your financial ledger stays private and on this device."}
+          </Text>
 
-        {unavailable ? (
-          <Button
-            label="Turn off app lock"
-            variant="ghost"
-            onPress={() =>
-              Alert.alert(
-                "Turn off app lock?",
-                "This device has no screen lock, so the app cannot verify you. Your data stays on the device.",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Turn off",
-                    style: "destructive",
-                    onPress: () => {
-                      void turnOffUnavailable();
-                    },
-                  },
-                ],
-              )
-            }
+          {error ? (
+            <View
+              style={[
+                styles.errorPill,
+                {
+                  backgroundColor:
+                    theme.scheme === "dark"
+                      ? "rgba(255, 82, 102, 0.16)"
+                      : "rgba(224, 40, 64, 0.10)",
+                },
+              ]}
+            >
+              <Text style={[theme.text.caption, { color: theme.colors.danger, textAlign: "center" }]}>
+                {error}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.ctaWrap}>
+            {unavailable ? (
+              <Button
+                label="Turn off app lock"
+                variant="ghost"
+                onPress={() =>
+                  Alert.alert(
+                    "Turn off app lock?",
+                    "This device has no screen lock, so the app cannot verify you. Your data stays on the device.",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Turn off",
+                        style: "destructive",
+                        onPress: () => {
+                          void turnOffUnavailable();
+                        },
+                      },
+                    ],
+                  )
+                }
+              />
+            ) : (
+              <Button label="Unlock" variant="accent" onPress={attempt} loading={busy} />
+            )}
+          </View>
+
+          <Pressable
+            onPress={() => {
+              setError(null);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear error"
+            style={styles.hiddenClear}
           />
-        ) : (
-          <Button label="Unlock" variant="accent" onPress={attempt} loading={busy} />
-        )}
-
-        <Pressable
-          onPress={() => {
-            setError(null);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Clear error"
-          style={{ height: 1, opacity: 0 }}
-        />
+        </Animated.View>
       </SafeAreaView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    ...StyleSheet.absoluteFill,
+  },
+  safe: {
+    flex: 1,
+    paddingHorizontal: 28,
+    justifyContent: "center",
+  },
+  center: {
+    alignItems: "center",
+    gap: 14,
+  },
+  emblem: {
+    width: 84,
+    height: 84,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  emblemCore: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    textAlign: "center",
+  },
+  subtitle: {
+    textAlign: "center",
+    maxWidth: 300,
+  },
+  errorPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  ctaWrap: {
+    width: "100%",
+    maxWidth: 320,
+    marginTop: 10,
+  },
+  hiddenClear: {
+    height: 1,
+    opacity: 0,
+  },
+});

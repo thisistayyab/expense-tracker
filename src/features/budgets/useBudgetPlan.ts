@@ -35,6 +35,7 @@ export type BudgetOverview = {
   /** Expense rows in the window that belong to another currency. */
   otherCurrency: { currency: string; count: number }[];
   monthOffset: number;
+  minMonthOffset: number;
   canGoPrevious: boolean;
   canGoNext: boolean;
 };
@@ -122,6 +123,7 @@ export function useBudgetPlan(
     if (request !== requestId.current) return;
 
     const earliestOffset = earliestMonthOffset(earliest, today);
+    const minOffset = Math.min(-24, earliestOffset);
     setData({
       currency,
       period,
@@ -133,7 +135,8 @@ export function useBudgetPlan(
       categories,
       otherCurrency,
       monthOffset,
-      canGoPrevious: monthOffset > earliestOffset,
+      minMonthOffset: minOffset,
+      canGoPrevious: monthOffset > minOffset,
       canGoNext: monthOffset < 0,
     });
     setError(null);

@@ -1,13 +1,9 @@
-import { Text, View, type StyleProp, type ViewStyle } from "react-native";
-
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../../lib/theme";
-import { CategoryIcon } from "./CategoryIcon";
+import { AppIcon, type AppIconName } from "./AppIcon";
+import { CategoryIcon, type CategoryIconName } from "./CategoryIcon";
 
-/**
- * Semantic icon keys live in the category table. The tile draws the stroke set
- * in `CategoryIcon`; `glyph` remains for the few callers that pass a symbol.
- */
-export const CATEGORY_ICON_KEYS = [
+export const CATEGORY_ICON_KEYS: readonly CategoryIconName[] = [
   "utensils",
   "cart",
   "car",
@@ -22,59 +18,59 @@ export const CATEGORY_ICON_KEYS = [
   "wallet",
   "briefcase",
   "ellipsis",
-  "plus",
 ] as const;
 
-export function categoryGlyph(icon: string | null | undefined): string {
-  return icon ?? "•";
-}
-
-function tint(color: string | null | undefined, fallback: string): string {
-  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return fallback;
-  return `${color}22`;
+export function categoryGlyph(name: string | null | undefined): string {
+  return name && CATEGORY_ICON_KEYS.includes(name as CategoryIconName) ? name : "ellipsis";
 }
 
 export type CategoryTileProps = {
   icon?: string | null;
-  color?: string | null;
+  appIcon?: AppIconName;
+  color: string | null | undefined;
   size?: number;
-  glyph?: string;
+  glyph?: string | null;
   style?: StyleProp<ViewStyle>;
 };
 
-export function CategoryTile({ icon, color, size = 42, glyph, style }: CategoryTileProps) {
+/**
+ * Smooth tonal iOS squircle category icon badge.
+ */
+export function CategoryTile({ icon, appIcon, color, size = 42, style }: CategoryTileProps) {
   const { theme } = useTheme();
   const foreground = color ?? theme.colors.accent;
+  const corner = Math.max(11, Math.round(size * 0.31));
+  const glyphSize = Math.round(size * 0.48);
 
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={[
+        styles.tile,
         {
           width: size,
           height: size,
-          borderRadius: Math.max(10, Math.round(size / 3)),
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: tint(color, theme.colors.surfaceSunken),
+          borderRadius: corner,
+          borderCurve: "continuous",
+          backgroundColor: theme.scheme === "dark" ? `${foreground}22` : `${foreground}14`,
         },
         style,
       ]}
     >
-      {glyph ? (
-        <Text
-          style={{
-            color: foreground,
-            fontSize: Math.round(size * 0.43),
-            lineHeight: Math.round(size * 0.55),
-          }}
-        >
-          {glyph}
-        </Text>
+      {appIcon ? (
+        <AppIcon name={appIcon} color={foreground} size={glyphSize} weight="semibold" />
       ) : (
-        <CategoryIcon name={icon} color={foreground} size={Math.round(size * 0.5)} />
+        <CategoryIcon name={icon} color={foreground} size={glyphSize} />
       )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  tile: {
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+});

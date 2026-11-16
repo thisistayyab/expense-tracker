@@ -141,9 +141,12 @@ export function CategoryEditorSheet({
               {
                 flex: 1,
                 height: 50,
-                borderRadius: 18,
+                borderRadius: theme.radius.input,
+                borderCurve: "continuous",
+                borderWidth: 1,
+                borderColor: theme.colors.cardBorder,
                 paddingHorizontal: 14,
-                backgroundColor: theme.colors.surfaceSunken,
+                backgroundColor: theme.colors.surfaceMuted,
                 color: theme.colors.textPrimary,
               },
             ]}
@@ -178,11 +181,12 @@ export function CategoryEditorSheet({
                 accessibilityLabel={`Use ${key} icon`}
                 accessibilityState={{ selected }}
                 style={({ pressed }) => ({
-                  borderRadius: 16,
+                  borderRadius: 15,
+                  borderCurve: "continuous",
                   borderWidth: selected ? 2 : 1,
-                  borderColor: selected ? theme.colors.accent : theme.colors.border,
+                  borderColor: selected ? theme.colors.accent : theme.colors.cardBorder,
                   padding: 2,
-                  opacity: pressed ? 0.7 : 1,
+                  opacity: pressed ? 0.72 : 1,
                 })}
               >
                 <CategoryTile icon={key} color={color} size={38} />
@@ -194,9 +198,12 @@ export function CategoryEditorSheet({
         <View
           style={{
             marginTop: 16,
-            paddingHorizontal: 14,
-            borderRadius: 20,
-            backgroundColor: theme.colors.surfaceSunken,
+            borderRadius: theme.radius.card,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            overflow: "hidden",
+            backgroundColor: theme.colors.surfaceMuted,
           }}
         >
           <FieldRow

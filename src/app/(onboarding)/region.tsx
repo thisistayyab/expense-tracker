@@ -3,13 +3,12 @@ import { useState } from "react";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ScreenBackground } from "../../components/ui";
 import { Pager } from "../../features/onboarding/Pager";
 import { RegionEditor, type RegionValue } from "../../features/settings/RegionEditor";
 import { detectRegionDefaults } from "../../lib/region";
-import { useTheme } from "../../lib/theme";
 
 export default function OnboardingRegionScreen() {
-  const { theme } = useTheme();
   const [value, setValue] = useState<RegionValue>(() => detectRegionDefaults());
 
   /**
@@ -26,7 +25,8 @@ export default function OnboardingRegionScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+    <View style={{ flex: 1 }}>
+      <ScreenBackground />
       <SafeAreaView edges={["top", "left", "right", "bottom"]} style={{ flex: 1 }}>
         <RegionEditor
           value={value}

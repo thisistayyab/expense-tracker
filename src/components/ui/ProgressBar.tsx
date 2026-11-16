@@ -1,7 +1,13 @@
 import { useEffect } from "react";
-import { View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-
+import { StyleSheet, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import { SPRING_SETTLE } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 
 export type ProgressState = "normal" | "warning" | "over";
@@ -13,7 +19,7 @@ export type ProgressBarProps = {
   /** Force a state instead of deriving it from the value. */
   state?: ProgressState;
   color?: string;
-  /** Track override — the ink hero needs a light track instead of surfaceSunken. */
+  /** Track override — smoked glass hero needs an ink-track instead of surfaceSunken. */
   trackColor?: string;
 };
 
@@ -23,52 +29,75 @@ export function progressStateFor(value: number): ProgressState {
   return "normal";
 }
 
-export function ProgressBar({ value, height = 6, state, color, trackColor }: ProgressBarProps) {
+/**
+ * Smooth Apple Health-style capsule bar with critically damped spring motion and subtle specular top catch.
+ */
+export function ProgressBar({ value, height = 7, state, color, trackColor }: ProgressBarProps) {
   const { theme } = useTheme();
+  const reduceMotion = useReducedMotion();
   const resolvedState = state ?? progressStateFor(value);
   const clamped = Math.max(0, Math.min(value, 1));
 
-  const track = useSharedValue(0);
-  const progress = useSharedValue(0);
+  const trackWidth = useSharedValue(0);
+  const progress = useSharedValue(reduceMotion ? clamped : 0);
 
   useEffect(() => {
-    // Spring, not a timed ease: the fill arrives with a little momentum, so a
-    // budget that just changed feels like it moved rather than faded in.
-    progress.value = withSpring(clamped, { damping: 26, stiffness: 210, mass: 0.9 });
-  }, [clamped, progress]);
+    progress.value = reduceMotion
+      ? withTiming(clamped, { duration: 0 })
+      : withSpring(clamped, SPRING_SETTLE);
+  }, [clamped, progress, reduceMotion]);
 
   const fillStyle = useAnimatedStyle(() => ({
-    width: Math.max(0, progress.value * track.value),
+    width: Math.max(trackWidth.value > 0 && progress.value > 0.01 ? height : 0, trackWidth.value * progress.value),
   }));
 
-  const fill =
+  const fillColor =
     color ??
     (resolvedState === "over"
-      ? theme.colors.expense
+      ? theme.colors.danger
       : resolvedState === "warning"
         ? theme.colors.warning
         : theme.colors.accent);
+
+  const trackBg = trackColor ?? theme.colors.surfaceSunken;
 
   return (
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}
       onLayout={(event) => {
-        track.value = event.nativeEvent.layout.width;
+        trackWidth.value = event.nativeEvent.layout.width;
       }}
-      style={{
-        height,
-        borderRadius: height,
-        backgroundColor: trackColor ?? theme.colors.surfaceSunken,
-        overflow: "hidden",
-      }}
+      style={[
+        styles.track,
+        {
+          height,
+          borderRadius: height / 2,
+          backgroundColor: trackBg,
+        },
+      ]}
     >
       <Animated.View
         style={[
-          { height: "100%", borderRadius: height, backgroundColor: fill },
+          styles.fill,
+          {
+            height,
+            borderRadius: height / 2,
+            backgroundColor: fillColor,
+          },
           fillStyle,
         ]}
       />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  track: {
+    width: "100%",
+    overflow: "hidden",
+  },
+  fill: {
+    overflow: "hidden",
+  },
+});
