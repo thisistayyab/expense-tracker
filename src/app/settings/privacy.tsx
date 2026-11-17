@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppIcon, Card, ScreenBackground, SectionHeader, TactilePressable } from "../../components/ui";
 import { useTheme } from "../../lib/theme";
@@ -29,15 +30,17 @@ const SECTIONS: { title: string; body: string }[] = [
 
 export default function PrivacyScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={{ flex: 1 }}>
       <ScreenBackground />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
-      >
+      <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+        >
         <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
           A plain-language summary of what the app does with your data.
         </Text>
@@ -79,7 +82,8 @@ export default function PrivacyScreen() {
           </Text>
           <AppIcon name="chevronRight" color={theme.colors.accent} size={13} />
         </TactilePressable>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }

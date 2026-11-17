@@ -15,16 +15,21 @@ export type SafeToSpendInput = {
   daysRemaining: number;
 };
 
+function safeInt(value: number): number {
+  return Number.isFinite(value) ? Math.trunc(value) : 0;
+}
+
 export function remainingAfterCommitments({
   limitMinor,
   spentMinor,
   committedMinor = 0,
 }: Omit<SafeToSpendInput, "daysRemaining">): number {
-  return Math.trunc(limitMinor) - Math.trunc(spentMinor) - Math.trunc(committedMinor);
+  const committed = Math.max(0, safeInt(committedMinor));
+  return safeInt(limitMinor) - safeInt(spentMinor) - committed;
 }
 
 export function safeToSpend(input: SafeToSpendInput): number {
-  const days = Math.max(1, Math.trunc(input.daysRemaining));
+  const days = Math.max(1, Number.isFinite(input.daysRemaining) ? Math.trunc(input.daysRemaining) : 1);
   const remaining = remainingAfterCommitments(input);
   if (remaining <= 0) return 0;
   return Math.floor(remaining / days);

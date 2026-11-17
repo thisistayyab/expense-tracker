@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Switch, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppIcon, Card, ScreenBackground, SectionHeader } from "../../components/ui";
 import { useAppLock } from "../../features/security/AppLockProvider";
@@ -7,22 +8,32 @@ import { useTheme } from "../../lib/theme";
 
 export default function SecurityScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const { enabled, capability, enable, disable } = useAppLock();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const busyRef = useRef(false);
 
   const toggle = async (on: boolean) => {
+    if (busy || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
-    const result = on ? await enable() : await disable();
-    if (!result.success) {
-      setError(
-        result.error === "user_cancel"
-          ? "Cancelled — nothing changed."
-          : `Could not verify: ${result.error ?? "try again"}`,
-      );
+    try {
+      const result = on ? await enable() : await disable();
+      if (!result.success) {
+        setError(
+          result.error === "user_cancel"
+            ? "Cancelled — nothing changed."
+            : `Could not verify: ${result.error ?? "try again"}`,
+        );
+      }
+    } catch (cause: unknown) {
+      setError(`Could not verify: ${String(cause)}`);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const unavailable = capability?.available === false;
@@ -30,11 +41,12 @@ export default function SecurityScreen() {
   return (
     <View style={{ flex: 1 }}>
       <ScreenBackground />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
-      >
+      <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+        >
         <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
           App lock asks for your face, fingerprint or device passcode when the app opens or returns
           from the background. The data itself is still stored only on this device.
@@ -98,7 +110,8 @@ export default function SecurityScreen() {
             {error}
           </Text>
         ) : null}
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }

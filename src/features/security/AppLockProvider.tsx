@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AppState, View } from "react-native";
+import { AppState, Modal, View } from "react-native";
 
 import { getSetting, setSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import type { Db } from "../../lib/db/types";
@@ -28,8 +28,10 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
   const { theme } = useTheme();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [locked, setLocked] = useState(false);
+  const [obscured, setObscured] = useState(false);
   const [capability, setCapability] = useState<LockCapability | null>(null);
   const enabledRef = useRef(false);
+  const authenticatingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +59,18 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "background" && enabledRef.current) setLocked(true);
+      if (state === "active") {
+        setObscured(false);
+        void getLockCapability().then(setCapability);
+        return;
+      }
+      if (!enabledRef.current || authenticatingRef.current) return;
+      if (state === "inactive") {
+        setObscured(true);
+      } else if (state === "background") {
+        setObscured(false);
+        setLocked(true);
+      }
     });
     return () => subscription.remove();
   }, []);
@@ -68,31 +81,44 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
       enabledRef.current = next;
       setEnabled(next);
       setLocked(false);
+      setObscured(false);
     },
     [db],
   );
 
+  const runAuth = useCallback(async () => {
+    authenticatingRef.current = true;
+    try {
+      return await authenticateToUnlock();
+    } finally {
+      authenticatingRef.current = false;
+    }
+  }, []);
+
   const enable = useCallback(async (): Promise<UnlockResult> => {
-    const result = await authenticateToUnlock();
+    const result = await runAuth();
     if (!result.success) return result;
     await writeEnabled(true);
     return { success: true };
-  }, [writeEnabled]);
+  }, [runAuth, writeEnabled]);
 
   const disable = useCallback(async (): Promise<UnlockResult> => {
     if (capability?.available !== false) {
-      const result = await authenticateToUnlock();
+      const result = await runAuth();
       if (!result.success) return result;
     }
     await writeEnabled(false);
     return { success: true };
-  }, [capability, writeEnabled]);
+  }, [capability, runAuth, writeEnabled]);
 
   const unlock = useCallback(async (): Promise<UnlockResult> => {
-    const result = await authenticateToUnlock();
-    if (result.success) setLocked(false);
+    const result = await runAuth();
+    if (result.success) {
+      setLocked(false);
+      setObscured(false);
+    }
     return result;
-  }, []);
+  }, [runAuth]);
 
   const turnOffUnavailable = useCallback(async () => {
     await writeEnabled(false);
@@ -105,6 +131,7 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
     enabledRef.current = on;
     setEnabled(on);
     setLocked(on);
+    setObscured(false);
   }, [db]);
 
   const value = useMemo(
@@ -114,17 +141,28 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
 
   if (enabled === null) return null;
 
+  const modalVisible = locked || obscured;
+
   return (
     <AppLockContext.Provider value={value}>
       <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
         <View
           style={{ flex: 1 }}
-          accessibilityElementsHidden={locked}
-          importantForAccessibility={locked ? "no-hide-descendants" : "auto"}
+          accessibilityElementsHidden={modalVisible}
+          importantForAccessibility={modalVisible ? "no-hide-descendants" : "auto"}
         >
           {children}
         </View>
-        {locked ? <LockScreen /> : null}
+        <Modal
+          visible={modalVisible}
+          transparent={false}
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
+          animationType="none"
+          onRequestClose={() => {}}
+        >
+          <LockScreen veilOnly={!locked && obscured} />
+        </Modal>
       </View>
     </AppLockContext.Provider>
   );

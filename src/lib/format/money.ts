@@ -75,14 +75,12 @@ export function formatMoney(
   const absolute = Math.abs(safeMinor);
 
   const value = formatAbsolute(absolute, currency, options.locale);
-  let signed = value;
-  if (negative) signed = `${MINUS}${value}`;
-  else if (options.showPlus && absolute > 0) signed = `+${value}`;
+  const sign = negative ? MINUS : options.showPlus && absolute > 0 ? "+" : "";
 
-  if (options.withCode && !signed.includes(currency.code)) {
-    return `${currency.code} ${signed}`;
+  if (options.withCode && !value.includes(currency.code)) {
+    return `${sign}${currency.code} ${value}`;
   }
-  return signed;
+  return `${sign}${value}`;
 }
 
 /**
@@ -139,9 +137,16 @@ export function sanitizeMoneyInput(input: string, code: string): string {
     return whole.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 9);
   }
 
-  // A decimal keypad may emit "," in some locales, so accept both while typing.
-  // A dot wins when both appear, which drops grouping commas from pasted amounts.
-  const normalized = input.includes(".") ? input : input.replace(/,/g, ".");
+  // A decimal keypad may emit "," in some locales, so accept a single non-grouping comma
+  // as a decimal separator while stripping multiple or 2-decimal thousands grouping commas.
+  const commaCount = (input.match(/,/g) ?? []).length;
+  const isGroupingComma =
+    commaCount > 1 || (exponent !== 3 && /^\s*\d{1,3}(,\d{3})+\s*$/.test(input));
+  const normalized = input.includes(".")
+    ? input
+    : isGroupingComma
+      ? input.replace(/,/g, "")
+      : input.replace(/,/g, ".");
   const [wholeRaw = "", ...fractions] = normalized.replace(/[^\d.]/g, "").split(".");
   const whole = wholeRaw.replace(/^0+(?=\d)/, "").slice(0, 9);
   if (!fractions.length) return whole;
@@ -162,8 +167,9 @@ export function sanitizeSignedMoneyInput(input: string, code: string): string {
 /** 1250 USD → "12.50"; 1200 JPY → "1200"; 1250 KWD → "1.250". */
 export function minorToDecimalString(minor: number, code: string): string {
   const { exponent } = getCurrency(code);
-  const sign = minor < 0 ? "-" : "";
-  const absolute = Math.abs(Math.trunc(minor));
+  const safeMinor = Number.isFinite(minor) ? Math.trunc(minor) : 0;
+  const sign = safeMinor < 0 ? "-" : "";
+  const absolute = Math.abs(safeMinor);
   if (exponent === 0) return `${sign}${absolute}`;
   const scale = 10 ** exponent;
   const whole = Math.floor(absolute / scale);
@@ -184,7 +190,7 @@ export function parseSignedMoneyInput(
   const negative = input.trim().startsWith("-");
   const value = parseMoneyInput(input.replace(/^\s*-/, ""), code, decimalSeparator);
   if (value === null) return null;
-  return negative ? -value : value;
+  return negative && value > 0 ? -value : value;
 }
 
 export function parseMoneyInput(
@@ -193,18 +199,22 @@ export function parseMoneyInput(
   decimalSeparator = ".",
 ): number | null {
   const { exponent } = getCurrency(code);
+  const sep = decimalSeparator || ".";
   const collapsed = input.trim().replace(/\s/g, "");
-  // Only the *other* separator can be grouping: stripping the comma while it is the
-  // decimal separator turned "1 250,75" into 125075 instead of 1250.75.
-  const cleaned =
-    decimalSeparator === "." ? collapsed.replace(/,/g, "") : collapsed.replace(/\./g, "");
+  // Strip grouping commas/dots that are not the active decimal separator.
+  let cleaned = collapsed;
+  if (sep !== ",") cleaned = cleaned.replace(/,/g, "");
+  if (sep !== ".") cleaned = cleaned.replace(/\./g, "");
   if (!cleaned) return null;
 
-  const separatorPattern = decimalSeparator === "." ? /\./g : new RegExp(`\\${decimalSeparator}`, "g");
+  if (exponent === 0 && cleaned.includes(sep)) return null;
+
+  const escapedSep = sep.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const separatorPattern = new RegExp(escapedSep, "g");
   const separatorCount = (cleaned.match(separatorPattern) ?? []).length;
   if (separatorCount > 1) return null;
 
-  const normalised = decimalSeparator === "." ? cleaned : cleaned.replace(decimalSeparator, ".");
+  const normalised = sep === "." ? cleaned : cleaned.replace(sep, ".");
   if (!/^\d*\.?\d*$/.test(normalised)) return null;
 
   const [wholePart = "", fractionPart = ""] = normalised.split(".");

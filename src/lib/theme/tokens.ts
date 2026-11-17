@@ -25,8 +25,6 @@ export type ColorTokens = {
   glassBorder: string;
   /** Crisp inner top-edge specular rim & light catch on glass */
   glassHighlight: string;
-  /** Subtle internal top-to-bottom frost gradient overlay */
-  glassSheen: string;
   /** Native UIBlurEffect / expo-blur tint material */
   blurTint: "systemChromeMaterialLight" | "systemChromeMaterialDark";
   /** Hero smoked obsidian-sapphire glass card */
@@ -55,8 +53,6 @@ export type ColorTokens = {
   accentFillAlt: string;
   accentTop: string;
   accentBottom: string;
-  accentRim: string;
-  specular: string;
   /** Semantic financial feedback */
   income: string;
   expense: string;
@@ -74,10 +70,6 @@ export type ColorTokens = {
   insightFrom: string;
   insightTo: string;
   sheet: string;
-  /** Ambient atmospheric light blooms behind frosted glass */
-  bloom1: string;
-  bloom2: string;
-  bloom3: string;
 };
 
 export type ToneName = "iris" | "mint" | "amber" | "coral" | "sky" | "slate";
@@ -98,7 +90,6 @@ const lightColors: ColorTokens = {
   glassThick: "rgba(255, 255, 255, 0.94)",
   glassBorder: "rgba(15, 23, 42, 0.075)",
   glassHighlight: "rgba(255, 255, 255, 0.65)",
-  glassSheen: "rgba(255, 255, 255, 0.0)",
   blurTint: "systemChromeMaterialLight",
 
   ink: "#161922",
@@ -116,7 +107,7 @@ const lightColors: ColorTokens = {
 
   textPrimary: "#0C0F18",
   textSecondary: "#525B70",
-  textTertiary: "#858FA3",
+  textTertiary: "#667085",
 
   accent: "#007AFF",
   accentAlt: "#2B90FF",
@@ -126,8 +117,6 @@ const lightColors: ColorTokens = {
   accentFillAlt: "#2B90FF",
   accentTop: "#007AFF",
   accentBottom: "#007AFF",
-  accentRim: "rgba(255, 255, 255, 0.0)",
-  specular: "rgba(255, 255, 255, 0.0)",
 
   income: "#169B5C",
   expense: "#DC2F43",
@@ -145,10 +134,6 @@ const lightColors: ColorTokens = {
   insightFrom: "#F5F8FD",
   insightTo: "#F5F8FD",
   sheet: "#F9FAFC",
-
-  bloom1: "rgba(15, 23, 42, 0.0)",
-  bloom2: "rgba(15, 23, 42, 0.0)",
-  bloom3: "rgba(15, 23, 42, 0.0)",
 };
 
 const darkColors: ColorTokens = {
@@ -165,7 +150,6 @@ const darkColors: ColorTokens = {
   glassThick: "rgba(22, 24, 32, 0.96)",
   glassBorder: "rgba(255, 255, 255, 0.095)",
   glassHighlight: "rgba(255, 255, 255, 0.10)",
-  glassSheen: "rgba(255, 255, 255, 0.0)",
   blurTint: "systemChromeMaterialDark",
 
   ink: "#151821",
@@ -183,7 +167,7 @@ const darkColors: ColorTokens = {
 
   textPrimary: "#F4F5F8",
   textSecondary: "#98A0B3",
-  textTertiary: "#636B7E",
+  textTertiary: "#838C9F",
 
   accent: "#0A84FF",
   accentAlt: "#409CFF",
@@ -193,8 +177,6 @@ const darkColors: ColorTokens = {
   accentFillAlt: "#3399FF",
   accentTop: "#0A84FF",
   accentBottom: "#0A84FF",
-  accentRim: "rgba(255, 255, 255, 0.0)",
-  specular: "rgba(255, 255, 255, 0.0)",
 
   income: "#30D158",
   expense: "#FF453A",
@@ -212,10 +194,6 @@ const darkColors: ColorTokens = {
   insightFrom: "#161A24",
   insightTo: "#161A24",
   sheet: "#15171F",
-
-  bloom1: "rgba(255, 255, 255, 0.0)",
-  bloom2: "rgba(255, 255, 255, 0.0)",
-  bloom3: "rgba(255, 255, 255, 0.0)",
 };
 
 const lightTones: Record<ToneName, Tone> = {

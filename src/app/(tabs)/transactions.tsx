@@ -1,10 +1,11 @@
 import { BlurView } from "expo-blur";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Keyboard,
   Platform,
   ScrollView,
@@ -39,11 +40,13 @@ import {
 } from "../../lib/db/repos/transactions";
 import type { Account, Category, Db, Transaction } from "../../lib/db/types";
 import { isCurrencyCode } from "../../constants/currencies";
+import { selectableCategories } from "../../lib/domain/category-tree";
 import { addDays, isIsoDate, toIsoDate } from "../../lib/domain/dates";
 import { groupTransactionsByDay, type TransactionDaySection } from "../../lib/domain/transaction-groups";
 import { formatMoney } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
-import { useTheme } from "../../lib/theme";
+import { notifyLedgerChanged, subscribeLedgerChanged } from "../../lib/ledgerEvents";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { useUndo } from "../../lib/undo/UndoProvider";
 import {
   activeFilterCount,
@@ -118,7 +121,11 @@ function DayHeader({
       <Text
         style={[
           theme.text.caption,
-          { color: theme.colors.textSecondary, fontWeight: "600", fontVariant: ["tabular-nums"] },
+          {
+            color: theme.colors.textSecondary,
+            fontFamily: FONT_FAMILIES.semibold,
+            fontVariant: ["tabular-nums"],
+          },
         ]}
         numberOfLines={1}
       >
@@ -201,10 +208,14 @@ export default function ActivityScreen() {
   const db: Db = useSQLiteContext();
   const insets = useSafeAreaInsets();
   const showUndo = useUndo();
-  const today = useMemo(() => toIsoDate(new Date()), []);
+  const [today, setToday] = useState(() => toIsoDate(new Date()));
   const monthLabel = useMemo(
-    () => new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }),
-    [],
+    () =>
+      new Date(`${today}T00:00:00`).toLocaleDateString(undefined, {
+        month: "long",
+        year: "numeric",
+      }),
+    [today],
   );
 
   const [query, setQuery] = useState("");
@@ -250,10 +261,28 @@ export default function ActivityScreen() {
   const [activeCurrency, setActiveCurrency] = useState("USD");
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [metadataError, setMetadataError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [categoryTarget, setCategoryTarget] = useState<Transaction | null>(null);
+  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
+  const categoryOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [focusTick, setFocusTick] = useState(0);
+
+  useEffect(() => {
+    const unsubLedger = subscribeLedgerChanged(() => setFocusTick((current) => current + 1));
+    const subApp = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        setToday(toIsoDate(new Date()));
+        setFocusTick((current) => current + 1);
+      }
+    });
+    return () => {
+      unsubLedger();
+      subApp.remove();
+      if (categoryOpenTimer.current) clearTimeout(categoryOpenTimer.current);
+    };
+  }, []);
 
   // Re-read after a save, edit, delete, undo or returning from another tab.
   useFocusEffect(
@@ -285,9 +314,10 @@ export default function ActivityScreen() {
         setCategories(nextCategories);
         setCurrencies(nextCurrencies);
         setTotalCount(total);
+        setMetadataError(null);
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(`Could not load activity: ${String(cause)}`);
+        if (!cancelled) setMetadataError(`Could not load activity: ${String(cause)}`);
       });
     return () => {
       cancelled = true;
@@ -311,11 +341,11 @@ export default function ActivityScreen() {
       .then((next) => {
         if (!cancelled) {
           setRows(next);
-          setError(null);
+          setListError(null);
         }
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(`Could not load transactions: ${String(cause)}`);
+        if (!cancelled) setListError(`Could not load transactions: ${String(cause)}`);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -324,6 +354,8 @@ export default function ActivityScreen() {
       cancelled = true;
     };
   }, [db, debouncedQuery, filters, focusTick, today]);
+
+  const error = listError ?? metadataError;
 
   const accountById = useMemo(
     () => new Map(accounts.map((account) => [account.id, account])),
@@ -363,10 +395,12 @@ export default function ActivityScreen() {
       haptics.success();
       deleteTransaction(db, row.id)
         .then(() => {
+          notifyLedgerChanged();
           showUndo({
             message: "Transaction deleted",
             onUndo: async () => {
               await restoreTransaction(db, snapshot);
+              notifyLedgerChanged();
               refresh();
             },
           });
@@ -395,12 +429,14 @@ export default function ActivityScreen() {
         localDate: today,
       })
         .then((created) => {
+          notifyLedgerChanged();
           haptics.success();
           refresh();
           showUndo({
             message: "Transaction duplicated",
             onUndo: async () => {
               await deleteTransaction(db, created.id);
+              notifyLedgerChanged();
               refresh();
             },
           });
@@ -415,7 +451,13 @@ export default function ActivityScreen() {
   const changeCategory = useCallback(
     (row: Transaction) => {
       if (row.type === "transfer") return;
-      setCategoryTarget(row);
+      if (categoryOpenTimer.current) clearTimeout(categoryOpenTimer.current);
+      // Wait for iOS Alert dismissal animation before presenting the PickerSheet Modal.
+      categoryOpenTimer.current = setTimeout(() => {
+        categoryOpenTimer.current = null;
+        setCategoryTarget(row);
+        setCategoryPickerVisible(true);
+      }, 150);
     },
     [],
   );
@@ -502,26 +544,27 @@ export default function ActivityScreen() {
   const categoryOptions = useMemo(() => {
     if (!categoryTarget || categoryTarget.type === "transfer") return [];
     const kind = categoryTarget.type === "income" ? "income" : "expense";
-    return categories.filter(
-      (category) =>
-        category.kind === kind &&
-        (!category.isArchived || category.id === categoryTarget.categoryId),
-    );
+    return selectableCategories(categories, {
+      kind,
+      includeIds: [categoryTarget.categoryId],
+    });
   }, [categories, categoryTarget]);
 
   const applyCategory = (categoryId: string) => {
     const target = categoryTarget;
-    setCategoryTarget(null);
+    setCategoryPickerVisible(false);
     if (!target) return;
     const previous = target.categoryId;
     updateTransaction(db, target.id, { categoryId: categoryId || null })
       .then(() => {
+        notifyLedgerChanged();
         haptics.success();
         refresh();
         showUndo({
           message: "Category changed",
           onUndo: async () => {
             await updateTransaction(db, target.id, { categoryId: previous });
+            notifyLedgerChanged();
             refresh();
           },
         });
@@ -538,7 +581,7 @@ export default function ActivityScreen() {
   return (
     <View style={{ flex: 1 }}>
       <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1 }}>
-        <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
           <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
             {monthLabel}
           </Text>
@@ -660,23 +703,22 @@ export default function ActivityScreen() {
         />
       </SafeAreaView>
 
-      {filterOpen ? (
-        <FiltersSheet
-          value={filters}
-          accounts={accounts}
-          categories={categories}
-          currencies={currencies}
-          onApply={(next) => {
-            clearRouteFilters();
-            setFilters(next);
-            setFilterOpen(false);
-          }}
-          onClose={() => setFilterOpen(false)}
-        />
-      ) : null}
+      <FiltersSheet
+        visible={filterOpen}
+        value={filters}
+        accounts={accounts}
+        categories={categories}
+        currencies={currencies}
+        onApply={(next) => {
+          clearRouteFilters();
+          setFilters(next);
+          setFilterOpen(false);
+        }}
+        onClose={() => setFilterOpen(false)}
+      />
 
       <PickerSheet
-        visible={Boolean(categoryTarget)}
+        visible={categoryPickerVisible}
         title="Change category"
         options={categoryOptions.map((category) => ({
           value: category.id,
@@ -687,7 +729,8 @@ export default function ActivityScreen() {
         searchable
         searchPlaceholder="Search categories"
         onSelect={applyCategory}
-        onClose={() => setCategoryTarget(null)}
+        onClose={() => setCategoryPickerVisible(false)}
+        onClosed={() => setCategoryTarget(null)}
       />
     </View>
   );

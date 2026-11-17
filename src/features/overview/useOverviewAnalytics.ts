@@ -56,6 +56,14 @@ export function useOverviewAnalytics(
   const [data, setData] = useState<OverviewAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     if (!currency) return;
@@ -104,6 +112,7 @@ export function useOverviewAnalytics(
 
   const refresh = useCallback(() => {
     load().catch((cause: unknown) => {
+      if (!mountedRef.current) return;
       // The section shows this instead of vanishing, so a failed read is visible
       // rather than looking like the app simply has nothing to chart.
       setError(String(cause));

@@ -1,5 +1,5 @@
 import type { Category } from "../../db/types";
-import { categoryNodes } from "../category-tree";
+import { categoryNodes, selectableCategories } from "../category-tree";
 
 function category(overrides: Partial<Category>): Category {
   return {
@@ -41,5 +41,22 @@ describe("category tree", () => {
     );
     expect(nodes).toHaveLength(1);
     expect(nodes[0].category.isArchived).toBe(true);
+  });
+
+  test("selectableCategories excludes archived parents and their children while preserving included ids", () => {
+    const all = [
+      category({ id: "food", name: "Food" }),
+      category({ id: "archived-parent", name: "Old Parent", isArchived: true }),
+      category({ id: "child-of-archived", name: "Coffee", parentId: "archived-parent" }),
+      category({ id: "archived-leaf", name: "Legacy", isArchived: true }),
+      category({ id: "salary", name: "Salary", kind: "income" }),
+    ];
+
+    expect(selectableCategories(all, { kind: "expense" }).map((c) => c.id)).toEqual(["food"]);
+    expect(
+      selectableCategories(all, { kind: "expense", includeIds: ["archived-leaf"] }).map(
+        (c) => c.id,
+      ),
+    ).toEqual(["food", "archived-leaf"]);
   });
 });

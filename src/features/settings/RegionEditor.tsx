@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Keyboard, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { AppIcon, Button, FieldRow, PickerSheet } from "../../components/ui";
+import { AppIcon, Button, FieldRow, PickerSheet, TactilePressable } from "../../components/ui";
 import {
   countryOptions,
   currencyForCountry,
@@ -10,7 +10,7 @@ import {
 } from "../../constants/countries";
 import { currencyLabel, currencyOptions, getCurrency } from "../../constants/currencies";
 import { detectRegionDefaults } from "../../lib/region";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 export type RegionValue = {
   country: string;
@@ -75,6 +75,7 @@ export function RegionEditor({
   const selectedCurrency = getCurrency(value.currency);
 
   const selectCountry = (country: Country) => {
+    if (busy) return;
     // The search field keeps focus through the row press, so without this the
     // keyboard stays up over the rest of the step after the country is chosen.
     Keyboard.dismiss();
@@ -155,13 +156,15 @@ export function RegionEditor({
           autoCorrect={false}
           autoCapitalize="none"
           returnKeyType="search"
+          editable={!busy}
           style={[
             theme.text.body,
             {
               marginTop: 12,
-              height: 46,
+              minHeight: 46,
               borderRadius: 23,
               paddingHorizontal: 16,
+              paddingVertical: 10,
               backgroundColor: theme.colors.surfaceMuted,
               color: theme.colors.textPrimary,
               borderWidth: StyleSheet.hairlineWidth,
@@ -180,84 +183,99 @@ export function RegionEditor({
         </Text>
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(country) => country.code}
-        keyboardShouldPersistTaps="handled"
-        style={{ flex: 1, marginHorizontal: 20 }}
-        contentContainerStyle={{
+      <View
+        style={{
+          flex: 1,
+          marginHorizontal: 20,
           backgroundColor: theme.colors.surface,
           borderRadius: theme.radius.card,
           borderCurve: "continuous",
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: theme.colors.cardBorder,
           overflow: "hidden",
-          // Rows are edge-to-edge tappable, but their content needs the inset the
-          // design's pickgroup had: otherwise the flag tile, currency code and
-          // check icon sit flush against the card's border and rounded corners.
-          paddingHorizontal: 16,
         }}
-        renderItem={({ item, index }) => {
-          const isSelected = item.code === value.country;
-          return (
-            <Pressable
-              onPress={() => selectCountry(item)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`${item.name}, ${item.currency}`}
-              style={({ pressed }) => ({
-                minHeight: 56,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-                borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
-                borderTopColor: theme.colors.border,
-                opacity: pressed ? 0.6 : 1,
-              })}
-            >
-              <View
+      >
+        <FlatList
+          data={filtered}
+          keyExtractor={(country) => country.code}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            // Rows are edge-to-edge tappable, but their content needs the inset the
+            // design's pickgroup had: otherwise the flag tile, currency code and
+            // check icon sit flush against the card's border and rounded corners.
+            paddingHorizontal: 16,
+          }}
+          renderItem={({ item, index }) => {
+            const isSelected = item.code === value.country;
+            return (
+              <TactilePressable
+                onPress={() => selectCountry(item)}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected, disabled: busy }}
+                accessibilityLabel={`${item.name}, ${item.currency}`}
+                scaleTo={0.99}
                 style={{
-                  minWidth: 28,
-                  paddingVertical: 5,
-                  paddingHorizontal: 6,
-                  borderRadius: 7,
-                  backgroundColor: theme.colors.surfaceSunken,
+                  minHeight: 56,
+                  flexDirection: "row",
                   alignItems: "center",
+                  gap: 12,
+                  borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                  borderTopColor: theme.colors.border,
+                  opacity: busy ? 0.55 : 1,
                 }}
               >
-                <Text
-                  style={[
-                    theme.text.caption,
-                    { color: theme.colors.textSecondary, fontWeight: "700", letterSpacing: 0.4 },
-                  ]}
+                <View
+                  style={{
+                    minWidth: 28,
+                    paddingVertical: 5,
+                    paddingHorizontal: 6,
+                    borderRadius: 7,
+                    backgroundColor: theme.colors.surfaceSunken,
+                    alignItems: "center",
+                  }}
                 >
-                  {item.code}
+                  <Text
+                    maxFontSizeMultiplier={1.2}
+                    style={[
+                      theme.text.caption,
+                      {
+                        color: theme.colors.textSecondary,
+                        fontFamily: FONT_FAMILIES.bold,
+                        letterSpacing: 0.4,
+                      },
+                    ]}
+                  >
+                    {item.code}
+                  </Text>
+                </View>
+                <Text
+                  style={[theme.text.body, { color: theme.colors.textPrimary, flex: 1, minWidth: 0 }]}
+                  numberOfLines={1}
+                >
+                  {item.name}
                 </Text>
-              </View>
-              <Text
-                style={[theme.text.body, { color: theme.colors.textPrimary, flex: 1 }]}
-                numberOfLines={1}
-              >
-                {item.name}
+                <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
+                  {currencyLabel(getCurrency(item.currency))}
+                </Text>
+                {isSelected ? (
+                  <AppIcon name="check" color={theme.colors.accent} size={16} />
+                ) : null}
+              </TactilePressable>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={{ paddingVertical: 24, alignItems: "center", gap: 8 }}>
+              <Text style={[theme.text.body, { color: theme.colors.textSecondary, textAlign: "center" }]}>
+                No countries match “{query.trim()}”.
               </Text>
-              <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
-                {currencyLabel(getCurrency(item.currency))}
-              </Text>
-              {isSelected ? (
-                <AppIcon name="check" color={theme.colors.accent} size={16} />
-              ) : null}
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={{ paddingVertical: 24, alignItems: "center", gap: 8 }}>
-            <Text style={[theme.text.body, { color: theme.colors.textSecondary, textAlign: "center" }]}>
-              No countries match “{query.trim()}”.
-            </Text>
-            <Button label="Clear" variant="ghost" size="sm" onPress={() => setQuery("")} />
-          </View>
-        }
-      />
+              <Button label="Clear" variant="ghost" size="sm" onPress={() => setQuery("")} />
+            </View>
+          }
+        />
+      </View>
 
       <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 10 }}>
         {error ? (
@@ -277,7 +295,8 @@ export function RegionEditor({
           <FieldRow
             label="Currency"
             value={currencyLabel(selectedCurrency)}
-            onPress={() => setCurrencyPickerOpen(true)}
+            onPress={busy ? undefined : () => setCurrencyPickerOpen(true)}
+            muted={busy}
           />
         </View>
 

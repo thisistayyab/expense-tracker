@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Button, Card, Money, Sheet } from "../../components/ui";
 import type { BudgetPlan } from "../../lib/domain/budget-plan";
@@ -11,10 +11,19 @@ export type SafeToSpendSheetProps = {
   label: string;
   isCurrentPeriod: boolean;
   onClose: () => void;
+  onClosed?: () => void;
   onOpenBudgets: () => void;
 };
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({
+  label,
+  first = false,
+  children,
+}: {
+  label: string;
+  first?: boolean;
+  children: ReactNode;
+}) {
   const { theme } = useTheme();
   return (
     <View
@@ -24,11 +33,13 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
         justifyContent: "space-between",
         gap: 12,
         paddingVertical: 10,
-        borderTopWidth: 1,
+        borderTopWidth: first ? 0 : StyleSheet.hairlineWidth,
         borderTopColor: theme.colors.border,
       }}
     >
-      <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>{label}</Text>
+      <Text style={[theme.text.body, { color: theme.colors.textSecondary, flexShrink: 1 }]}>
+        {label}
+      </Text>
       {children}
     </View>
   );
@@ -45,6 +56,7 @@ export function SafeToSpendSheet({
   label,
   isCurrentPeriod,
   onClose,
+  onClosed,
   onOpenBudgets,
 }: SafeToSpendSheetProps) {
   const { theme } = useTheme();
@@ -52,8 +64,12 @@ export function SafeToSpendSheet({
   const amount = isCurrentPeriod ? plan.safePerDayMinor : plan.remainingMinor;
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Safe to spend">
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+    <Sheet visible={visible} onClose={onClose} onClosed={onClosed} title="Safe to spend">
+      <ScrollView
+        style={{ flexGrow: 0, flexShrink: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary, marginTop: 2 }]}>
           {isCurrentPeriod ? "Per day" : "Left over"}
         </Text>
@@ -69,7 +85,7 @@ export function SafeToSpendSheet({
         </Text>
 
         <Card variant="muted" padded={false} style={{ marginTop: 16, paddingHorizontal: 16, paddingVertical: 4 }}>
-          <Row label="Overall limit">
+          <Row label="Overall limit" first>
             <Money minor={plan.overallLimitMinor ?? 0} currency={currency} />
           </Row>
           <Row label="Spent so far">

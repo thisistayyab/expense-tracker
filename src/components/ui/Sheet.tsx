@@ -8,13 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import {
-  Dimensions,
   Keyboard,
   Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -48,8 +48,11 @@ export type SheetProps = {
   subtitle?: string;
   children: ReactNode;
   footer?: ReactNode;
+  /** Rendered inside the same sheet overlay above `sheetCard` (e.g. embedded pickers). */
+  overlayChildren?: ReactNode;
   maxHeightRatio?: number;
   embedded?: boolean;
+  dismissible?: boolean;
 };
 
 type SheetStage =
@@ -58,9 +61,6 @@ type SheetStage =
   | "closingExternal"
   | "closingInteractive"
   | "nativeDismissing";
-
-const SCREEN_HEIGHT = Dimensions.get("window").height;
-const INITIAL_OFFSET = Math.min(SCREEN_HEIGHT, 640);
 
 /**
  * Interactive iOS frosted-glass bottom sheet with blur scrim, rubber-banding
@@ -74,12 +74,16 @@ export function Sheet({
   subtitle,
   children,
   footer,
+  overlayChildren,
   maxHeightRatio = 0.88,
   embedded = false,
+  dismissible = true,
 }: SheetProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const { height: windowHeight } = useWindowDimensions();
+  const initialOffset = Math.min(windowHeight, 640);
 
   const [prevVisible, setPrevVisible] = useState(visible);
   const [stage, setStage] = useState<SheetStage>(visible ? "open" : "closed");
@@ -94,34 +98,43 @@ export function Sheet({
   }
 
   const closedNotifiedRef = useRef(false);
-  const onCloseRef = useRef(onClose);
+  const isMountedRef = useRef(true);
   const onClosedRef = useRef(onClosed);
 
   useEffect(() => {
-    onCloseRef.current = onClose;
-    onClosedRef.current = onClosed;
-  }, [onClose, onClosed]);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-  const progress = useSharedValue(0);
+  useEffect(() => {
+    onClosedRef.current = onClosed;
+  }, [onClosed]);
+
+  const progress = useSharedValue(visible && reduceMotion ? 1 : 0);
   const dragY = useSharedValue(0);
-  const keyboardShift = useSharedValue(0);
+  const keyboardLift = useSharedValue(0);
   const handleActive = useSharedValue(0);
+  const willDismiss = useSharedValue(false);
 
   const notifyClosedOnce = useCallback(() => {
-    if (closedNotifiedRef.current) return;
+    if (!isMountedRef.current || closedNotifiedRef.current) return;
     closedNotifiedRef.current = true;
     onClosedRef.current?.();
   }, []);
 
   const finishNativeDismiss = useCallback(() => {
+    if (!isMountedRef.current) return;
     setStage((current) => (current === "nativeDismissing" ? "closed" : current));
     notifyClosedOnce();
   }, [notifyClosedOnce]);
 
   const finishSlideOut = useCallback(
     (wasInteractive: boolean) => {
+      if (!isMountedRef.current) return;
       if (wasInteractive) {
-        onCloseRef.current();
+        onClose();
       }
       if (embedded) {
         setStage("closed");
@@ -130,19 +143,25 @@ export function Sheet({
         setStage("nativeDismissing");
       }
     },
-    [embedded, notifyClosedOnce],
+    [embedded, notifyClosedOnce, onClose],
   );
 
   const dismissInteractive = useCallback(() => {
-    if (stage !== "open") return;
+    if (!dismissible || stage !== "open") return;
     Keyboard.dismiss();
     haptics.tick();
+    if (embedded) {
+      dragY.set(reduceMotion ? 0 : withSpring(0, SPRING_SHEET));
+      onClose();
+      return;
+    }
     setStage("closingInteractive");
-  }, [stage]);
+  }, [dismissible, dragY, embedded, onClose, reduceMotion, stage]);
 
   useEffect(() => {
     if (stage === "open") {
       closedNotifiedRef.current = false;
+      willDismiss.set(false);
       dragY.set(0);
       if (reduceMotion) {
         progress.set(1);
@@ -151,15 +170,6 @@ export function Sheet({
         progress.set(withSpring(1, SPRING_SHEET));
       }
       return undefined;
-    }
-
-    if (stage === "closingInteractive" && embedded) {
-      dragY.set(0);
-      const frame = requestAnimationFrame(() => {
-        setStage("open");
-        onCloseRef.current();
-      });
-      return () => cancelAnimationFrame(frame);
     }
 
     if (stage === "closingExternal" || stage === "closingInteractive") {
@@ -178,25 +188,39 @@ export function Sheet({
     }
 
     if (stage === "nativeDismissing") {
-      const timer = setTimeout(finishNativeDismiss, Platform.OS === "ios" ? 250 : 32);
+      // If caller declined to flip `visible` to false on `onClose()`, restore open instead of hiding forever.
+      if (visible) {
+        const recoverTimer = setTimeout(() => {
+          if (isMountedRef.current) setStage("open");
+        }, 32);
+        return () => clearTimeout(recoverTimer);
+      }
+      const timer = setTimeout(finishNativeDismiss, Platform.OS === "ios" ? 400 : 80);
       return () => clearTimeout(timer);
     }
 
     return undefined;
-  }, [dragY, embedded, finishNativeDismiss, finishSlideOut, progress, reduceMotion, stage]);
+  }, [dragY, finishNativeDismiss, finishSlideOut, progress, reduceMotion, stage, visible, willDismiss]);
 
   useEffect(() => {
+    // Non-embedded Android Modals resize natively via SOFT_INPUT_ADJUST_RESIZE;
+    // adding a JS lift on top double-offsets the sheet above the viewport.
+    if (!embedded && Platform.OS === "android") {
+      keyboardLift.set(0);
+      return undefined;
+    }
+
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
     const showSub = Keyboard.addListener(showEvent, (event) => {
-      const target = -Math.max(0, event.endCoordinates.height - insets.bottom);
-      keyboardShift.set(
+      const target = Math.max(0, event.endCoordinates.height);
+      keyboardLift.set(
         reduceMotion ? target : withTiming(target, { duration: event.duration || 250 }),
       );
     });
     const hideSub = Keyboard.addListener(hideEvent, (event) => {
-      keyboardShift.set(
+      keyboardLift.set(
         reduceMotion ? 0 : withTiming(0, { duration: event.duration || 220 }),
       );
     });
@@ -205,13 +229,17 @@ export function Sheet({
       showSub.remove();
       hideSub.remove();
     };
-  }, [insets.bottom, keyboardShift, reduceMotion]);
+  }, [embedded, keyboardLift, reduceMotion]);
 
-  const createPanGesture = useCallback(
+  // RNGH forbids binding the same Gesture instance to multiple GestureDetectors.
+  // Keep both builders direct inside useMemo so React Compiler sees the worklets
+  // are event handlers rather than a ref-capturing helper called during render.
+  const grabberPan = useMemo(
     () =>
       Gesture.Pan()
         .activeOffsetY(5)
         .onBegin(() => {
+          willDismiss.set(false);
           handleActive.set(withTiming(1, { duration: 100 }));
         })
         .onUpdate((event) => {
@@ -220,7 +248,8 @@ export function Sheet({
         })
         .onEnd((event) => {
           handleActive.set(withTiming(0, { duration: 150 }));
-          if (event.translationY > 105 || event.velocityY > 720) {
+          if (dismissible && (event.translationY > 105 || event.velocityY > 720)) {
+            willDismiss.set(true);
             runOnJS(dismissInteractive)();
           } else {
             dragY.set(reduceMotion ? 0 : withSpring(0, SPRING_SHEET));
@@ -228,13 +257,42 @@ export function Sheet({
         })
         .onFinalize(() => {
           handleActive.set(withTiming(0, { duration: 150 }));
+          if (!willDismiss.get()) {
+            dragY.set(reduceMotion ? 0 : withSpring(0, SPRING_SHEET));
+          }
         }),
-    [dismissInteractive, dragY, handleActive, reduceMotion],
+    [dismissInteractive, dismissible, dragY, handleActive, reduceMotion, willDismiss],
   );
 
-  // RNGH forbids binding the same Gesture instance to multiple GestureDetectors.
-  const grabberPan = useMemo(() => createPanGesture(), [createPanGesture]);
-  const headerPan = useMemo(() => createPanGesture(), [createPanGesture]);
+  const headerPan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(5)
+        .onBegin(() => {
+          willDismiss.set(false);
+          handleActive.set(withTiming(1, { duration: 100 }));
+        })
+        .onUpdate((event) => {
+          const y = event.translationY;
+          dragY.set(y >= 0 ? y : -Math.pow(-y, 0.72) * 0.42);
+        })
+        .onEnd((event) => {
+          handleActive.set(withTiming(0, { duration: 150 }));
+          if (dismissible && (event.translationY > 105 || event.velocityY > 720)) {
+            willDismiss.set(true);
+            runOnJS(dismissInteractive)();
+          } else {
+            dragY.set(reduceMotion ? 0 : withSpring(0, SPRING_SHEET));
+          }
+        })
+        .onFinalize(() => {
+          handleActive.set(withTiming(0, { duration: 150 }));
+          if (!willDismiss.get()) {
+            dragY.set(reduceMotion ? 0 : withSpring(0, SPRING_SHEET));
+          }
+        }),
+    [dismissInteractive, dismissible, dragY, handleActive, reduceMotion, willDismiss],
+  );
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(dragY.value, [0, 320], [1, 0.2], Extrapolation.CLAMP);
@@ -243,12 +301,25 @@ export function Sheet({
     };
   });
 
+  const restPaddingBottom = Math.max(insets.bottom, theme.space.lg);
   const sheetAnimatedStyle = useAnimatedStyle(() => {
-    const entranceY = (1 - progress.value) * INITIAL_OFFSET;
+    const entranceY = (1 - progress.value) * initialOffset;
+    const availableHeight = Math.max(
+      220,
+      Math.min(
+        Math.round(windowHeight * maxHeightRatio),
+        windowHeight - insets.top - 16 - keyboardLift.value,
+      ),
+    );
+    const activePaddingBottom =
+      keyboardLift.value > 0 ? theme.space.sm : restPaddingBottom;
     return {
-      transform: [{ translateY: entranceY + dragY.value + keyboardShift.value }],
+      maxHeight: availableHeight,
+      marginBottom: keyboardLift.value,
+      paddingBottom: activePaddingBottom,
+      transform: [{ translateY: entranceY + dragY.value }],
     };
-  });
+  }, [initialOffset, insets.top, maxHeightRatio, restPaddingBottom, theme.space.sm, windowHeight]);
 
   const grabberStyle = useAnimatedStyle(() => ({
     width: interpolate(handleActive.value, [0, 1], [38, 48]),
@@ -257,7 +328,6 @@ export function Sheet({
 
   if (stage === "closed" && !visible) return null;
 
-  const maxHeight = Math.round(SCREEN_HEIGHT * maxHeightRatio);
   const sheetSurfaceColor =
     Platform.OS === "android"
       ? theme.colors.sheet
@@ -267,12 +337,13 @@ export function Sheet({
 
   const sheetCard = (
     <Animated.View
+      accessibilityViewIsModal
       style={[
         styles.sheet,
         theme.shadow.sheet,
         {
-          maxHeight,
-          paddingBottom: Math.max(insets.bottom, theme.space.lg),
+          borderTopLeftRadius: theme.radius.sheet,
+          borderTopRightRadius: theme.radius.sheet,
           backgroundColor: sheetSurfaceColor,
           borderColor:
             theme.scheme === "dark" ? theme.colors.glassBorder : theme.colors.cardBorder,
@@ -280,7 +351,16 @@ export function Sheet({
         sheetAnimatedStyle,
       ]}
     >
-      <View pointerEvents="none" style={styles.sheetGlassClip}>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.sheetGlassClip,
+          {
+            borderTopLeftRadius: theme.radius.sheet,
+            borderTopRightRadius: theme.radius.sheet,
+          },
+        ]}
+      >
         {Platform.OS === "ios" || Platform.OS === "web" ? (
           <BlurView tint={theme.colors.blurTint} intensity={82} style={StyleSheet.absoluteFill} />
         ) : null}
@@ -304,7 +384,10 @@ export function Sheet({
             <GestureDetector gesture={headerPan}>
               <View style={styles.headerText}>
                 {title ? (
-                  <Text style={[theme.text.title2, { color: theme.colors.textPrimary }]}>
+                  <Text
+                    accessibilityRole="header"
+                    style={[theme.text.title2, { color: theme.colors.textPrimary }]}
+                  >
                     {title}
                   </Text>
                 ) : null}
@@ -368,19 +451,23 @@ export function Sheet({
         />
       </Animated.View>
       {sheetCard}
+      {overlayChildren}
     </View>
   );
 
   if (embedded) return overlay;
 
+  const modalVisible =
+    visible || stage === "open" || stage === "closingExternal" || stage === "closingInteractive";
+
   return (
     <Modal
-      visible={stage === "open" || stage === "closingExternal" || stage === "closingInteractive"}
+      visible={modalVisible}
       transparent
       statusBarTranslucent
       animationType="none"
       onDismiss={finishNativeDismiss}
-      onRequestClose={dismissInteractive}
+      onRequestClose={dismissible ? dismissInteractive : () => {}}
     >
       <GestureHandlerRootView style={styles.flexOne}>{overlay}</GestureHandlerRootView>
     </Modal>
@@ -394,8 +481,6 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
     borderCurve: "continuous",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: StyleSheet.hairlineWidth,
@@ -404,8 +489,6 @@ const styles = StyleSheet.create({
   },
   sheetGlassClip: {
     ...StyleSheet.absoluteFill,
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
     borderCurve: "continuous",
     overflow: "hidden",
   },

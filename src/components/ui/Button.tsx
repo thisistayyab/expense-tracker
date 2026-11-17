@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -9,6 +9,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES } from "../../lib/theme/fonts";
+import { AppIcon, type AppIconName } from "./AppIcon";
 import { TactilePressable } from "./TactilePressable";
 
 export type ButtonVariant = "primary" | "accent" | "ghost" | "danger";
@@ -21,7 +23,7 @@ export type ButtonProps = {
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
-  leftIcon?: ReactNode;
+  leftIcon?: AppIconName | ReactElement | false | null;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -107,13 +109,22 @@ export function Button({
         <ActivityIndicator color={textColor} size="small" />
       ) : (
         <View style={styles.contentRow}>
-          {leftIcon}
+          {typeof leftIcon === "string" ? (
+            <AppIcon
+              name={leftIcon}
+              size={size === "sm" ? 15 : 18}
+              color={textColor}
+              weight="semibold"
+            />
+          ) : (
+            leftIcon
+          )}
           <Text
             style={[
               size === "sm" ? text.caption : text.label,
               {
                 color: textColor,
-                fontWeight: "600",
+                fontFamily: FONT_FAMILIES.semibold,
                 fontSize: size === "sm" ? 14 : 16,
               },
             ]}

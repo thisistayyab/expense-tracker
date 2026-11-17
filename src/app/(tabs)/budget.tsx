@@ -1,7 +1,7 @@
 import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -31,10 +31,12 @@ import {
   periodWindow,
   windowLabel,
 } from "../../lib/domain/budget-period";
+import { selectableCategories } from "../../lib/domain/category-tree";
 import { toIsoDate } from "../../lib/domain/dates";
 import { formatMoney } from "../../lib/format/money";
+import { notifyLedgerChanged, subscribeLedgerChanged } from "../../lib/ledgerEvents";
 import { iosEnter } from "../../lib/motion";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 type Editing = {
   categoryId: string | null;
@@ -59,20 +61,38 @@ export default function BudgetsScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const db: Db = useSQLiteContext();
-  const today = useMemo(() => toIsoDate(new Date()), []);
-  const [periodOverride, setPeriodOverride] = useState<BudgetPeriod | undefined>(undefined);
+  const [today, setToday] = useState(() => toIsoDate(new Date()));
   const [monthOffset, setMonthOffset] = useState(0);
-  const { data, loading, error, refresh } = useBudgetPlan({
-    period: periodOverride,
-    monthOffset,
-  });
+  const { data, loading, error, refresh } = useBudgetPlan({ monthOffset });
+  const [prevPeriod, setPrevPeriod] = useState<string | undefined>(data?.period);
+  if (data?.period && data.period !== prevPeriod) {
+    setPrevPeriod(data.period);
+    if (data.period !== "monthly" && monthOffset !== 0) {
+      setMonthOffset(0);
+    }
+  }
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [editorVisible, setEditorVisible] = useState(false);
   const [picking, setPicking] = useState(false);
   const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
   const [periodOpen, setPeriodOpen] = useState(false);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const firstFocus = useRef(true);
+
+  useEffect(() => {
+    const unsubLedger = subscribeLedgerChanged(() => refresh());
+    const subApp = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        setToday(toIsoDate(new Date()));
+        refresh();
+      }
+    });
+    return () => {
+      unsubLedger();
+      subApp.remove();
+    };
+  }, [refresh]);
 
   useFocusEffect(
     useCallback(() => {
@@ -94,6 +114,7 @@ export default function BudgetsScreen() {
   const openOverall = () => {
     if (!plan) return;
     setEditing({ categoryId: null, title: "Overall budget" });
+    setEditorVisible(true);
   };
 
   const openCategory = (categoryId: string) => {
@@ -101,6 +122,7 @@ export default function BudgetsScreen() {
       categoryId,
       title: categoryById.get(categoryId)?.name ?? "Category limit",
     });
+    setEditorVisible(true);
   };
 
   const openRecreate = (budget: Budget) => {
@@ -115,13 +137,15 @@ export default function BudgetsScreen() {
       monthScope: budget.month !== null,
       replacesBudgetId: budget.id,
     });
+    setEditorVisible(true);
   };
 
   const finishEditing = () => {
     const replaces = editing?.replacesBudgetId;
-    setEditing(null);
+    setEditorVisible(false);
     if (!replaces) {
       refresh();
+      notifyLedgerChanged();
       return;
     }
     // The old-currency budget is retired, not deleted: it stays as a record and can
@@ -130,7 +154,16 @@ export default function BudgetsScreen() {
       .catch((cause: unknown) => {
         setActionError(`Could not retire the old limit: ${String(cause)}`);
       })
-      .finally(() => refresh());
+      .finally(() => {
+        refresh();
+        notifyLedgerChanged();
+      });
+  };
+
+  const finishRemoving = () => {
+    setEditorVisible(false);
+    refresh();
+    notifyLedgerChanged();
   };
 
   const changePeriod = (next: BudgetPeriod) => {
@@ -138,9 +171,10 @@ export default function BudgetsScreen() {
     setActionError(null);
     setMonthOffset(0);
     setSettings(db, { [SETTING_KEYS.budgetPeriod]: next })
-      // The hook reloads from the override, and the stored key keeps Overview in
-      // step the next time it is opened.
-      .then(() => setPeriodOverride(next))
+      .then(() => {
+        refresh();
+        notifyLedgerChanged();
+      })
       .catch((cause: unknown) => {
         setActionError(`Could not change the period: ${String(cause)}`);
       });
@@ -180,12 +214,9 @@ export default function BudgetsScreen() {
   }, [data?.minMonthOffset, today]);
 
   const rows = plan?.rows ?? [];
-  const availableCategories = (data?.categories ?? []).filter(
-    (category) =>
-      category.kind === "expense" &&
-      !category.isArchived &&
-      !rows.some((row) => row.categoryId === category.id),
-  );
+  const availableCategories = selectableCategories(data?.categories ?? [], {
+    kind: "expense",
+  }).filter((category) => !rows.some((row) => row.categoryId === category.id));
   const pct = plan ? Math.round(plan.progress * 100) : 0;
   const ringColor =
     plan?.state === "over"
@@ -201,10 +232,11 @@ export default function BudgetsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             padding: 20,
+            paddingTop: 14,
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
           }}
         >
-          <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary, marginTop: 8 }]}>
+          <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary }]}>
             {data ? `${PERIOD_LABELS[data.period]} · ${data.currency}` : "Budgets"}
           </Text>
           <View
@@ -325,7 +357,7 @@ export default function BudgetsScreen() {
                               theme.text.label,
                               {
                                 color: theme.colors.textPrimary,
-                                fontWeight: "700",
+                                fontFamily: FONT_FAMILIES.bold,
                                 fontVariant: ["tabular-nums"],
                               },
                             ]}
@@ -364,7 +396,12 @@ export default function BudgetsScreen() {
                           borderColor: `${theme.colors.accent}28`,
                         }}
                       >
-                        <Text style={[theme.text.caption, { fontWeight: "700", color: theme.colors.accent }]}>
+                        <Text
+                          style={[
+                            theme.text.caption,
+                            { fontFamily: FONT_FAMILIES.bold, color: theme.colors.accent },
+                          ]}
+                        >
                           Edit overall limit
                         </Text>
                         <AppIcon name="chevronRight" color={theme.colors.accent} size={12} />
@@ -673,7 +710,7 @@ export default function BudgetsScreen() {
       {editing && data ? (
         <BudgetEditorSheet
           key={`${editing.categoryId ?? "overall"}-${editing.replacesBudgetId ?? "own"}-${data.month}`}
-          visible
+          visible={editorVisible}
           currency={data.currency}
           period={data.period}
           month={data.month}
@@ -686,8 +723,12 @@ export default function BudgetsScreen() {
           monthly={editingLimits.monthly}
           initialLimitMinor={editing.initialLimitMinor}
           initialScope={editing.monthScope ? "month" : undefined}
-          onClose={() => setEditing(null)}
+          onClose={() => setEditorVisible(false)}
+          onClosed={() => {
+            if (!editorVisible) setEditing(null);
+          }}
           onSaved={finishEditing}
+          onRemoved={finishRemoving}
         />
       ) : null}
     </View>

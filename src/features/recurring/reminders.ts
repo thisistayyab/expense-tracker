@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import { listRecurringRules } from "../../lib/db/repos/recurring";
 import type { Db } from "../../lib/db/types";
 import { addDays, toIsoDate } from "../../lib/domain/dates";
-import { firstDueOnOrAfter } from "../../lib/domain/recurrence";
+import { firstDueOnOrAfter, isRuleFinished } from "../../lib/domain/recurrence";
 import { formatMoney } from "../../lib/format/money";
 
 export const BILLS_CHANNEL_ID = "bills";
@@ -53,7 +53,6 @@ function mapPermission(status: Notifications.NotificationPermissionsStatus): Rem
 export async function getReminderPermission(): Promise<ReminderPermission> {
   if (Platform.OS === "web") return "unavailable";
   try {
-    await ensureChannel();
     return mapPermission(await Notifications.getPermissionsAsync());
   } catch {
     return "unavailable";
@@ -83,57 +82,70 @@ export async function cancelReminders(): Promise<void> {
   }
 }
 
+let reminderQueue: Promise<unknown> = Promise.resolve();
+
 /**
  * Replace the scheduled set with one notification per active rule that has a
  * lead time. Cancelling first keeps edits and backfills from leaving stale dates.
  * The in-app "Bills due" card is the primary reminder (R10); this is the extra.
  */
-export async function refreshReminders(
+export function refreshReminders(
   db: Db,
   today: string = toIsoDate(new Date()),
 ): Promise<number> {
-  if (Platform.OS === "web") return 0;
+  if (Platform.OS === "web") return Promise.resolve(0);
 
-  const permission = await getReminderPermission();
-  await cancelReminders();
-  if (permission !== "granted") return 0;
+  const run = reminderQueue.then(async () => {
+    const permission = await getReminderPermission();
+    await cancelReminders();
+    if (permission !== "granted") return 0;
 
-  const rules = await listRecurringRules(db);
-  let scheduled = 0;
+    await ensureChannel();
+    const rules = await listRecurringRules(db);
+    let scheduled = 0;
 
-  for (const rule of rules) {
-    // This channel is for bills. Income rules are still posted when due, but a
-    // salary must not appear as a "Bill due soon".
-    if (rule.type !== "expense") continue;
-    if (rule.remindDays <= 0) continue;
-    const due = firstDueOnOrAfter(rule, today);
-    if (!due) continue;
+    for (const rule of rules) {
+      // This channel is for bills. Income rules are still posted when due, but a
+      // salary must not appear as a "Bill due soon".
+      if (rule.type !== "expense") continue;
+      if (rule.remindDays <= 0) continue;
 
-    const reminderDate = addDays(due, -rule.remindDays);
-    const at = new Date(`${reminderDate}T09:00:00`);
-    if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) continue;
+      const floor = rule.nextDueAt > today ? rule.nextDueAt : today;
+      const due =
+        rule.nextDueAt >= today && !isRuleFinished(rule, rule.nextDueAt)
+          ? rule.nextDueAt
+          : firstDueOnOrAfter(rule, floor);
+      if (!due) continue;
 
-    try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Bill due soon",
-          body: `${rule.itemName ?? "A recurring bill"} · ${formatMoney(
-            rule.amountMinor,
-            rule.currency,
-          )} due ${due}`,
-          data: { url: "/settings/recurring" },
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: at,
-          channelId: BILLS_CHANNEL_ID,
-        },
-      });
-      scheduled += 1;
-    } catch {
-      // One bad rule must not stop the remaining reminders.
+      const reminderDate = addDays(due, -rule.remindDays);
+      const at = new Date(`${reminderDate}T09:00:00`);
+      if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) continue;
+
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Bill due soon",
+            body: `${rule.itemName ?? "A recurring bill"} · ${formatMoney(
+              rule.amountMinor,
+              rule.currency,
+            )} due ${due}`,
+            data: { url: "/settings/recurring" },
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: at,
+            channelId: BILLS_CHANNEL_ID,
+          },
+        });
+        scheduled += 1;
+      } catch {
+        // One bad rule must not stop the remaining reminders.
+      }
     }
-  }
 
-  return scheduled;
+    return scheduled;
+  });
+
+  reminderQueue = run.catch(() => undefined);
+  return run;
 }

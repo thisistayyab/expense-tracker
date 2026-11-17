@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -35,9 +35,10 @@ import { periodWindow, windowLabel } from "../../lib/domain/budget-period";
 import { addDays, toIsoDate } from "../../lib/domain/dates";
 import { formatMoney, formatMoneySpoken } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
+import { subscribeLedgerChanged } from "../../lib/ledgerEvents";
 import { iosEnter } from "../../lib/motion";
 import { useOnboarding } from "../../lib/onboarding";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 /**
  * Dev-only proof that P1 booted: migrations ran and the seed landed. It is not part
@@ -120,7 +121,7 @@ export default function OverviewScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const db: Db = useSQLiteContext();
-  const today = toIsoDate(new Date());
+  const [today, setToday] = useState(() => toIsoDate(new Date()));
   const [monthOffset, setMonthOffset] = useState(0);
   const { data, loading, error, refresh } = useBudgetPlan({ monthOffset });
   const {
@@ -128,12 +129,39 @@ export default function OverviewScreen() {
     error: analyticsError,
     refresh: refreshAnalytics,
   } = useOverviewAnalytics(data?.currency ?? null, monthOffset);
+  const [prevPeriod, setPrevPeriod] = useState<string | undefined>(data?.period);
+  if (data?.period && data.period !== prevPeriod) {
+    setPrevPeriod(data.period);
+    if (data.period !== "monthly" && monthOffset !== 0) {
+      setMonthOffset(0);
+    }
+  }
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [openBudgetsOnClose, setOpenBudgetsOnClose] = useState(false);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [count, setCount] = useState<number | null>(null);
+  const [recentError, setRecentError] = useState<string | null>(null);
   const firstFocus = useRef(true);
   const previousState = useRef<{ key: string; state: string } | null>(null);
+
+  useEffect(() => {
+    const unsubLedger = subscribeLedgerChanged(() => {
+      refresh();
+      refreshAnalytics();
+    });
+    const subApp = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        setToday(toIsoDate(new Date()));
+        refresh();
+        refreshAnalytics();
+      }
+    });
+    return () => {
+      unsubLedger();
+      subApp.remove();
+    };
+  }, [refresh, refreshAnalytics]);
 
   // Refresh on focus so a save or an undo is reflected without a reload. The first
   // focus is skipped because the hook already loaded on mount.
@@ -160,9 +188,10 @@ export default function OverviewScreen() {
         if (cancelled) return;
         setCount(total);
         setRecent(rows);
+        setRecentError(null);
       })
-      .catch(() => {
-        if (!cancelled) setCount(0);
+      .catch((cause: unknown) => {
+        if (!cancelled) setRecentError(`Could not read recent activity: ${String(cause)}`);
       });
     return () => {
       cancelled = true;
@@ -230,11 +259,18 @@ export default function OverviewScreen() {
       });
       return;
     }
-    router.push("/(tabs)/transactions");
+    router.push({
+      pathname: "/(tabs)/transactions",
+      params: { currency: "", categoryId: "", from: "", to: "" },
+    });
   };
 
   const openBudgets = () => {
-    setBreakdownOpen(false);
+    if (breakdownOpen) {
+      setOpenBudgetsOnClose(true);
+      setBreakdownOpen(false);
+      return;
+    }
     router.push("/(tabs)/budget");
   };
 
@@ -245,6 +281,7 @@ export default function OverviewScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             padding: 20,
+            paddingTop: 14,
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
           }}
         >
@@ -312,9 +349,9 @@ export default function OverviewScreen() {
             Overview
           </Text>
 
-          {error ? (
+          {error || recentError ? (
             <Text style={[theme.text.caption, { color: theme.colors.danger, marginTop: 10 }]}>
-              {error}
+              {error ?? recentError}
             </Text>
           ) : null}
 
@@ -419,7 +456,7 @@ export default function OverviewScreen() {
                                 theme.text.caption,
                                 {
                                   color: theme.colors.onInkMuted,
-                                  fontWeight: "600",
+                                  fontFamily: FONT_FAMILIES.semibold,
                                   fontVariant: ["tabular-nums"],
                                 },
                               ]}
@@ -830,94 +867,103 @@ export default function OverviewScreen() {
                     </Card>
                   )}
 
-                  <SectionHeader
-                    title="Recent"
-                    actionLabel="Activity"
-                    onAction={() => router.push("/(tabs)/transactions")}
-                  />
+                  {recent.length ? (
+                    <>
+                      <SectionHeader
+                        title="Recent"
+                        actionLabel="Activity"
+                        onAction={() =>
+                          router.push({
+                            pathname: "/(tabs)/transactions",
+                            params: { currency: "", categoryId: "", from: "", to: "" },
+                          })
+                        }
+                      />
 
-                  <Card variant="glass" padded={false}>
-                    {recent.map((transaction, index) => {
-                      const category = transaction.categoryId
-                        ? categoryById.get(transaction.categoryId)
-                        : null;
-                      const title =
-                        transaction.itemName ??
-                        transaction.place ??
-                        (transaction.type === "transfer"
-                          ? "Transfer"
-                          : (category?.name ?? "Expense"));
-                      const subtitle = `${
-                        transaction.type === "transfer"
-                          ? "Transfer"
-                          : (category?.name ?? "Uncategorized")
-                      } · ${dayLabel(transaction.localDate, today)}`;
-                      return (
-                        <Fragment key={transaction.id}>
-                          {index > 0 ? (
-                            <View
-                              style={{
-                                marginLeft: 64,
-                                height: StyleSheet.hairlineWidth,
-                                backgroundColor: theme.colors.border,
-                              }}
-                            />
-                          ) : null}
-                          <TactilePressable
-                            onPress={() => router.push(`/transaction/${transaction.id}`)}
-                            haptic="selection"
-                            scaleTo={0.985}
-                            radius={14}
-                            accessibilityRole="button"
-                            accessibilityLabel={`${title}, ${formatMoneySpoken(
-                              transaction.amountMinor,
-                              transaction.currency,
-                            )}, ${subtitle}`}
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 12,
-                              paddingHorizontal: 16,
-                              paddingVertical: 12,
-                            }}
-                          >
-                          <CategoryTile
-                            icon={
-                              transaction.type === "transfer"
-                                ? null
-                                : (category?.icon ?? null)
-                            }
-                            appIcon={transaction.type === "transfer" ? "transfer" : undefined}
-                            color={category?.color ?? null}
-                            size={36}
-                          />
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text
-                              style={[theme.text.label, { color: theme.colors.textPrimary }]}
-                              numberOfLines={1}
-                            >
-                              {title}
-                            </Text>
-                            <Text
-                              style={[
-                                theme.text.caption,
-                                { color: theme.colors.textSecondary, marginTop: 2 },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {subtitle}
-                            </Text>
-                          </View>
-                            <Money
-                              minor={transaction.amountMinor}
-                              currency={transaction.currency}
-                              tone={transaction.type === "income" ? "income" : "default"}
-                            />
-                          </TactilePressable>
-                        </Fragment>
-                      );
-                    })}
-                  </Card>
+                      <Card variant="glass" padded={false}>
+                        {recent.map((transaction, index) => {
+                          const category = transaction.categoryId
+                            ? categoryById.get(transaction.categoryId)
+                            : null;
+                          const title =
+                            transaction.itemName ??
+                            transaction.place ??
+                            (transaction.type === "transfer"
+                              ? "Transfer"
+                              : (category?.name ?? "Expense"));
+                          const subtitle = `${
+                            transaction.type === "transfer"
+                              ? "Transfer"
+                              : (category?.name ?? "Uncategorized")
+                          } · ${dayLabel(transaction.localDate, today)}`;
+                          return (
+                            <Fragment key={transaction.id}>
+                              {index > 0 ? (
+                                <View
+                                  style={{
+                                    marginLeft: 64,
+                                    height: StyleSheet.hairlineWidth,
+                                    backgroundColor: theme.colors.border,
+                                  }}
+                                />
+                              ) : null}
+                              <TactilePressable
+                                onPress={() => router.push(`/transaction/${transaction.id}`)}
+                                haptic="selection"
+                                scaleTo={0.985}
+                                radius={14}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${title}, ${formatMoneySpoken(
+                                  transaction.amountMinor,
+                                  transaction.currency,
+                                )}, ${subtitle}`}
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 12,
+                                  paddingHorizontal: 16,
+                                  paddingVertical: 12,
+                                }}
+                              >
+                              <CategoryTile
+                                icon={
+                                  transaction.type === "transfer"
+                                    ? null
+                                    : (category?.icon ?? null)
+                                }
+                                appIcon={transaction.type === "transfer" ? "transfer" : undefined}
+                                color={category?.color ?? null}
+                                size={36}
+                              />
+                              <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text
+                                  style={[theme.text.label, { color: theme.colors.textPrimary }]}
+                                  numberOfLines={1}
+                                >
+                                  {title}
+                                </Text>
+                                <Text
+                                  style={[
+                                    theme.text.caption,
+                                    { color: theme.colors.textSecondary, marginTop: 2 },
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {subtitle}
+                                </Text>
+                              </View>
+                                <Money
+                                  minor={transaction.amountMinor}
+                                  currency={transaction.currency}
+                                  tone={transaction.type === "income" ? "income" : "default"}
+                                />
+                              </TactilePressable>
+                            </Fragment>
+                          );
+                        })}
+                      </Card>
+                    </>
+                  ) : null}
                 </>
               )}
             </>
@@ -933,7 +979,16 @@ export default function OverviewScreen() {
           plan={plan}
           label={data.label}
           isCurrentPeriod={data.isCurrentPeriod}
-          onClose={() => setBreakdownOpen(false)}
+          onClose={() => {
+            setOpenBudgetsOnClose(false);
+            setBreakdownOpen(false);
+          }}
+          onClosed={() => {
+            if (openBudgetsOnClose) {
+              setOpenBudgetsOnClose(false);
+              router.push("/(tabs)/budget");
+            }
+          }}
           onOpenBudgets={openBudgets}
         />
       ) : null}

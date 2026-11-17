@@ -1,6 +1,6 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AppIcon, Button, Sheet, TextField } from "../../components/ui";
 import { resetAllData } from "../../lib/db/repos/backup";
@@ -52,13 +52,18 @@ export function DeleteAllSheet({
       onDeleted?.();
     } catch (cause) {
       setError(`Nothing was deleted: ${String(cause)}`);
+    } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Sheet visible={visible} onClose={close} title="Delete all data?">
-      <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 14 }}>
+    <Sheet visible={visible} onClose={close} dismissible={!busy} title="Delete all data?">
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 14 }}
+      >
         <View
           style={{
             flexDirection: "row",
@@ -67,7 +72,7 @@ export function DeleteAllSheet({
             padding: 14,
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: `${theme.colors.danger}32`,
             backgroundColor:
               theme.scheme === "dark"
@@ -104,7 +109,7 @@ export function DeleteAllSheet({
           />
           <Button label="Cancel" variant="ghost" onPress={close} disabled={busy} />
         </View>
-      </View>
+      </ScrollView>
     </Sheet>
   );
 }

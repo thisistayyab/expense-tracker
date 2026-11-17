@@ -121,6 +121,26 @@ describe("accounts", () => {
     // Reactivating from the paused list must not bypass the archive check.
     await expect(setRecurringActive(db, rule.id, true)).rejects.toThrow(/Restore the account/);
   });
+
+  test("excludes mismatched-currency rows and nets self-transfers to zero in balances", async () => {
+    const { db, cash } = await accountsFixture();
+    const before = (await listAccountBalances(db)).find((a) => a.id === cash.id)!;
+
+    // Simulate corrupt foreign-currency row and a self-transfer directly in SQLite.
+    await db.runAsync(
+      `INSERT INTO transactions (id, type, amount_minor, currency, account_id, occurred_at, local_date, created_at, updated_at)
+       VALUES ('foreign-row', 'expense', 9999, 'EUR', ?, '2026-11-12T12:00:00.000Z', '2026-11-12', '2026-11-12T12:00:00.000Z', '2026-11-12T12:00:00.000Z')`,
+      [cash.id],
+    );
+    await db.runAsync(
+      `INSERT INTO transactions (id, type, amount_minor, currency, account_id, transfer_account_id, occurred_at, local_date, created_at, updated_at)
+       VALUES ('self-xfer', 'transfer', 500, 'USD', ?, ?, '2026-11-12T12:00:00.000Z', '2026-11-12', '2026-11-12T12:00:00.000Z', '2026-11-12T12:00:00.000Z')`,
+      [cash.id, cash.id],
+    );
+
+    const after = (await listAccountBalances(db)).find((a) => a.id === cash.id)!;
+    expect(after.balanceMinor).toBe(before.balanceMinor);
+  });
 });
 
 describe("categories", () => {

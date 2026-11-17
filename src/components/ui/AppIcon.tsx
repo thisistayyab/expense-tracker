@@ -39,6 +39,11 @@ export type AppIconProps = {
   weight?: "regular" | "medium" | "semibold" | "bold";
 };
 
+const WALLET_SYMBOL: SFSymbol =
+  Platform.OS === "ios" && parseFloat(String(Platform.Version)) >= 18
+    ? "wallet.bifold"
+    : "wallet.pass";
+
 const SF_MAP: Record<AppIconName, SFSymbol> = {
   settings: "gearshape",
   plus: "plus",
@@ -63,7 +68,7 @@ const SF_MAP: Record<AppIconName, SFSymbol> = {
   chart: "chart.xyaxis.line",
   banknote: "banknote",
   creditcard: "creditcard",
-  wallet: "wallet.bifold",
+  wallet: WALLET_SYMBOL,
   building: "building.columns",
   diamond: "diamond",
   exclamation: "exclamationmark.triangle",

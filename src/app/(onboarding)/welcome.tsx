@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -13,7 +13,7 @@ import { haptics } from "../../lib/haptics";
 import { iosEnter } from "../../lib/motion";
 import { useOnboarding } from "../../lib/onboarding";
 import { detectRegionDefaults } from "../../lib/region";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 const COVER_BG = "#0B0C10";
 const PAPER = "#F4F5F8";
@@ -61,10 +61,17 @@ export default function WelcomeScreen() {
   const { theme } = useTheme();
   const { finish } = useOnboarding();
   const [busy, setBusy] = useState(false);
+  const [navigating, setNavigating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useFocusEffect(
+    useCallback(() => {
+      setNavigating(false);
+    }, []),
+  );
+
   const skip = () => {
-    if (busy) return;
+    if (busy || navigating) return;
     setBusy(true);
     setError(null);
     // Flipping the onboarding flag disables the onboarding guard, and the root
@@ -91,7 +98,7 @@ export default function WelcomeScreen() {
         <View style={{ alignItems: "flex-end", paddingHorizontal: 20, paddingTop: 6 }}>
           <TactilePressable
             onPress={skip}
-            disabled={busy}
+            disabled={busy || navigating}
             hitSlop={10}
             haptic="selection"
             scaleTo={0.94}
@@ -100,13 +107,23 @@ export default function WelcomeScreen() {
             accessibilityLabel="Skip onboarding and use detected settings"
             style={styles.skipPill}
           >
-            <Text style={[theme.text.caption, { fontWeight: "600", color: PAPER }]}>
+            <Text style={[theme.text.caption, { fontFamily: FONT_FAMILIES.semibold, color: PAPER }]}>
               Skip
             </Text>
           </TactilePressable>
         </View>
 
-        <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: 24 }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: 24,
+            paddingVertical: 16,
+          }}
+        >
           <Animated.View entering={iosEnter(0)} style={styles.emblemOuter}>
             <BrandMark size={64} framed />
           </Animated.View>
@@ -115,9 +132,9 @@ export default function WelcomeScreen() {
             <Text
               style={{
                 color: PAPER,
+                fontFamily: FONT_FAMILIES.bold,
                 fontSize: 34,
                 lineHeight: 41,
-                fontWeight: "700",
                 letterSpacing: -0.9,
                 marginTop: 22,
               }}
@@ -125,7 +142,16 @@ export default function WelcomeScreen() {
               Know what&apos;s{"\n"}left, not just{"\n"}what&apos;s gone.
             </Text>
 
-            <Text style={{ color: MUTED, fontSize: 16, lineHeight: 23, marginTop: 12, maxWidth: 310 }}>
+            <Text
+              style={{
+                color: MUTED,
+                fontFamily: FONT_FAMILIES.regular,
+                fontSize: 16,
+                lineHeight: 23,
+                marginTop: 12,
+                maxWidth: 310,
+              }}
+            >
               Track spending in seconds and see what you can safely spend today.
             </Text>
           </Animated.View>
@@ -154,7 +180,7 @@ export default function WelcomeScreen() {
               />
             </View>
           </Animated.View>
-        </View>
+        </ScrollView>
 
         <Animated.View entering={iosEnter(200)} style={{ paddingHorizontal: 20, paddingBottom: 18 }}>
           <View style={{ marginBottom: 16 }}>
@@ -163,10 +189,12 @@ export default function WelcomeScreen() {
 
           <TactilePressable
             onPress={() => {
+              if (busy || navigating) return;
+              setNavigating(true);
               haptics.selection();
               router.push("/(onboarding)/region");
             }}
-            disabled={busy}
+            disabled={busy || navigating}
             scaleTo={0.975}
             radius={999}
             accessibilityRole="button"
@@ -253,12 +281,13 @@ const styles = StyleSheet.create({
   },
   valueTitle: {
     color: PAPER,
+    fontFamily: FONT_FAMILIES.semibold,
     fontSize: 16,
-    fontWeight: "600",
     letterSpacing: -0.25,
   },
   valueBody: {
     color: MUTED,
+    fontFamily: FONT_FAMILIES.regular,
     fontSize: 14,
     lineHeight: 19,
     marginTop: 2,
@@ -286,8 +315,8 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     color: "#FFFFFF",
+    fontFamily: FONT_FAMILIES.semibold,
     fontSize: 17,
-    fontWeight: "600",
     letterSpacing: -0.3,
   },
 });

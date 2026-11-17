@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES } from "../../lib/theme/fonts";
 
 export type TextFieldProps = Omit<TextInputProps, "style"> & {
   label?: string;
@@ -41,7 +42,12 @@ export function TextField({ label, helper, error, ...input }: TextFieldProps) {
   return (
     <View style={styles.wrap}>
       {label ? (
-        <Text style={[theme.text.caption, { color: theme.colors.textSecondary, fontWeight: "600" }]}>
+        <Text
+          style={[
+            theme.text.caption,
+            { color: theme.colors.textSecondary, fontFamily: FONT_FAMILIES.semibold },
+          ]}
+        >
           {label}
         </Text>
       ) : null}
@@ -57,6 +63,7 @@ export function TextField({ label, helper, error, ...input }: TextFieldProps) {
       >
         <TextInput
           {...input}
+          accessibilityLabel={input.accessibilityLabel ?? label}
           onFocus={(event) => {
             setFocused(true);
             input.onFocus?.(event);
@@ -71,7 +78,9 @@ export function TextField({ label, helper, error, ...input }: TextFieldProps) {
         />
       </Animated.View>
       {error ? (
-        <Text style={[theme.text.caption, { color: theme.colors.danger }]}>{error}</Text>
+        <Text accessibilityLiveRegion="polite" style={[theme.text.caption, { color: theme.colors.danger }]}>
+          {error}
+        </Text>
       ) : helper ? (
         <Text style={[theme.text.caption, { color: theme.colors.textTertiary }]}>{helper}</Text>
       ) : null}
@@ -82,7 +91,7 @@ export function TextField({ label, helper, error, ...input }: TextFieldProps) {
 const styles = StyleSheet.create({
   wrap: { gap: 6 },
   inputBox: {
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderCurve: "continuous",
     overflow: "hidden",
   },

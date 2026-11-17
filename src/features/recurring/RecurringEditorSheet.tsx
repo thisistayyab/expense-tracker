@@ -2,9 +2,10 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
   Keyboard,
-  Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -18,6 +19,7 @@ import {
   FieldRow,
   PickerSheet,
   Sheet,
+  TactilePressable,
   TextField,
 } from "../../components/ui";
 import { currencyLabel, currencyOptions } from "../../constants/currencies";
@@ -40,7 +42,8 @@ import {
   sanitizeMoneyInput,
 } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
-import { useTheme } from "../../lib/theme";
+import { notifyLedgerChanged } from "../../lib/ledgerEvents";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { processDueRecurring } from "./processDue";
 import { refreshReminders, requestReminderPermission } from "./reminders";
 
@@ -53,17 +56,21 @@ type PickTarget = "account" | "category" | "currency" | "frequency" | "start" | 
  * entries are never rewritten.
  */
 export function RecurringEditorSheet({
+  visible = true,
   rule,
   onClose,
+  onClosed,
   onSaved,
 }: {
+  visible?: boolean;
   rule?: RecurringRule | null;
   onClose: () => void;
+  onClosed?: () => void;
   onSaved: () => void;
 }) {
   const { theme } = useTheme();
   const db: Db = useSQLiteContext();
-  const today = useMemo(() => toIsoDate(new Date()), []);
+  const [today, setToday] = useState(() => toIsoDate(new Date()));
   const editing = Boolean(rule);
 
   const [type, setType] = useState<"expense" | "income">(
@@ -100,20 +107,68 @@ export function RecurringEditorSheet({
   const [error, setError] = useState<string | null>(null);
   const savingRef = useRef(false);
 
+  const openKey = visible ? (rule?.id ?? "new") : null;
+  const [lastOpenKey, setLastOpenKey] = useState<string | null>(openKey);
+  if (openKey !== null && openKey !== lastOpenKey) {
+    const freshToday = toIsoDate(new Date());
+    setLastOpenKey(openKey);
+    setToday(freshToday);
+    setType(rule?.type === "income" ? "income" : "expense");
+    setCurrency(rule?.currency ?? "USD");
+    setAmountText(rule ? minorToDecimalString(rule.amountMinor, rule.currency) : "");
+    setAccountId(rule?.accountId ?? null);
+    setCategoryId(rule?.categoryId ?? null);
+    setItemName(rule?.itemName ?? "");
+    setPlace(rule?.place ?? "");
+    setNote(rule?.note ?? "");
+    setFrequency(rule?.frequency ?? "monthly");
+    setIntervalText(String(rule?.intervalCount ?? 1));
+    setDayText(String(rule?.dayOfMonth ?? Number((rule?.startDate ?? freshToday).slice(8, 10))));
+    setStartDate(rule?.startDate ?? freshToday);
+    setEndDate(rule?.endDate ?? null);
+    setAutoPost(rule?.autoPost ?? false);
+    setRemindOn((rule?.remindDays ?? 0) > 0);
+    setRemindDaysText(String(rule?.remindDays && rule.remindDays > 0 ? rule.remindDays : 3));
+    setPicker(null);
+    setLoading(true);
+    setSaving(false);
+    setError(null);
+  } else if (openKey === null && lastOpenKey !== null) {
+    setLastOpenKey(null);
+    setPicker(null);
+  }
+
   useEffect(() => {
+    if (!visible) {
+      savingRef.current = false;
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setToday(toIsoDate(new Date()));
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return undefined;
     let cancelled = false;
     Promise.all([
       getAllSettings(db),
-      listAccounts(db, { includeArchived: false }),
-      listCategories(db, { includeArchived: Boolean(rule) }),
+      listAccounts(db, { includeArchived: Boolean(rule) }),
+      listCategories(db, { includeArchived: true }),
     ])
       .then(([settings, nextAccounts, nextCategories]) => {
         if (cancelled) return;
         const active = rule?.currency ?? settings[SETTING_KEYS.currency] ?? "USD";
-        const inCurrency = nextAccounts.filter((account) => account.currency === active);
+        const visibleAccounts = nextAccounts.filter(
+          (account) => !account.isArchived || account.id === rule?.accountId,
+        );
+        const inCurrency = visibleAccounts.filter((account) => account.currency === active);
 
         setCurrency(active);
-        setAccounts(nextAccounts);
+        setAccounts(visibleAccounts);
         setCategories(nextCategories);
         setAccountId((current) => {
           if (current && inCurrency.some((account) => account.id === current)) return current;
@@ -129,37 +184,48 @@ export function RecurringEditorSheet({
     return () => {
       cancelled = true;
     };
-  }, [db, rule]);
+  }, [db, rule, visible]);
 
   const currencyAccounts = useMemo(
     () => accounts.filter((account) => account.currency === currency),
     [accounts, currency],
   );
-  const kindCategories = useMemo(
-    () =>
-      categories.filter(
-        (category) => category.kind === type && (!category.isArchived || category.id === categoryId),
-      ),
-    [categories, categoryId, type],
-  );
+  const kindCategories = useMemo(() => {
+    const archivedIds = new Set(categories.filter((c) => c.isArchived).map((c) => c.id));
+    return categories.filter((category) => {
+      if (category.kind !== type) return false;
+      if (category.id === categoryId || category.id === rule?.categoryId) return true;
+      if (category.isArchived) return false;
+      if (category.parentId && archivedIds.has(category.parentId)) return false;
+      return true;
+    });
+  }, [categories, categoryId, rule?.categoryId, type]);
   const selectedAccount = currencyAccounts.find((account) => account.id === accountId) ?? null;
   const selectedCategory = kindCategories.find((category) => category.id === categoryId) ?? null;
 
   const changeCurrency = (next: string) => {
+    if (next === currency) return;
+    const prevExp = decimalPlaces(currency);
+    const nextExp = decimalPlaces(next);
     setCurrency(next);
+    if (prevExp !== nextExp) {
+      setAmountText("");
+    } else {
+      setAmountText((current) => sanitizeMoneyInput(current, next));
+    }
     setAccountId(accounts.find((account) => account.currency === next)?.id ?? null);
     setError(null);
   };
 
   const changeType = (next: "expense" | "income") => {
-    if (next === type) return;
+    if (next === type || saving) return;
     haptics.selection();
     setType(next);
     setCategoryId(null);
   };
 
   const save = async () => {
-    if (savingRef.current) return;
+    if (savingRef.current || saving) return;
     const amountMinor = amountText ? parseMoneyInput(amountText, currency) : null;
 
     if (!amountMinor || amountMinor <= 0) {
@@ -174,15 +240,42 @@ export function RecurringEditorSheet({
       setError("Choose a valid start date.");
       return;
     }
+    if (endDate && (!isIsoDate(endDate) || endDate < startDate)) {
+      setError("End date must be on or after the start date.");
+      return;
+    }
 
-    const interval = Math.max(1, Math.min(999, Math.trunc(Number(intervalText) || 1)));
-    const dayOfMonth =
-      frequency === "monthly" || frequency === "yearly"
-        ? Math.min(31, Math.max(1, Math.trunc(Number(dayText) || Number(startDate.slice(8, 10)))))
-        : null;
+    const parsedInterval = intervalText.trim() ? Math.trunc(Number(intervalText)) : 1;
+    if (!Number.isFinite(parsedInterval) || parsedInterval < 1 || parsedInterval > 999) {
+      setError("Repeat interval must be between 1 and 999.");
+      return;
+    }
+
+    let dayOfMonth: number | null = null;
+    if (frequency === "monthly" || frequency === "yearly") {
+      const parsedDay = dayText.trim()
+        ? Math.trunc(Number(dayText))
+        : Number(startDate.slice(8, 10));
+      if (!Number.isFinite(parsedDay) || parsedDay < 1 || parsedDay > 31) {
+        setError("Day of month must be between 1 and 31.");
+        return;
+      }
+      dayOfMonth = parsedDay;
+    }
+
+    let remindDays = 0;
+    if (remindOn) {
+      const parsedRemind = remindDaysText.trim() ? Math.trunc(Number(remindDaysText)) : 3;
+      if (!Number.isFinite(parsedRemind) || parsedRemind < 1 || parsedRemind > 60) {
+        setError("Reminder lead time must be between 1 and 60 days.");
+        return;
+      }
+      remindDays = parsedRemind;
+    }
+
     const schedule = {
       frequency,
-      intervalCount: interval,
+      intervalCount: parsedInterval,
       dayOfMonth,
       startDate,
       endDate,
@@ -191,20 +284,17 @@ export function RecurringEditorSheet({
     const scheduleChanged =
       Boolean(rule) &&
       (rule!.frequency !== frequency ||
-        rule!.intervalCount !== interval ||
+        rule!.intervalCount !== parsedInterval ||
         rule!.dayOfMonth !== dayOfMonth ||
         rule!.startDate !== startDate ||
         rule!.endDate !== endDate);
 
+    const finishedSentinel = endDate ? addDays(endDate, 1) : startDate;
     const nextDueAt = rule
       ? scheduleChanged
-        ? (firstDueOnOrAfter(schedule, today) ?? startDate)
+        ? (firstDueOnOrAfter(schedule, today) ?? finishedSentinel)
         : rule.nextDueAt
-      : startDate;
-
-    const remindDays = remindOn
-      ? Math.min(60, Math.max(1, Math.trunc(Number(remindDaysText) || 3)))
-      : 0;
+      : (firstDueOnOrAfter(schedule, startDate) ?? finishedSentinel);
 
     const draft: RecurringRuleDraft = {
       type,
@@ -235,8 +325,9 @@ export function RecurringEditorSheet({
         await updateRecurringRule(db, rule.id, draft);
       } else {
         await createRecurringRule(db, draft);
-        // A backdated rule should backfill immediately, not wait for the next launch.
-        if (autoPost) await processDueRecurring(db);
+      }
+      if (autoPost) {
+        await processDueRecurring(db);
       }
 
       if (remindOn) {
@@ -246,7 +337,9 @@ export function RecurringEditorSheet({
         await refreshReminders(db);
       }
 
+      notifyLedgerChanged();
       haptics.success();
+      savingRef.current = false;
       onSaved();
     } catch (cause) {
       haptics.error();
@@ -258,7 +351,7 @@ export function RecurringEditorSheet({
   };
 
   const remove = () => {
-    if (!rule) return;
+    if (!rule || savingRef.current || saving) return;
     Alert.alert(
       "Delete this recurring rule?",
       "Entries it already posted stay in Activity. Future occurrences will stop.",
@@ -268,13 +361,25 @@ export function RecurringEditorSheet({
           text: "Delete",
           style: "destructive",
           onPress: () => {
+            if (savingRef.current) return;
+            savingRef.current = true;
+            setSaving(true);
+            setError(null);
             deleteRecurringRule(db, rule.id)
               .then(() => refreshReminders(db))
               .then(() => {
+                notifyLedgerChanged();
                 haptics.error();
+                savingRef.current = false;
                 onSaved();
               })
-              .catch((cause: unknown) => setError(`Not deleted: ${String(cause)}`));
+              .catch((cause: unknown) => {
+                setError(`Not deleted: ${String(cause)}`);
+              })
+              .finally(() => {
+                savingRef.current = false;
+                setSaving(false);
+              });
           },
         },
       ],
@@ -282,16 +387,115 @@ export function RecurringEditorSheet({
   };
 
   return (
-    <Sheet visible onClose={onClose} title={editing ? "Edit recurring rule" : "New recurring rule"}>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      dismissible={!saving}
+      title={editing ? "Edit recurring rule" : "New recurring rule"}
+      overlayChildren={
+        <>
+          <PickerSheet
+            embedded
+            visible={picker === "currency"}
+            title="Currency"
+            options={currencyOptions().map((entry) => ({
+              value: entry.code,
+              label: currencyLabel(entry),
+              secondary: entry.name,
+            }))}
+            selected={currency}
+            searchable
+            searchPlaceholder="Search currencies"
+            onSelect={changeCurrency}
+            onClose={() => setPicker(null)}
+          />
+          <PickerSheet
+            embedded
+            visible={picker === "account"}
+            title="Account"
+            options={currencyAccounts.map((account) => ({
+              value: account.id,
+              label: account.isArchived ? `${account.name} (archived)` : account.name,
+              secondary: account.type,
+            }))}
+            selected={accountId ?? undefined}
+            onSelect={(value) => setAccountId(value)}
+            onClose={() => setPicker(null)}
+          />
+          <PickerSheet
+            embedded
+            visible={picker === "category"}
+            title="Category"
+            options={kindCategories.map((category) => ({
+              value: category.id,
+              label: category.isArchived ? `${category.name} (archived)` : category.name,
+            }))}
+            selected={categoryId ?? undefined}
+            searchable
+            searchPlaceholder="Search categories"
+            onSelect={(value) => setCategoryId(value)}
+            onClose={() => setPicker(null)}
+          />
+          <PickerSheet
+            embedded
+            visible={picker === "frequency"}
+            title="Repeats"
+            options={[
+              { value: "daily", label: "Daily" },
+              { value: "weekly", label: "Weekly" },
+              { value: "monthly", label: "Monthly" },
+              { value: "yearly", label: "Yearly" },
+            ]}
+            selected={frequency}
+            onSelect={(value) => setFrequency(value as RecurringRule["frequency"])}
+            onClose={() => setPicker(null)}
+          />
+          <DatePickerSheet
+            embedded
+            visible={picker === "start"}
+            value={startDate}
+            onSelect={(nextStart) => {
+              setStartDate(nextStart);
+              setError(null);
+            }}
+            onClose={() => setPicker(null)}
+            title="Start date"
+          />
+          <DatePickerSheet
+            embedded
+            visible={picker === "end"}
+            value={endDate ?? addDays(startDate, 30)}
+            onSelect={(nextEnd) => {
+              setEndDate(nextEnd);
+              setError(null);
+            }}
+            onClose={() => setPicker(null)}
+            title="End date"
+          />
+        </>
+      }
+    >
       <ScrollView
         style={{ flexGrow: 0, flexShrink: 1 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 8 }}
       >
         <View style={{ paddingHorizontal: 20, flexDirection: "row", gap: 8 }}>
-          <ChoiceChip label="Expense" selected={type === "expense"} onPress={() => changeType("expense")} />
-          <ChoiceChip label="Income" selected={type === "income"} onPress={() => changeType("income")} />
+          <ChoiceChip
+            label="Expense"
+            selected={type === "expense"}
+            onPress={() => changeType("expense")}
+            disabled={saving}
+          />
+          <ChoiceChip
+            label="Income"
+            selected={type === "income"}
+            onPress={() => changeType("income")}
+            disabled={saving}
+          />
         </View>
 
         <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 10 }}>
@@ -322,7 +526,7 @@ export function RecurringEditorSheet({
             backgroundColor: theme.colors.surfaceMuted,
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.colors.cardBorder,
             overflow: "hidden",
           }}
@@ -331,18 +535,21 @@ export function RecurringEditorSheet({
             label="Currency"
             value={currency}
             onPress={loading || saving ? undefined : () => setPicker("currency")}
+            muted={loading || saving}
           />
           <FieldRow
             label="Account"
             value={selectedAccount?.name ?? "Choose account"}
             showDivider
             onPress={saving ? undefined : () => setPicker("account")}
+            muted={saving}
           />
           <FieldRow
             label="Category"
             value={selectedCategory?.name ?? "Uncategorized"}
             showDivider
             onPress={saving ? undefined : () => setPicker("category")}
+            muted={saving}
           />
         </View>
 
@@ -357,21 +564,24 @@ export function RecurringEditorSheet({
             backgroundColor: theme.colors.surfaceMuted,
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.colors.cardBorder,
             overflow: "hidden",
           }}
         >
           <FieldRow
             label="Repeats"
-            value={frequencyLabel(frequency, Number(intervalText) || 1)}
+            value={frequencyLabel(frequency, Math.max(1, Number(intervalText) || 1))}
             onPress={saving ? undefined : () => setPicker("frequency")}
+            muted={saving}
           />
           {frequency !== "daily" && frequency !== "weekly" ? (
             <View
               style={{
                 minHeight: 52,
-                borderTopWidth: 1,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderTopWidth: StyleSheet.hairlineWidth,
                 borderTopColor: theme.colors.border,
                 flexDirection: "row",
                 alignItems: "center",
@@ -389,7 +599,12 @@ export function RecurringEditorSheet({
                 accessibilityLabel="Day of month"
                 style={[
                   theme.text.body,
-                  { color: theme.colors.textSecondary, width: 52, textAlign: "right" },
+                  {
+                    color: theme.colors.textSecondary,
+                    width: 52,
+                    textAlign: "right",
+                    fontVariant: ["tabular-nums"],
+                  },
                 ]}
               />
             </View>
@@ -397,7 +612,9 @@ export function RecurringEditorSheet({
           <View
             style={{
               minHeight: 52,
-              borderTopWidth: 1,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderTopWidth: StyleSheet.hairlineWidth,
               borderTopColor: theme.colors.border,
               flexDirection: "row",
               alignItems: "center",
@@ -415,7 +632,12 @@ export function RecurringEditorSheet({
               accessibilityLabel="Interval"
               style={[
                 theme.text.body,
-                { color: theme.colors.textSecondary, width: 52, textAlign: "right" },
+                {
+                  color: theme.colors.textSecondary,
+                  width: 52,
+                  textAlign: "right",
+                  fontVariant: ["tabular-nums"],
+                },
               ]}
             />
             <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
@@ -433,24 +655,31 @@ export function RecurringEditorSheet({
             value={startDate}
             showDivider
             onPress={saving ? undefined : () => setPicker("start")}
+            muted={saving}
           />
           <FieldRow
             label="Ends"
             value={endDate ?? "No end date"}
             showDivider
             onPress={saving ? undefined : () => setPicker("end")}
+            muted={saving}
           />
         </View>
 
         {endDate ? (
-          <Pressable
+          <TactilePressable
             onPress={() => setEndDate(null)}
+            disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Clear end date"
+            hitSlop={8}
+            scaleTo={0.95}
             style={{ alignSelf: "flex-end", paddingHorizontal: 22, paddingTop: 6 }}
           >
-            <Text style={[theme.text.caption, { color: theme.colors.accent }]}>Clear end date</Text>
-          </Pressable>
+            <Text style={[theme.text.caption, { color: theme.colors.accent, fontFamily: FONT_FAMILIES.medium }]}>
+              Clear end date
+            </Text>
+          </TactilePressable>
         ) : null}
 
         <View
@@ -460,13 +689,22 @@ export function RecurringEditorSheet({
             backgroundColor: theme.colors.surfaceMuted,
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.colors.cardBorder,
             overflow: "hidden",
           }}
         >
-          <View style={{ minHeight: 56, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ flex: 1 }}>
+          <View
+            style={{
+              minHeight: 56,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[theme.text.body, { color: theme.colors.textPrimary }]}>
                 Post automatically
               </Text>
@@ -486,14 +724,16 @@ export function RecurringEditorSheet({
           <View
             style={{
               minHeight: 56,
-              borderTopWidth: 1,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderTopWidth: StyleSheet.hairlineWidth,
               borderTopColor: theme.colors.border,
               flexDirection: "row",
               alignItems: "center",
               gap: 12,
             }}
           >
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[theme.text.body, { color: theme.colors.textPrimary }]}>
                 Remind me
               </Text>
@@ -514,7 +754,9 @@ export function RecurringEditorSheet({
             <View
               style={{
                 minHeight: 52,
-                borderTopWidth: 1,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderTopWidth: StyleSheet.hairlineWidth,
                 borderTopColor: theme.colors.border,
                 flexDirection: "row",
                 alignItems: "center",
@@ -532,7 +774,12 @@ export function RecurringEditorSheet({
                 accessibilityLabel="Days before the bill"
                 style={[
                   theme.text.body,
-                  { color: theme.colors.textSecondary, width: 52, textAlign: "right" },
+                  {
+                    color: theme.colors.textSecondary,
+                    width: 52,
+                    textAlign: "right",
+                    fontVariant: ["tabular-nums"],
+                  },
                 ]}
               />
             </View>
@@ -568,17 +815,25 @@ export function RecurringEditorSheet({
         ) : null}
 
         {editing ? (
-          <Pressable
+          <TactilePressable
             onPress={remove}
             disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Delete recurring rule"
-            style={{ alignItems: "center", paddingVertical: 12 }}
+            hitSlop={8}
+            scaleTo={0.96}
+            style={{
+              minHeight: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingVertical: 12,
+              opacity: saving ? 0.5 : 1,
+            }}
           >
-            <Text style={[theme.text.caption, { color: theme.colors.danger }]}>
+            <Text style={[theme.text.caption, { color: theme.colors.danger, fontFamily: FONT_FAMILIES.semibold }]}>
               Delete this rule
             </Text>
-          </Pressable>
+          </TactilePressable>
         ) : null}
       </ScrollView>
 
@@ -591,77 +846,6 @@ export function RecurringEditorSheet({
           disabled={saving || loading}
         />
       </View>
-
-      <PickerSheet
-        visible={picker === "currency"}
-        title="Currency"
-        options={currencyOptions().map((entry) => ({
-          value: entry.code,
-          label: currencyLabel(entry),
-          secondary: entry.name,
-        }))}
-        selected={currency}
-        searchable
-        searchPlaceholder="Search currencies"
-        onSelect={changeCurrency}
-        onClose={() => setPicker(null)}
-      />
-      <PickerSheet
-        visible={picker === "account"}
-        title="Account"
-        options={currencyAccounts.map((account) => ({
-          value: account.id,
-          label: account.name,
-          secondary: account.type,
-        }))}
-        selected={accountId ?? undefined}
-        onSelect={(value) => setAccountId(value)}
-        onClose={() => setPicker(null)}
-      />
-      <PickerSheet
-        visible={picker === "category"}
-        title="Category"
-        options={kindCategories.map((category) => ({
-          value: category.id,
-          label: category.isArchived ? `${category.name} (archived)` : category.name,
-        }))}
-        selected={categoryId ?? undefined}
-        searchable
-        searchPlaceholder="Search categories"
-        onSelect={(value) => setCategoryId(value)}
-        onClose={() => setPicker(null)}
-      />
-      <PickerSheet
-        visible={picker === "frequency"}
-        title="Repeats"
-        options={[
-          { value: "daily", label: "Daily" },
-          { value: "weekly", label: "Weekly" },
-          { value: "monthly", label: "Monthly" },
-          { value: "yearly", label: "Yearly" },
-        ]}
-        selected={frequency}
-        onSelect={(value) => setFrequency(value as RecurringRule["frequency"])}
-        onClose={() => setPicker(null)}
-      />
-      {picker === "start" ? (
-        <DatePickerSheet
-          visible
-          value={startDate}
-          onSelect={setStartDate}
-          onClose={() => setPicker(null)}
-          title="Start date"
-        />
-      ) : null}
-      {picker === "end" ? (
-        <DatePickerSheet
-          visible
-          value={endDate ?? addDays(today, 30)}
-          onSelect={setEndDate}
-          onClose={() => setPicker(null)}
-          title="End date"
-        />
-      ) : null}
     </Sheet>
   );
 }

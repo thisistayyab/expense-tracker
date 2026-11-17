@@ -36,6 +36,10 @@ export async function getLockCapability(): Promise<LockCapability> {
       };
     }
 
+    if (!enrolled) {
+      return { available: true, label: "Device passcode", reason: null };
+    }
+
     if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
       return { available: true, label: "Face ID", reason: null };
     }

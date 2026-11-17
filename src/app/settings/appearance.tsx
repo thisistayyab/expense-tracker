@@ -1,6 +1,7 @@
 import { useSQLiteContext } from "expo-sqlite";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppIcon, Card, ScreenBackground, SectionHeader, TactilePressable } from "../../components/ui";
 import { setSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
@@ -16,12 +17,16 @@ const OPTIONS: { value: ThemePreference; label: string; body: string }[] = [
 
 export default function AppearanceScreen() {
   const { theme, preference, setPreference } = useTheme();
+  const insets = useSafeAreaInsets();
   const db: Db = useSQLiteContext();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const busyRef = useRef(false);
 
   const choose = async (value: ThemePreference) => {
-    if (busy || value === preference) return;
+    if (busy || busyRef.current || value === preference) return;
+    const previous = preference;
+    busyRef.current = true;
     haptics.selection();
     setPreference(value);
     setBusy(true);
@@ -29,9 +34,10 @@ export default function AppearanceScreen() {
     try {
       await setSettings(db, { [SETTING_KEYS.theme]: value });
     } catch (cause) {
-      setPreference(preference);
+      setPreference(previous);
       setError(`Not saved: ${String(cause)}`);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -39,11 +45,12 @@ export default function AppearanceScreen() {
   return (
     <View style={{ flex: 1 }}>
       <ScreenBackground />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
-      >
+      <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+        >
         <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
           Appearance is a display preference only; no amount, date or currency changes with it.
         </Text>
@@ -95,7 +102,8 @@ export default function AppearanceScreen() {
             {error}
           </Text>
         ) : null}
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }

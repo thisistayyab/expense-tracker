@@ -13,6 +13,7 @@ export const DATABASE_NAME = "expense-tracker.db";
 async function applyPragmas(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync("PRAGMA journal_mode = WAL;");
   await db.execAsync("PRAGMA foreign_keys = ON;");
+  await db.execAsync("PRAGMA busy_timeout = 5000;");
 }
 
 export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -37,9 +38,14 @@ let connection: Promise<SQLite.SQLiteDatabase> | null = null;
  * Screens read through `useSQLiteContext()` so the provider lifecycle is honoured.
  */
 export function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  connection ??= SQLite.openDatabaseAsync(DATABASE_NAME).then(async (db) => {
-    await applyPragmas(db);
-    return db;
-  });
+  connection ??= SQLite.openDatabaseAsync(DATABASE_NAME)
+    .then(async (db) => {
+      await applyPragmas(db);
+      return db;
+    })
+    .catch((cause) => {
+      connection = null;
+      throw cause;
+    });
   return connection;
 }

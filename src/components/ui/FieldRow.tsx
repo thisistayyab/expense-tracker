@@ -26,7 +26,9 @@ export function FieldRow({
 
   const row = (
     <View style={styles.row}>
-      <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>{label}</Text>
+      <Text style={[theme.text.body, { color: theme.colors.textSecondary, flexShrink: 1 }]}>
+        {label}
+      </Text>
       <View style={styles.right}>
         {value ? (
           <Text
@@ -35,6 +37,7 @@ export function FieldRow({
               {
                 color: muted ? theme.colors.textTertiary : theme.colors.textPrimary,
                 textAlign: "right",
+                flexShrink: 1,
               },
             ]}
             numberOfLines={1}
@@ -83,6 +86,7 @@ const styles = StyleSheet.create({
   },
   right: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",

@@ -80,10 +80,9 @@ export function TactilePressable({
         onPressIn?.(event);
       }}
       onPressOut={(event) => {
-        if (!disabled) {
-          if (!reduceMotion && scaleTo !== 1) springTo(scale, 1, false);
-          fadeTo(flash, 0, reduceMotion ? 0 : 190);
-        }
+        // Always release spring/flash even if `disabled` became true mid-press.
+        if (scaleTo !== 1) springTo(scale, 1, false);
+        fadeTo(flash, 0, reduceMotion ? 0 : 190);
         onPressOut?.(event);
       }}
       style={[

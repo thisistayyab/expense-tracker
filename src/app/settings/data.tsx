@@ -1,7 +1,8 @@
 import { useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 
 import {
@@ -33,8 +34,9 @@ import {
   type BackupTable,
 } from "../../lib/domain/backup";
 import { haptics } from "../../lib/haptics";
+import { notifyLedgerReset } from "../../lib/ledgerEvents";
 import { useOnboarding } from "../../lib/onboarding";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 type Preview = {
   fileName: string;
@@ -62,17 +64,23 @@ const TABLE_LABELS: Record<BackupTable, string> = {
  */
 export default function DataScreen() {
   const { theme, setPreference } = useTheme();
+  const insets = useSafeAreaInsets();
   const db: Db = useSQLiteContext();
   const { reload } = useOnboarding();
   const { refresh: refreshAppLock } = useAppLock();
   const params = useLocalSearchParams<{ action?: string }>();
-  const [busy, setBusy] = useState(false);
+  const [activeTask, setActiveTask] = useState<"csv" | "backup" | "restore" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [postRestoreLockRefresh, setPostRestoreLockRefresh] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const ranAction = useRef(false);
+  const taskRef = useRef(false);
+  const previewBusyRef = useRef(false);
+  const busy = activeTask !== null;
 
   const applyExport = (result: ExportResult, label: string) => {
     setMessage(
@@ -83,7 +91,9 @@ export default function DataScreen() {
   };
 
   const runCsv = useCallback(async () => {
-    setBusy(true);
+    if (taskRef.current) return;
+    taskRef.current = true;
+    setActiveTask("csv");
     setError(null);
     setMessage(null);
     try {
@@ -91,12 +101,15 @@ export default function DataScreen() {
     } catch (cause) {
       setError(String(cause));
     } finally {
-      setBusy(false);
+      taskRef.current = false;
+      setActiveTask(null);
     }
   }, [db]);
 
   const runBackup = useCallback(async () => {
-    setBusy(true);
+    if (taskRef.current) return;
+    taskRef.current = true;
+    setActiveTask("backup");
     setError(null);
     setMessage(null);
     try {
@@ -105,12 +118,15 @@ export default function DataScreen() {
     } catch (cause) {
       setError(String(cause));
     } finally {
-      setBusy(false);
+      taskRef.current = false;
+      setActiveTask(null);
     }
   }, [db]);
 
   const runRestore = useCallback(async () => {
-    setBusy(true);
+    if (taskRef.current) return;
+    taskRef.current = true;
+    setActiveTask("restore");
     setError(null);
     setMessage(null);
     try {
@@ -136,27 +152,30 @@ export default function DataScreen() {
       }
 
       setPreview({ fileName: picked.name, payload: validation.payload, counts: validation.counts });
+      setPreviewVisible(true);
     } catch (cause) {
       setError(`Could not read the file: ${String(cause)}`);
     } finally {
-      setBusy(false);
+      taskRef.current = false;
+      setActiveTask(null);
     }
   }, []);
 
   const applyRestore = async (mode: RestoreMode) => {
-    if (!preview || previewBusy) return;
+    if (!preview || previewBusy || previewBusyRef.current) return;
+    previewBusyRef.current = true;
     setPreviewBusy(true);
     try {
       await restoreDatabase(db, preview.payload, mode);
       await reload();
-      await refreshAppLock();
       const storedTheme = await getSetting(db, SETTING_KEYS.theme);
       if (storedTheme === "light" || storedTheme === "dark" || storedTheme === "system") {
         setPreference(storedTheme);
       }
       await refreshReminders(db).catch(() => 0);
       haptics.success();
-      setPreview(null);
+      setPostRestoreLockRefresh(true);
+      setPreviewVisible(false);
       setMessage(
         mode === "replace"
           ? "Backup restored. Every table was replaced."
@@ -165,11 +184,13 @@ export default function DataScreen() {
     } catch (cause) {
       setError(`Restore failed and nothing was changed: ${String(cause)}`);
     } finally {
+      previewBusyRef.current = false;
       setPreviewBusy(false);
     }
   };
 
   const confirmReplace = () => {
+    if (previewBusy || previewBusyRef.current) return;
     Alert.alert(
       "Replace all data?",
       "Every current row is deleted and replaced with the backup. This cannot be undone.",
@@ -201,88 +222,102 @@ export default function DataScreen() {
   return (
     <View style={{ flex: 1 }}>
       <ScreenBackground />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
-      >
-        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
-          Your data lives only on this device. Export a CSV for a spreadsheet, or a JSON backup
-          that can restore every table exactly — including your region and currency.
-        </Text>
-
-        <SectionHeader title="Export" />
-        <View style={{ gap: 10 }}>
-          <Button
-            label="Export CSV"
-            leftIcon="share"
-            onPress={() => void runCsv()}
-            disabled={busy}
-            loading={busy}
-          />
-          <Button
-            label="Backup everything (JSON)"
-            variant="ghost"
-            onPress={() => void runBackup()}
-            disabled={busy}
-          />
-        </View>
-
-        <SectionHeader title="Restore" />
-        <Card variant="glass" style={{ gap: 10 }}>
-          <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
-            Pick a backup file to preview its row counts. Nothing is written until you choose
-            Replace or Merge.
-          </Text>
-          <Button
-            label="Choose a backup file"
-            variant="ghost"
-            onPress={() => void runRestore()}
-            disabled={busy}
-          />
-        </Card>
-
-        <SectionHeader title="Danger zone" />
-        <TactilePressable
-          onPress={() => setResetOpen(true)}
-          haptic="selection"
-          scaleTo={0.97}
-          radius={theme.radius.card}
-          accessibilityRole="button"
-          accessibilityLabel="Delete all data"
-          style={{
-            minHeight: 48,
-            borderRadius: theme.radius.card,
-            borderCurve: "continuous",
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: `${theme.colors.danger}32`,
-            backgroundColor: `${theme.colors.danger}16`,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
+      <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
         >
-          <Text style={[theme.text.label, { color: theme.colors.danger, fontWeight: "700" }]}>
-            Delete all data…
+          <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+            Your data lives only on this device. Export a CSV for a spreadsheet, or a JSON backup
+            that can restore every table exactly — including your region and currency.
           </Text>
-        </TactilePressable>
 
-        {busy ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 14 }} /> : null}
+          <SectionHeader title="Export" />
+          <View style={{ gap: 10 }}>
+            <Button
+              label="Export CSV"
+              leftIcon="share"
+              onPress={() => void runCsv()}
+              disabled={busy}
+              loading={activeTask === "csv"}
+            />
+            <Button
+              label="Backup everything (JSON)"
+              variant="ghost"
+              onPress={() => void runBackup()}
+              disabled={busy}
+              loading={activeTask === "backup"}
+            />
+          </View>
 
-        {message ? (
-          <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 16 }]}>
-            {message}
-          </Text>
-        ) : null}
-        {error ? (
-          <Text style={[theme.text.caption, { color: theme.colors.danger, marginTop: 12 }]}>
-            {error}
-          </Text>
-        ) : null}
-      </ScrollView>
+          <SectionHeader title="Restore" />
+          <Card variant="glass" style={{ gap: 10 }}>
+            <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+              Pick a backup file to preview its row counts. Nothing is written until you choose
+              Replace or Merge.
+            </Text>
+            <Button
+              label="Choose a backup file"
+              variant="ghost"
+              onPress={() => void runRestore()}
+              disabled={busy}
+              loading={activeTask === "restore"}
+            />
+          </Card>
+
+          <SectionHeader title="Danger zone" />
+          <TactilePressable
+            onPress={() => setResetOpen(true)}
+            disabled={busy}
+            haptic="selection"
+            scaleTo={0.97}
+            radius={theme.radius.card}
+            accessibilityRole="button"
+            accessibilityLabel="Delete all data"
+            style={{
+              minHeight: 48,
+              borderRadius: theme.radius.card,
+              borderCurve: "continuous",
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: `${theme.colors.danger}32`,
+              backgroundColor: `${theme.colors.danger}16`,
+              justifyContent: "center",
+              alignItems: "center",
+              opacity: busy ? 0.5 : 1,
+            }}
+          >
+            <Text style={[theme.text.label, { color: theme.colors.danger, fontFamily: FONT_FAMILIES.bold }]}>
+              Delete all data…
+            </Text>
+          </TactilePressable>
+
+          {message ? (
+            <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 16 }]}>
+              {message}
+            </Text>
+          ) : null}
+          {error ? (
+            <Text style={[theme.text.caption, { color: theme.colors.danger, marginTop: 12 }]}>
+              {error}
+            </Text>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
 
       <Sheet
-        visible={Boolean(preview)}
-        onClose={() => (previewBusy ? undefined : setPreview(null))}
+        visible={previewVisible}
+        dismissible={!previewBusy}
+        onClose={() => (previewBusy ? undefined : setPreviewVisible(false))}
+        onClosed={() => {
+          if (!previewVisible) {
+            setPreview(null);
+            if (postRestoreLockRefresh) {
+              setPostRestoreLockRefresh(false);
+              void refreshAppLock();
+            }
+          }
+        }}
         title="Restore preview"
       >
         {preview ? (
@@ -339,7 +374,7 @@ export default function DataScreen() {
               <Button
                 label="Cancel"
                 variant="ghost"
-                onPress={() => setPreview(null)}
+                onPress={() => setPreviewVisible(false)}
                 disabled={previewBusy}
               />
             </View>
@@ -350,7 +385,10 @@ export default function DataScreen() {
       <DeleteAllSheet
         visible={resetOpen}
         onClose={() => setResetOpen(false)}
-        onDeleted={() => setMessage("All rows were deleted; the starter library was recreated.")}
+        onDeleted={() => {
+          notifyLedgerReset();
+          setMessage("All rows were deleted; the starter library was recreated.");
+        }}
       />
     </View>
   );

@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES } from "../../lib/theme/fonts";
 import { AppIcon } from "./AppIcon";
 import { TactilePressable } from "./TactilePressable";
 
@@ -22,8 +23,9 @@ export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderPro
         style={[
           theme.text.caption,
           {
+            flexShrink: 1,
             color: theme.colors.textSecondary,
-            fontWeight: "600",
+            fontFamily: FONT_FAMILIES.semibold,
             fontSize: 13.5,
           },
         ]}
@@ -43,7 +45,11 @@ export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderPro
           <Text
             style={[
               theme.text.caption,
-              { color: theme.colors.accent, fontWeight: "600", fontSize: 12.5 },
+              {
+                color: theme.colors.accent,
+                fontFamily: FONT_FAMILIES.semibold,
+                fontSize: 12.5,
+              },
             ]}
           >
             {actionLabel}

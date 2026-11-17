@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -63,13 +64,15 @@ export default function FirstBudgetScreen() {
   const [focused, setFocused] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const busyRef = useRef(false);
 
   const minor = parseMoneyInput(text, currency);
   const valid = minor !== null && minor > 0;
   const symbol = getCurrency(currency).symbol;
 
   const complete = (withBudget: boolean) => {
-    if (busy) return;
+    if (busy || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     const region = { country, currency, locale };
@@ -83,6 +86,7 @@ export default function FirstBudgetScreen() {
         haptics.success();
       })
       .catch((cause: unknown) => {
+        busyRef.current = false;
         setError(`Could not finish setup: ${String(cause)}`);
         setBusy(false);
       });
@@ -96,12 +100,19 @@ export default function FirstBudgetScreen() {
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={{ flex: 1, paddingHorizontal: 20 }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+          >
             <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 4 }}>
               {/* Back is a real control: nothing is saved yet, so there is nothing
                   to lose by returning to the region step. */}
               <TactilePressable
                 onPress={() => router.back()}
+                disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel="Back to region"
                 hitSlop={10}
@@ -181,6 +192,7 @@ export default function FirstBudgetScreen() {
                     onChangeText={(next) => setText(sanitizeMoneyInput(next, currency))}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setFocused(false)}
+                    editable={!busy}
                     keyboardType={decimalPlaces(currency) === 0 ? "number-pad" : "decimal-pad"}
                     inputMode={decimalPlaces(currency) === 0 ? "numeric" : "decimal"}
                     accessibilityLabel={`Monthly budget in ${currency}`}
@@ -250,7 +262,7 @@ export default function FirstBudgetScreen() {
                 </Text>
               </TactilePressable>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>

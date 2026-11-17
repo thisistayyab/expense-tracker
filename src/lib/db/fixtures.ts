@@ -1,6 +1,6 @@
 import { isCurrencyCode } from "../../constants/currencies";
 import { newId } from "../ids";
-import { addDays, addMonthsClamped, startOfMonth } from "../domain/dates";
+import { addDays, addMonthsClamped, startOfMonth, toIsoDate } from "../domain/dates";
 import type { Db } from "./types";
 
 /**
@@ -65,7 +65,7 @@ export async function insertFixtureTransactions(
 
   const months = Math.max(1, options.months ?? 12);
   const count = Math.max(1, options.count ?? 2000);
-  const endDate = options.endDate ?? new Date().toISOString().slice(0, 10);
+  const endDate = options.endDate ?? toIsoDate(new Date());
   const startDate = startOfMonth(addMonthsClamped(endDate, -months));
   const rangeEnd = endDate;
   const random = mulberry32(options.seed ?? 20261112);

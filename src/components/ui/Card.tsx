@@ -26,6 +26,7 @@ export function Card({ children, variant = "surface", padded = true, style }: Ca
 
   const isInk = variant === "ink";
   const isMuted = variant === "muted";
+  const isGlass = variant === "glass";
 
   const shadowStyle = isInk
     ? Platform.OS === "ios"
@@ -61,7 +62,11 @@ export function Card({ children, variant = "surface", padded = true, style }: Ca
             borderCurve: "continuous",
             overflow: "hidden",
             borderWidth: isMuted ? 0 : StyleSheet.hairlineWidth,
-            borderColor: isInk ? theme.colors.inkBorder : theme.colors.cardBorder,
+            borderColor: isInk
+              ? theme.colors.inkBorder
+              : isGlass && theme.scheme === "dark"
+                ? theme.colors.glassBorder
+                : theme.colors.cardBorder,
           },
         ]}
       >

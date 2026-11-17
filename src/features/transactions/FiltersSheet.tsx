@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Button, ChoiceChip, DatePickerSheet, FieldRow, PickerSheet, Sheet } from "../../components/ui";
 import type { Account, Category } from "../../lib/db/types";
@@ -13,12 +13,14 @@ import {
 } from "./filters";
 
 export type FiltersSheetProps = {
+  visible?: boolean;
   value: TransactionFilters;
   accounts: Account[];
   categories: Category[];
   currencies: { currency: string; count: number }[];
   onApply: (next: TransactionFilters) => void;
   onClose: () => void;
+  onClosed?: () => void;
 };
 
 type PickerKind = "account" | "category" | "currency" | null;
@@ -57,18 +59,31 @@ function Chips({ children }: { children: ReactNode }) {
  * immediately, which is what makes the no-results "Clear filters" action honest.
  */
 export function FiltersSheet({
+  visible = true,
   value,
   accounts,
   categories,
   currencies,
   onApply,
   onClose,
+  onClosed,
 }: FiltersSheetProps) {
   const { theme } = useTheme();
+  const [prevVisible, setPrevVisible] = useState(visible);
   const [draft, setDraft] = useState<TransactionFilters>(value);
   const [picker, setPicker] = useState<PickerKind>(null);
   const [dateField, setDateField] = useState<DateField>(null);
-  const today = useMemo(() => toIsoDate(new Date()), []);
+  const [today, setToday] = useState(() => toIsoDate(new Date()));
+
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible) {
+      setDraft(value);
+      setPicker(null);
+      setDateField(null);
+      setToday(toIsoDate(new Date()));
+    }
+  }
 
   const accountLabel =
     accounts.find((account) => account.id === draft.accountId)?.name ?? "All accounts";
@@ -98,12 +113,93 @@ export function FiltersSheet({
     onApply(EMPTY_FILTERS);
   };
 
+  const childPickers = (
+    <>
+      <PickerSheet
+        embedded
+        visible={picker === "account"}
+        title="Account"
+        options={[
+          { value: "", label: "All accounts" },
+          ...accounts.map((account) => ({
+            value: account.id,
+            label: account.name,
+            secondary: account.currency,
+          })),
+        ]}
+        selected={draft.accountId ?? ""}
+        onSelect={(accountId) =>
+          setDraft((current) => ({ ...current, accountId: accountId || null }))
+        }
+        onClose={() => setPicker(null)}
+      />
+      <PickerSheet
+        embedded
+        visible={picker === "category"}
+        title="Category"
+        options={[
+          { value: "", label: "All categories" },
+          ...categories.map((category) => ({
+            value: category.id,
+            label: category.name,
+            secondary: category.kind,
+          })),
+        ]}
+        selected={draft.categoryId ?? ""}
+        searchable
+        searchPlaceholder="Search categories"
+        onSelect={(categoryId) =>
+          setDraft((current) => ({ ...current, categoryId: categoryId || null }))
+        }
+        onClose={() => setPicker(null)}
+      />
+      <PickerSheet
+        embedded
+        visible={picker === "currency"}
+        title="Currency"
+        options={[
+          { value: "", label: "All currencies" },
+          ...currencies.map(({ currency, count }) => ({
+            value: currency,
+            label: currency,
+            secondary: `${count} ${count === 1 ? "entry" : "entries"}`,
+          })),
+        ]}
+        selected={draft.currency ?? ""}
+        onSelect={(currency) =>
+          setDraft((current) => ({ ...current, currency: currency || null }))
+        }
+        onClose={() => setPicker(null)}
+      />
+      <DatePickerSheet
+        embedded
+        visible={dateField !== null}
+        value={(dateField ? draft[dateField] : null) ?? today}
+        onSelect={(iso) => {
+          if (!dateField) return;
+          setDraft((current) => ({
+            ...current,
+            [dateField]: iso,
+          }));
+        }}
+        onClose={() => setDateField(null)}
+      />
+    </>
+  );
+
   return (
-    <Sheet visible onClose={onClose} title="Filters">
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      overlayChildren={childPickers}
+      title="Filters"
+    >
       <ScrollView
         style={{ flexGrow: 0, flexShrink: 1 }}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 4 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <GroupLabel>Date</GroupLabel>
@@ -125,7 +221,7 @@ export function FiltersSheet({
               marginTop: 10,
               borderRadius: theme.radius.card,
               borderCurve: "continuous",
-              borderWidth: 1,
+              borderWidth: StyleSheet.hairlineWidth,
               borderColor: theme.colors.cardBorder,
               overflow: "hidden",
               backgroundColor: theme.colors.surfaceMuted,
@@ -134,12 +230,12 @@ export function FiltersSheet({
             <FieldRow
               label="From"
               value={draft.fromDate ?? "Choose date"}
+              showDivider
               onPress={() => setDateField("fromDate")}
             />
             <FieldRow
               label="To"
               value={draft.toDate ?? "Choose date"}
-              showDivider
               onPress={() => setDateField("toDate")}
             />
           </View>
@@ -168,24 +264,23 @@ export function FiltersSheet({
           style={{
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.colors.cardBorder,
             overflow: "hidden",
             backgroundColor: theme.colors.surfaceMuted,
           }}
         >
-          <FieldRow label="Account" value={accountLabel} onPress={() => setPicker("account")} />
+          <FieldRow label="Account" value={accountLabel} showDivider onPress={() => setPicker("account")} />
           <FieldRow
             label="Category"
             value={categoryLabel}
-            showDivider
+            showDivider={currencies.length > 1}
             onPress={() => setPicker("category")}
           />
           {currencies.length > 1 ? (
             <FieldRow
               label="Currency"
               value={currencyLabel}
-              showDivider
               onPress={() => setPicker("currency")}
             />
           ) : null}
@@ -229,74 +324,6 @@ export function FiltersSheet({
           />
         </View>
       </View>
-
-      <PickerSheet
-        visible={picker === "account"}
-        title="Account"
-        options={[
-          { value: "", label: "All accounts" },
-          ...accounts.map((account) => ({
-            value: account.id,
-            label: account.name,
-            secondary: account.currency,
-          })),
-        ]}
-        selected={draft.accountId ?? ""}
-        onSelect={(accountId) =>
-          setDraft((current) => ({ ...current, accountId: accountId || null }))
-        }
-        onClose={() => setPicker(null)}
-      />
-      <PickerSheet
-        visible={picker === "category"}
-        title="Category"
-        options={[
-          { value: "", label: "All categories" },
-          ...categories.map((category) => ({
-            value: category.id,
-            label: category.name,
-            secondary: category.kind,
-          })),
-        ]}
-        selected={draft.categoryId ?? ""}
-        searchable
-        searchPlaceholder="Search categories"
-        onSelect={(categoryId) =>
-          setDraft((current) => ({ ...current, categoryId: categoryId || null }))
-        }
-        onClose={() => setPicker(null)}
-      />
-      <PickerSheet
-        visible={picker === "currency"}
-        title="Currency"
-        options={[
-          { value: "", label: "All currencies" },
-          ...currencies.map(({ currency, count }) => ({
-            value: currency,
-            label: currency,
-            secondary: `${count} ${count === 1 ? "entry" : "entries"}`,
-          })),
-        ]}
-        selected={draft.currency ?? ""}
-        onSelect={(currency) =>
-          setDraft((current) => ({ ...current, currency: currency || null }))
-        }
-        onClose={() => setPicker(null)}
-      />
-
-      {dateField ? (
-        <DatePickerSheet
-          visible
-          value={draft[dateField] ?? today}
-          onSelect={(iso) =>
-            setDraft((current) => ({
-              ...current,
-              [dateField]: iso,
-            }))
-          }
-          onClose={() => setDateField(null)}
-        />
-      ) : null}
     </Sheet>
   );
 }

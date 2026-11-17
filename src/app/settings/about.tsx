@@ -1,22 +1,25 @@
 import Constants from "expo-constants";
 import { router } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BrandMark, Button, Card, ScreenBackground, SectionHeader } from "../../components/ui";
 import { useTheme } from "../../lib/theme";
 
 export default function AboutScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const version = Constants.expoConfig?.version ?? "1.0.0";
 
   return (
     <View style={{ flex: 1 }}>
       <ScreenBackground />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
-      >
+      <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+        >
         <Card variant="ink" style={{ padding: 22 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
             <BrandMark size={44} framed />
@@ -76,7 +79,8 @@ export default function AboutScreen() {
         >
           Suffice {version} · works offline
         </Text>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }

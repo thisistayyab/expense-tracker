@@ -1,14 +1,15 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { useCallback, useState } from "react";
-import { Alert, Linking, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, AppState, Linking, StyleSheet, Text, View } from "react-native";
 
 import { AppIcon, Card, Money, TactilePressable } from "../../components/ui";
 import { listUpcomingRecurringRules } from "../../lib/db/repos/recurring";
 import type { Db, RecurringRule } from "../../lib/db/types";
 import { addDays, daysBetween, toIsoDate } from "../../lib/domain/dates";
 import { formatMoneySpoken } from "../../lib/format/money";
-import { useTheme } from "../../lib/theme";
+import { notifyLedgerChanged, subscribeLedgerChanged } from "../../lib/ledgerEvents";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { postNextOccurrence } from "./processDue";
 import {
   getReminderPermission,
@@ -33,19 +34,26 @@ function dueLabel(due: string, today: string): string {
 export function BillsDueCard({ currency }: { currency: string }) {
   const { theme } = useTheme();
   const db: Db = useSQLiteContext();
-  const today = toIsoDate(new Date());
+  const [today, setToday] = useState(() => toIsoDate(new Date()));
   const [rules, setRules] = useState<RecurringRule[]>([]);
   const [permission, setPermission] = useState<ReminderPermission>("undetermined");
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
   const load = useCallback(async () => {
+    const currentToday = toIsoDate(new Date());
+    setToday(currentToday);
     const [upcoming, status] = await Promise.all([
-      listUpcomingRecurringRules(db, { currency, throughDate: addDays(today, 7), limit: 3 }),
+      listUpcomingRecurringRules(db, {
+        currency,
+        throughDate: addDays(currentToday, 7),
+        limit: 3,
+      }),
       getReminderPermission(),
     ]);
     setRules(upcoming);
     setPermission(status);
-  }, [currency, db, today]);
+  }, [currency, db]);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,44 +61,70 @@ export function BillsDueCard({ currency }: { currency: string }) {
       load().catch(() => {
         if (!cancelled) setRules([]);
       });
+      const unsubLedger = subscribeLedgerChanged(() => {
+        load().catch(() => {});
+      });
+      const subApp = AppState.addEventListener("change", (state) => {
+        if (state === "active") load().catch(() => {});
+      });
       return () => {
         cancelled = true;
+        unsubLedger();
+        subApp.remove();
       };
     }, [load]),
   );
 
+  useEffect(() => {
+    return () => {
+      busyRef.current = false;
+    };
+  }, []);
+
   if (!rules.length) return null;
 
   const enableReminders = async () => {
+    if (busyRef.current || busy) return;
+    busyRef.current = true;
     setBusy(true);
-    const next = await requestReminderPermission();
-    setPermission(next);
-    if (next === "granted") await refreshReminders(db);
-    if (next === "denied") {
-      Alert.alert(
-        "Notifications are off",
-        "Bills still appear here and stay set aside from safe to spend. You can enable reminders in system settings.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "Open settings", onPress: () => void Linking.openSettings() },
-        ],
-      );
+    try {
+      const next = await requestReminderPermission();
+      setPermission(next);
+      if (next === "granted") await refreshReminders(db);
+      if (next === "denied") {
+        Alert.alert(
+          "Notifications are off",
+          "Bills still appear here and stay set aside from safe to spend. You can enable reminders in system settings.",
+          [
+            { text: "Not now", style: "cancel" },
+            { text: "Open settings", onPress: () => void Linking.openSettings() },
+          ],
+        );
+      }
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const postNow = async (rule: RecurringRule) => {
+    if (busyRef.current || busy) return;
+    busyRef.current = true;
     setBusy(true);
     try {
-      const result = await postNextOccurrence(db, rule, today);
+      const currentToday = toIsoDate(new Date());
+      const result = await postNextOccurrence(db, rule, currentToday);
       if (!result.posted) {
         Alert.alert("Already posted", "This occurrence is already in Activity.");
+      } else {
+        notifyLedgerChanged();
       }
       await refreshReminders(db);
       await load();
     } catch (cause) {
       Alert.alert("Not posted", String(cause));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -108,7 +142,12 @@ export function BillsDueCard({ currency }: { currency: string }) {
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <AppIcon name="repeat" size={14} color={theme.colors.accent} />
-          <Text style={[theme.text.caption, { color: theme.colors.textSecondary, fontWeight: "600" }]}>
+          <Text
+            style={[
+              theme.text.caption,
+              { color: theme.colors.textSecondary, fontFamily: FONT_FAMILIES.semibold },
+            ]}
+          >
             Bills due
           </Text>
         </View>
@@ -126,45 +165,60 @@ export function BillsDueCard({ currency }: { currency: string }) {
             backgroundColor: theme.colors.accentSoft,
           }}
         >
-          <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "600" }]}>
+          <Text
+            style={[
+              theme.text.caption,
+              { color: theme.colors.accent, fontFamily: FONT_FAMILIES.semibold },
+            ]}
+          >
             Manage
           </Text>
         </TactilePressable>
       </View>
 
       {rules.map((rule, index) => (
-        <TactilePressable
+        <View
           key={rule.id}
-          onPress={() => router.push("/settings/recurring")}
-          accessibilityRole="button"
-          accessibilityLabel={`${rule.itemName ?? "Recurring bill"}, ${formatMoneySpoken(
-            rule.amountMinor,
-            rule.currency,
-          )}, ${dueLabel(rule.nextDueAt, today)}${rule.autoPost ? "" : ", unpaid"}`}
-          scaleTo={0.985}
-          radius={14}
           style={{
             flexDirection: "row",
             alignItems: "center",
-            gap: 12,
+            gap: 10,
             paddingHorizontal: 16,
             paddingVertical: 12,
             borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
             borderTopColor: theme.colors.border,
           }}
         >
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text
-              style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]}
-              numberOfLines={1}
-            >
-              {rule.itemName ?? "Recurring bill"}
-            </Text>
-            <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
-              {dueLabel(rule.nextDueAt, today)} · {rule.autoPost ? "Auto-posts" : "Unpaid"}
-            </Text>
-          </View>
-          <Money minor={rule.amountMinor} currency={rule.currency} />
+          <TactilePressable
+            onPress={() => router.push("/settings/recurring")}
+            accessibilityRole="button"
+            accessibilityLabel={`${rule.itemName ?? "Recurring bill"}, ${formatMoneySpoken(
+              rule.amountMinor,
+              rule.currency,
+            )}, ${dueLabel(rule.nextDueAt, today)}${rule.autoPost ? "" : ", unpaid"}`}
+            scaleTo={0.985}
+            radius={14}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {rule.itemName ?? "Recurring bill"}
+              </Text>
+              <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
+                {dueLabel(rule.nextDueAt, today)} · {rule.autoPost ? "Auto-posts" : "Unpaid"}
+              </Text>
+            </View>
+            <Money minor={rule.amountMinor} currency={rule.currency} />
+          </TactilePressable>
           {!rule.autoPost && rule.nextDueAt <= today ? (
             <TactilePressable
               onPress={() => void postNow(rule)}
@@ -180,14 +234,21 @@ export function BillsDueCard({ currency }: { currency: string }) {
                 borderRadius: 999,
                 justifyContent: "center",
                 backgroundColor: theme.colors.accentSoft,
+                opacity: busy ? 0.5 : 1,
               }}
             >
-              <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "700" }]}>
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={[
+                  theme.text.caption,
+                  { color: theme.colors.accent, fontFamily: FONT_FAMILIES.bold },
+                ]}
+              >
                 Post
               </Text>
             </TactilePressable>
           ) : null}
-        </TactilePressable>
+        </View>
       ))}
 
       <View
@@ -216,8 +277,15 @@ export function BillsDueCard({ currency }: { currency: string }) {
             accessibilityLabel="Turn on bill reminders"
             hitSlop={8}
             scaleTo={0.94}
+            style={{ opacity: busy ? 0.5 : 1 }}
           >
-            <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "600" }]}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={[
+                theme.text.caption,
+                { color: theme.colors.accent, fontFamily: FONT_FAMILIES.semibold },
+              ]}
+            >
               Turn on
             </Text>
           </TactilePressable>

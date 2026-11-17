@@ -1,6 +1,6 @@
 import { GlassView } from "expo-glass-effect";
 import { router, usePathname } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptics } from "../../lib/haptics";
 import { SPRING_PRESS, SPRING_RELEASE, SPRING_SNAPPY } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES } from "../../lib/theme/fonts";
 import { AppIcon } from "../ui/AppIcon";
 import { Glass, GlassGroup, liquidGlass, type GlassProps } from "../ui/Glass";
 import { TabIcon, type TabIconName } from "./TabIcon";
@@ -80,12 +81,13 @@ function TabButton({
         />
         <Text
           numberOfLines={1}
+          maxFontSizeMultiplier={1.2}
           style={[
             theme.text.caption,
             styles.tabLabel,
             {
               color: active ? accentColor : inactiveColor,
-              fontWeight: active ? "700" : "500",
+              fontFamily: active ? FONT_FAMILIES.bold : FONT_FAMILIES.medium,
             },
           ]}
         >
@@ -107,15 +109,22 @@ export function FloatingTabBar({ blurTarget }: { blurTarget?: GlassProps["blurTa
   const pathname = usePathname();
   const reduceMotion = useReducedMotion();
 
+  const matchedIndex = TABS.findIndex(
+    (tab) => pathname === tab.href || pathname.startsWith(`${tab.href}/`),
+  );
+  const [lastMatchedIndex, setLastMatchedIndex] = useState(
+    matchedIndex >= 0 ? matchedIndex : 0,
+  );
+  if (matchedIndex >= 0 && matchedIndex !== lastMatchedIndex) {
+    setLastMatchedIndex(matchedIndex);
+  }
+  const activeIndex = matchedIndex >= 0 ? matchedIndex : lastMatchedIndex;
+
   const [capsuleWidth, setCapsuleWidth] = useState(0);
+  const hasMeasuredPill = useRef(false);
   const pillX = useSharedValue(0);
   const fabScale = useSharedValue(1);
   const barTranslateY = useSharedValue(reduceMotion ? 0 : 28);
-
-  const activeIndex = Math.max(
-    0,
-    TABS.findIndex((tab) => pathname === tab.href || pathname.startsWith(`${tab.href}/`)),
-  );
 
   useEffect(() => {
     barTranslateY.set(reduceMotion ? 0 : withSpring(0, SPRING_SNAPPY));
@@ -126,6 +135,11 @@ export function FloatingTabBar({ blurTarget }: { blurTarget?: GlassProps["blurTa
     const innerWidth = capsuleWidth - 8;
     const slotWidth = innerWidth / TABS.length;
     const target = activeIndex * slotWidth;
+    if (!hasMeasuredPill.current) {
+      hasMeasuredPill.current = true;
+      pillX.set(target);
+      return;
+    }
     pillX.set(
       reduceMotion ? withTiming(target, { duration: 0 }) : withSpring(target, SPRING_SNAPPY),
     );
@@ -176,6 +190,7 @@ export function FloatingTabBar({ blurTarget }: { blurTarget?: GlassProps["blurTa
           ]}
         >
           <View
+            accessibilityRole="tablist"
             onLayout={(e) => setCapsuleWidth(e.nativeEvent.layout.width)}
             style={styles.capsuleRow}
           >

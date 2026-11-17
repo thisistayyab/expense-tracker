@@ -56,9 +56,10 @@ export function MonthSelector({
     <View style={styles.labelWrap}>
       <Animated.Text
         key={label}
+        numberOfLines={1}
         entering={reduceMotion ? undefined : FadeIn.duration(160).reduceMotion(ReduceMotion.System)}
         accessibilityLiveRegion="polite"
-        style={[theme.text.label, { color: theme.colors.textPrimary }]}
+        style={[theme.text.label, { color: theme.colors.textPrimary, flexShrink: 1 }]}
       >
         {label}
       </Animated.Text>
@@ -81,12 +82,14 @@ export function MonthSelector({
       ]}
     >
       {Platform.OS === "ios" || Platform.OS === "web" ? (
-        <BlurView
-          pointerEvents="none"
-          tint={theme.colors.blurTint}
-          intensity={44}
-          style={StyleSheet.absoluteFill}
-        />
+        <View pointerEvents="none" style={styles.blurClip}>
+          <BlurView
+            pointerEvents="none"
+            tint={theme.colors.blurTint}
+            intensity={44}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
       ) : null}
       {showPrevious && onPrevious ? arrow("chevronLeft", onPrevious, "Previous month") : null}
       {onPressLabel ? (
@@ -98,6 +101,7 @@ export function MonthSelector({
           haptic="selection"
           scaleTo={0.96}
           radius={14}
+          style={styles.labelPress}
         >
           {labelContent}
         </TactilePressable>
@@ -114,13 +118,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
+    flexShrink: 1,
     minHeight: 40,
     borderRadius: 999,
     borderCurve: "continuous",
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 5,
-    overflow: "hidden",
     gap: 4,
+  },
+  blurClip: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 999,
+    overflow: "hidden",
   },
   arrow: {
     width: 30,
@@ -129,7 +138,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  labelPress: {
+    flexShrink: 1,
+  },
   labelWrap: {
+    flexShrink: 1,
     paddingHorizontal: 10,
     alignItems: "center",
     justifyContent: "center",

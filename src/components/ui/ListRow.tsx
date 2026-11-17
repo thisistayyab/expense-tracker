@@ -60,7 +60,7 @@ export function ListRow({
         <TactilePressable
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel ?? title}
+          accessibilityLabel={accessibilityLabel ?? (subtitle ? `${title}, ${subtitle}` : title)}
           scaleTo={0.985}
           radius={14}
         >
@@ -86,6 +86,7 @@ export function ListRow({
 
 const styles = StyleSheet.create({
   row: {
+    minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,

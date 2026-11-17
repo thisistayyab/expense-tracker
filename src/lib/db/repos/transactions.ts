@@ -1,4 +1,5 @@
 import { isCurrencyCode } from "../../../constants/currencies";
+import { isIsoDate } from "../../domain/dates";
 import { newId } from "../../ids";
 import type { CategoryKind, Db, Transaction, TransactionType } from "../types";
 import { nullable } from "../types";
@@ -187,39 +188,74 @@ export async function getTransaction(db: Db, id: string): Promise<Transaction | 
 
 export async function createTransaction(db: Db, input: NewTransaction): Promise<Transaction> {
   assertAmount(input.amountMinor);
-  if (!isCurrencyCode(input.currency)) throw new Error(`Unknown currency: ${input.currency}`);
-  if (input.type === "transfer" && !input.transferAccountId) {
-    throw new Error("A transfer needs a destination account");
+  const currency = input.currency.trim().toUpperCase();
+  if (!isCurrencyCode(currency)) throw new Error(`Unknown currency: ${input.currency}`);
+  if (!isIsoDate(input.localDate)) throw new Error(`Invalid localDate: ${input.localDate}`);
+
+  if (input.type === "transfer") {
+    if (!input.transferAccountId) {
+      throw new Error("A transfer needs a destination account");
+    }
+    if (input.transferAccountId === input.accountId) {
+      throw new Error("A transfer needs two different accounts");
+    }
   }
 
+  const categoryId = input.type === "transfer" ? null : nullable(input.categoryId ?? null);
   const id = input.id ?? newId();
   const now = new Date().toISOString();
 
-  await db.runAsync(
-    `INSERT INTO transactions (id, type, amount_minor, currency, account_id, transfer_account_id,
-                               category_id, item_name, place, note, occurred_at, local_date,
-                               recurring_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      input.type,
-      Math.trunc(input.amountMinor),
-      input.currency.toUpperCase(),
-      input.accountId,
-      input.type === "transfer" ? input.transferAccountId! : null,
-      nullable(input.categoryId ?? null),
-      nullable(input.itemName ?? null),
-      nullable(input.place ?? null),
-      nullable(input.note ?? null),
-      input.occurredAt,
-      input.localDate,
-      input.recurringId ?? null,
-      now,
-      now,
-    ],
-  );
+  let created: Transaction | null = null;
+  await db.withTransactionAsync(async () => {
+    if (input.type === "transfer") {
+      for (const accountId of [input.accountId, input.transferAccountId!]) {
+        const account = await db.getFirstAsync<{ currency: string }>(
+          "SELECT currency FROM accounts WHERE id = ?",
+          [accountId],
+        );
+        if (!account) throw new Error(`Account not found: ${accountId}`);
+        if (account.currency.toUpperCase() !== currency) {
+          throw new Error("Transfer accounts must use the transaction's currency");
+        }
+      }
+    }
 
-  return (await getTransaction(db, id))!;
+    if (categoryId) {
+      const category = await db.getFirstAsync<{ id: string }>(
+        "SELECT id FROM categories WHERE id = ?",
+        [categoryId],
+      );
+      if (!category) throw new Error(`Category not found: ${categoryId}`);
+    }
+
+    await db.runAsync(
+      `INSERT INTO transactions (id, type, amount_minor, currency, account_id, transfer_account_id,
+                                 category_id, item_name, place, note, occurred_at, local_date,
+                                 recurring_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.type,
+        Math.trunc(input.amountMinor),
+        currency,
+        input.accountId,
+        input.type === "transfer" ? input.transferAccountId! : null,
+        categoryId,
+        nullable(input.itemName ?? null),
+        nullable(input.place ?? null),
+        nullable(input.note ?? null),
+        input.occurredAt,
+        input.localDate,
+        input.recurringId ?? null,
+        now,
+        now,
+      ],
+    );
+
+    created = await getTransaction(db, id);
+  });
+
+  return created!;
 }
 
 /**
@@ -244,64 +280,84 @@ export async function updateTransaction(
   id: string,
   patch: TransactionPatch,
 ): Promise<void> {
-  const current = await getTransaction(db, id);
-  if (!current) throw new Error(`Transaction not found: ${id}`);
+  await db.withTransactionAsync(async () => {
+    const current = await getTransaction(db, id);
+    if (!current) throw new Error(`Transaction not found: ${id}`);
 
-  if (patch.amountMinor !== undefined) assertAmount(patch.amountMinor);
-
-  const nextAccountId = patch.accountId ?? current.accountId;
-  const nextTransferAccountId =
-    current.type === "transfer"
-      ? patch.transferAccountId === undefined
-        ? current.transferAccountId
-        : patch.transferAccountId
-      : null;
-
-  if (current.type === "transfer") {
-    if (!nextTransferAccountId) {
-      throw new Error("A transfer needs a destination account");
+    if (patch.amountMinor !== undefined) assertAmount(patch.amountMinor);
+    if (patch.localDate !== undefined && !isIsoDate(patch.localDate)) {
+      throw new Error(`Invalid localDate: ${patch.localDate}`);
     }
-    if (nextTransferAccountId === nextAccountId) {
-      throw new Error("A transfer needs two different accounts");
-    }
-  }
 
-  // The pickers already filter by currency, but the repository is the last line of
-  // defence: a row's currency snapshot and its accounts must stay in agreement.
-  const accountIds = [nextAccountId, nextTransferAccountId].filter(
-    (accountId): accountId is string => Boolean(accountId),
-  );
-  for (const accountId of accountIds) {
-    const account = await db.getFirstAsync<{ currency: string }>(
-      "SELECT currency FROM accounts WHERE id = ?",
-      [accountId],
+    const nextAccountId = patch.accountId ?? current.accountId;
+    const nextTransferAccountId =
+      current.type === "transfer"
+        ? patch.transferAccountId === undefined
+          ? current.transferAccountId
+          : patch.transferAccountId
+        : null;
+
+    if (current.type === "transfer") {
+      if (!nextTransferAccountId) {
+        throw new Error("A transfer needs a destination account");
+      }
+      if (nextTransferAccountId === nextAccountId) {
+        throw new Error("A transfer needs two different accounts");
+      }
+    }
+
+    const nextCategoryId =
+      current.type === "transfer"
+        ? null
+        : patch.categoryId === undefined
+          ? current.categoryId
+          : nullable(patch.categoryId);
+
+    if (nextCategoryId) {
+      const category = await db.getFirstAsync<{ id: string }>(
+        "SELECT id FROM categories WHERE id = ?",
+        [nextCategoryId],
+      );
+      if (!category) throw new Error(`Category not found: ${nextCategoryId}`);
+    }
+
+    // The pickers already filter by currency, but the repository is the last line of
+    // defence: a row's currency snapshot and its accounts must stay in agreement.
+    const accountIds = [nextAccountId, nextTransferAccountId].filter(
+      (accountId): accountId is string => Boolean(accountId),
     );
-    if (!account) throw new Error(`Account not found: ${accountId}`);
-    if (account.currency.toUpperCase() !== current.currency.toUpperCase()) {
-      throw new Error("An account must use the transaction's currency");
+    for (const accountId of accountIds) {
+      const account = await db.getFirstAsync<{ currency: string }>(
+        "SELECT currency FROM accounts WHERE id = ?",
+        [accountId],
+      );
+      if (!account) throw new Error(`Account not found: ${accountId}`);
+      if (account.currency.toUpperCase() !== current.currency.toUpperCase()) {
+        throw new Error("An account must use the transaction's currency");
+      }
     }
-  }
 
-  await db.runAsync(
-    `UPDATE transactions
-        SET amount_minor = ?, account_id = ?, transfer_account_id = ?, category_id = ?,
-            item_name = ?, place = ?, note = ?, occurred_at = ?, local_date = ?,
-            updated_at = ?
-      WHERE id = ?`,
-    [
-      Math.trunc(patch.amountMinor ?? current.amountMinor),
-      nextAccountId,
-      nextTransferAccountId,
-      patch.categoryId === undefined ? current.categoryId : nullable(patch.categoryId),
-      patch.itemName === undefined ? current.itemName : nullable(patch.itemName),
-      patch.place === undefined ? current.place : nullable(patch.place),
-      patch.note === undefined ? current.note : nullable(patch.note),
-      patch.occurredAt ?? current.occurredAt,
-      patch.localDate ?? current.localDate,
-      new Date().toISOString(),
-      id,
-    ],
-  );
+    await db.runAsync(
+      `UPDATE transactions
+          SET amount_minor = ?, account_id = ?, transfer_account_id = ?, category_id = ?,
+              item_name = ?, place = ?, note = ?, occurred_at = ?, local_date = ?,
+              updated_at = ?
+        WHERE id = ?`,
+      [
+        Math.trunc(patch.amountMinor ?? current.amountMinor),
+        nextAccountId,
+        nextTransferAccountId,
+        nextCategoryId,
+        patch.itemName === undefined ? current.itemName : nullable(patch.itemName),
+        patch.place === undefined ? current.place : nullable(patch.place),
+        patch.note === undefined ? current.note : nullable(patch.note),
+        patch.occurredAt ?? current.occurredAt,
+        patch.localDate ?? current.localDate,
+        new Date().toISOString(),
+        id,
+      ],
+    );
+  });
 }
 
 export async function deleteTransaction(db: Db, id: string): Promise<void> {
@@ -440,20 +496,27 @@ export async function listRecentCategoryIds(
   db: Db,
   options: { kind: CategoryKind; currency?: string; limit?: number },
 ): Promise<string[]> {
-  const params: (string | number)[] = [options.kind];
+  const params: (string | number)[] = [options.kind, options.kind];
   let currencyClause = "";
   if (options.currency) {
-    currencyClause = "AND currency = ?";
+    currencyClause = "AND t.currency = ?";
     params.push(options.currency.toUpperCase());
   }
   params.push(Math.max(1, Math.min(20, Math.trunc(options.limit ?? 4))));
 
   const rows = await db.getAllAsync<{ category_id: string }>(
-    `SELECT category_id
-       FROM transactions
-      WHERE category_id IS NOT NULL AND type = ? ${currencyClause}
-      GROUP BY category_id
-      ORDER BY MAX(created_at) DESC
+    `SELECT t.category_id
+       FROM transactions t
+       JOIN categories c ON c.id = t.category_id
+       LEFT JOIN categories p ON p.id = c.parent_id
+      WHERE t.category_id IS NOT NULL
+        AND t.type = ?
+        AND c.kind = ?
+        AND c.is_archived = 0
+        AND (c.parent_id IS NULL OR p.is_archived = 0)
+        ${currencyClause}
+      GROUP BY t.category_id
+      ORDER BY MAX(t.created_at) DESC
       LIMIT ?`,
     params,
   );
@@ -466,7 +529,7 @@ export async function listRecentCategoryIds(
  */
 export async function restoreTransaction(db: Db, transaction: Transaction): Promise<void> {
   await db.runAsync(
-    `INSERT OR REPLACE INTO transactions
+    `INSERT INTO transactions
        (id, type, amount_minor, currency, account_id, transfer_account_id, category_id,
         item_name, place, note, occurred_at, local_date, recurring_id, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

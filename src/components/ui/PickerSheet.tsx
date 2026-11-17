@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { AppIcon } from "./AppIcon";
 import { Sheet } from "./Sheet";
@@ -21,6 +21,7 @@ export type PickerSheetProps = {
   onClosed?: () => void;
   searchable?: boolean;
   searchPlaceholder?: string;
+  embedded?: boolean;
 };
 
 /**
@@ -36,13 +37,19 @@ export function PickerSheet({
   onClosed,
   searchable = false,
   searchPlaceholder = "Search",
+  embedded = false,
 }: PickerSheetProps) {
   const { theme } = useTheme();
   const [query, setQuery] = useState("");
 
   const close = () => {
-    setQuery("");
+    Keyboard.dismiss();
     onClose();
+  };
+
+  const handleClosed = () => {
+    setQuery("");
+    onClosed?.();
   };
 
   const filtered = useMemo(() => {
@@ -57,7 +64,13 @@ export function PickerSheet({
   }, [options, query]);
 
   return (
-    <Sheet visible={visible} onClose={close} onClosed={onClosed} title={title}>
+    <Sheet
+      visible={visible}
+      onClose={close}
+      onClosed={handleClosed}
+      title={title}
+      embedded={embedded}
+    >
       {searchable ? (
         <View style={styles.searchWrap}>
           <View
@@ -75,6 +88,7 @@ export function PickerSheet({
               value={query}
               onChangeText={setQuery}
               placeholder={searchPlaceholder}
+              accessibilityLabel={searchPlaceholder}
               placeholderTextColor={theme.colors.textTertiary}
               selectionColor={theme.colors.accent}
               autoCapitalize="none"
@@ -97,6 +111,7 @@ export function PickerSheet({
 
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={styles.list}
       >
         {filtered.length === 0 ? (

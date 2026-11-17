@@ -1,6 +1,6 @@
 import { useSQLiteContext } from "expo-sqlite";
-import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
   Button,
@@ -9,6 +9,7 @@ import {
   FieldRow,
   PickerSheet,
   Sheet,
+  TactilePressable,
 } from "../../components/ui";
 import {
   createCategory,
@@ -16,24 +17,29 @@ import {
   updateCategory,
 } from "../../lib/db/repos/categories";
 import type { Category, CategoryKind, Db } from "../../lib/db/types";
+import { notifyLedgerChanged } from "../../lib/ledgerEvents";
 import { categoryRamp, useTheme } from "../../lib/theme";
 
 export type CategoryEditorSheetProps = {
+  visible?: boolean;
   category?: Category | null;
   kind: CategoryKind;
   /** All categories, including archived, so parent labels stay resolvable. */
   categories: Category[];
   defaultParentId?: string | null;
   onClose: () => void;
+  onClosed?: () => void;
   onSaved: () => void;
 };
 
 export function CategoryEditorSheet({
+  visible = true,
   category = null,
   kind,
   categories,
   defaultParentId = null,
   onClose,
+  onClosed,
   onSaved,
 }: CategoryEditorSheetProps) {
   const { theme } = useTheme();
@@ -42,11 +48,34 @@ export function CategoryEditorSheet({
   const [parentId, setParentId] = useState<string | null>(
     category?.parentId ?? defaultParentId,
   );
-  const [color, setColor] = useState(category?.color ?? theme.colors.accent);
+  const [color, setColor] = useState(category?.color ?? categoryRamp[0]);
   const [icon, setIcon] = useState(category?.icon ?? "ellipsis");
   const [parentOpen, setParentOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const busyRef = useRef(false);
+
+  const openKey = visible ? `${category?.id ?? "new"}:${kind}:${defaultParentId ?? ""}` : null;
+  const [lastOpenKey, setLastOpenKey] = useState<string | null>(openKey);
+  if (openKey !== null && openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
+    setName(category?.name ?? "");
+    setParentId(category?.parentId ?? defaultParentId);
+    setColor(category?.color ?? categoryRamp[0]);
+    setIcon(category?.icon ?? "ellipsis");
+    setParentOpen(false);
+    setBusy(false);
+    setError(null);
+  } else if (openKey === null && lastOpenKey !== null) {
+    setLastOpenKey(null);
+    setParentOpen(false);
+  }
+
+  useEffect(() => {
+    if (!visible) {
+      busyRef.current = false;
+    }
+  }, [visible]);
 
   const hasChildren = categories.some((entry) => entry.parentId === category?.id);
   const parent = parentId ? categories.find((entry) => entry.id === parentId) : null;
@@ -64,7 +93,8 @@ export function CategoryEditorSheet({
   const nextSortOrder = siblings.reduce((max, entry) => Math.max(max, entry.sortOrder), -1) + 1;
 
   const save = () => {
-    if (!name.trim() || busy) return;
+    if (!name.trim() || busy || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     const task = category
@@ -84,21 +114,33 @@ export function CategoryEditorSheet({
         });
 
     task
-      .then(onSaved)
+      .then(() => {
+        busyRef.current = false;
+        notifyLedgerChanged();
+        onSaved();
+      })
       .catch((cause: unknown) => {
+        busyRef.current = false;
         setError(`Not saved: ${String(cause)}`);
         setBusy(false);
       });
   };
 
   const toggleArchive = () => {
-    if (!category) return;
+    if (!category || busy || busyRef.current) return;
     const next = !category.isArchived;
     const archive = () => {
+      if (busyRef.current) return;
+      busyRef.current = true;
       setBusy(true);
       setCategoryArchived(db, category.id, next)
-        .then(onSaved)
+        .then(() => {
+          busyRef.current = false;
+          notifyLedgerChanged();
+          onSaved();
+        })
         .catch((cause: unknown) => {
+          busyRef.current = false;
           setError(`Could not ${next ? "archive" : "restore"}: ${String(cause)}`);
           setBusy(false);
         });
@@ -119,11 +161,32 @@ export function CategoryEditorSheet({
   };
 
   return (
-    <Sheet visible onClose={onClose} title={category ? "Edit category" : "New category"}>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      dismissible={!busy}
+      title={category ? "Edit category" : "New category"}
+      overlayChildren={
+        <PickerSheet
+          embedded
+          visible={parentOpen}
+          title="Parent category"
+          options={[
+            { value: "", label: "Top level" },
+            ...parentOptions.map((entry) => ({ value: entry.id, label: entry.name })),
+          ]}
+          selected={parentId ?? ""}
+          onSelect={(next) => setParentId(next || null)}
+          onClose={() => setParentOpen(false)}
+        />
+      }
+    >
       <ScrollView
         style={{ flexGrow: 0, flexShrink: 1 }}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 4 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -140,12 +203,13 @@ export function CategoryEditorSheet({
               theme.text.title3,
               {
                 flex: 1,
-                height: 50,
+                minHeight: 50,
                 borderRadius: theme.radius.input,
                 borderCurve: "continuous",
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.colors.cardBorder,
                 paddingHorizontal: 14,
+                paddingVertical: 10,
                 backgroundColor: theme.colors.surfaceMuted,
                 color: theme.colors.textPrimary,
               },
@@ -163,6 +227,7 @@ export function CategoryEditorSheet({
               color={swatch}
               selected={color === swatch}
               onPress={() => setColor(swatch)}
+              disabled={busy}
             />
           ))}
         </View>
@@ -174,23 +239,23 @@ export function CategoryEditorSheet({
           {CATEGORY_ICON_KEYS.map((key) => {
             const selected = icon === key;
             return (
-              <Pressable
+              <TactilePressable
                 key={key}
                 onPress={() => setIcon(key)}
+                disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel={`Use ${key} icon`}
-                accessibilityState={{ selected }}
-                style={({ pressed }) => ({
+                accessibilityState={{ selected, disabled: busy }}
+                style={{
                   borderRadius: 15,
                   borderCurve: "continuous",
-                  borderWidth: selected ? 2 : 1,
+                  borderWidth: selected ? 2 : StyleSheet.hairlineWidth,
                   borderColor: selected ? theme.colors.accent : theme.colors.cardBorder,
                   padding: 2,
-                  opacity: pressed ? 0.72 : 1,
-                })}
+                }}
               >
                 <CategoryTile icon={key} color={color} size={38} />
-              </Pressable>
+              </TactilePressable>
             );
           })}
         </View>
@@ -200,7 +265,7 @@ export function CategoryEditorSheet({
             marginTop: 16,
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.colors.cardBorder,
             overflow: "hidden",
             backgroundColor: theme.colors.surfaceMuted,
@@ -209,8 +274,8 @@ export function CategoryEditorSheet({
           <FieldRow
             label="Parent"
             value={parent?.name ?? "Top level"}
-            muted={!parent}
-            onPress={hasChildren ? undefined : () => setParentOpen(true)}
+            muted={!parent || hasChildren}
+            onPress={hasChildren || busy ? undefined : () => setParentOpen(true)}
           />
         </View>
         {hasChildren ? (
@@ -251,18 +316,6 @@ export function CategoryEditorSheet({
           />
         ) : null}
       </View>
-
-      <PickerSheet
-        visible={parentOpen}
-        title="Parent category"
-        options={[
-          { value: "", label: "Top level" },
-          ...parentOptions.map((entry) => ({ value: entry.id, label: entry.name })),
-        ]}
-        selected={parentId ?? ""}
-        onSelect={(next) => setParentId(next || null)}
-        onClose={() => setParentOpen(false)}
-      />
     </Sheet>
   );
 }
@@ -271,27 +324,29 @@ function ColorSwatch({
   color,
   selected,
   onPress,
+  disabled,
 }: {
   color: string;
   selected: boolean;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   const { theme } = useTheme();
   return (
-    <Pressable
+    <TactilePressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={`Use color ${color}`}
-      accessibilityState={{ selected }}
-      style={({ pressed }) => ({
+      accessibilityState={{ selected, disabled: Boolean(disabled) }}
+      style={{
         width: 34,
         height: 34,
         borderRadius: 17,
         backgroundColor: color,
         borderWidth: selected ? 3 : 0,
         borderColor: theme.colors.surface,
-        opacity: pressed ? 0.7 : 1,
-      })}
+      }}
     />
   );
 }

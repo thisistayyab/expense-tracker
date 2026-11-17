@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { AppState, Platform } from "react-native";
 
 import type { Db } from "../../lib/db/types";
+import { notifyLedgerChanged } from "../../lib/ledgerEvents";
 import { processDueRecurring } from "./processDue";
 import { refreshReminders } from "./reminders";
 
@@ -40,7 +41,10 @@ function NativeRecurringRuntime() {
       if (running) return;
       running = true;
       try {
-        await processDueRecurring(db);
+        const result = await processDueRecurring(db);
+        if (result.posted > 0) {
+          notifyLedgerChanged();
+        }
         await refreshReminders(db);
       } catch (cause) {
         if (__DEV__) console.warn("[recurring] foreground run failed", cause);

@@ -63,6 +63,14 @@ export function useInsights(period: InsightPeriod): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     const request = ++requestId.current;
@@ -190,7 +198,7 @@ export function useInsights(period: InsightPeriod): {
 
   const refresh = useCallback(() => {
     load().catch((cause: unknown) => {
-      setError(`Could not read insights: ${String(cause)}`);
+      if (mountedRef.current) setError(`Could not read insights: ${String(cause)}`);
     });
   }, [load]);
 

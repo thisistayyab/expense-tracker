@@ -1,12 +1,14 @@
 import { StatusBar } from "expo-status-bar";
+import * as SystemUI from "expo-system-ui";
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { useColorScheme } from "react-native";
+import { Appearance, useColorScheme } from "react-native";
 
 import { darkTheme, lightTheme, type Theme } from "./tokens";
 
@@ -38,14 +40,21 @@ export function ThemeProvider({
   const scheme: Scheme =
     preference === "system" ? (systemScheme === "dark" ? "dark" : "light") : preference;
 
+  const activeTheme = scheme === "dark" ? darkTheme : lightTheme;
+
+  useEffect(() => {
+    Appearance.setColorScheme?.(preference === "system" ? "unspecified" : preference);
+    void SystemUI.setBackgroundColorAsync(activeTheme.colors.bg).catch(() => {});
+  }, [activeTheme.colors.bg, preference]);
+
   const value = useMemo<ThemeContextValue>(
     () => ({
-      theme: scheme === "dark" ? darkTheme : lightTheme,
+      theme: activeTheme,
       scheme,
       preference,
       setPreference,
     }),
-    [scheme, preference],
+    [activeTheme, scheme, preference],
   );
 
   return (

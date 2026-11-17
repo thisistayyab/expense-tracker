@@ -21,9 +21,11 @@ export type ProgressBarProps = {
   color?: string;
   /** Track override — smoked glass hero needs an ink-track instead of surfaceSunken. */
   trackColor?: string;
+  accessibilityLabel?: string;
 };
 
 export function progressStateFor(value: number): ProgressState {
+  if (!Number.isFinite(value)) return "normal";
   if (value >= 1) return "over";
   if (value >= 0.8) return "warning";
   return "normal";
@@ -32,11 +34,19 @@ export function progressStateFor(value: number): ProgressState {
 /**
  * Smooth Apple Health-style capsule bar with critically damped spring motion and subtle specular top catch.
  */
-export function ProgressBar({ value, height = 7, state, color, trackColor }: ProgressBarProps) {
+export function ProgressBar({
+  value,
+  height = 7,
+  state,
+  color,
+  trackColor,
+  accessibilityLabel,
+}: ProgressBarProps) {
   const { theme } = useTheme();
   const reduceMotion = useReducedMotion();
-  const resolvedState = state ?? progressStateFor(value);
-  const clamped = Math.max(0, Math.min(value, 1));
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const resolvedState = state ?? progressStateFor(safeValue);
+  const clamped = Math.max(0, Math.min(safeValue, 1));
 
   const trackWidth = useSharedValue(0);
   const progress = useSharedValue(reduceMotion ? clamped : 0);
@@ -64,6 +74,7 @@ export function ProgressBar({ value, height = 7, state, color, trackColor }: Pro
   return (
     <View
       accessibilityRole="progressbar"
+      accessibilityLabel={accessibilityLabel}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}
       onLayout={(event) => {
         trackWidth.value = event.nativeEvent.layout.width;

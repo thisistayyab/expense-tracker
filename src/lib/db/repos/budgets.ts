@@ -83,7 +83,7 @@ const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
  * limit and its month override coexist. Upsert is manual because `ON CONFLICT`
  * cannot target a partial index by column list.
  */
-export async function upsertBudget(db: Db, input: UpsertBudget): Promise<Budget> {
+export async function upsertBudgetInTransaction(db: Db, input: UpsertBudget): Promise<Budget> {
   if (!Number.isSafeInteger(input.limitMinor) || input.limitMinor <= 0) {
     throw new Error("A budget limit must be a positive integer in minor units");
   }
@@ -143,6 +143,14 @@ export async function upsertBudget(db: Db, input: UpsertBudget): Promise<Budget>
 
   const row = await db.getFirstAsync<BudgetRow>(`${SELECT} WHERE id = ?`, [id]);
   return mapBudget(row!);
+}
+
+export async function upsertBudget(db: Db, input: UpsertBudget): Promise<Budget> {
+  let saved: Budget | null = null;
+  await db.withTransactionAsync(async () => {
+    saved = await upsertBudgetInTransaction(db, input);
+  });
+  return saved!;
 }
 
 /**

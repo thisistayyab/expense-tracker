@@ -18,18 +18,22 @@ export const SPRING_SHEET = motion.sheetSpring;
 export const SPRING_SNAPPY = motion.snappy;
 
 export function springTo(value: SharedValue<number>, to: number, pressed = false) {
+  "worklet";
   value.value = withSpring(to, pressed ? SPRING_PRESS : SPRING_RELEASE);
 }
 
 export function settleTo(value: SharedValue<number>, to: number) {
+  "worklet";
   value.value = withSpring(to, SPRING_SETTLE);
 }
 
 export function snappyTo(value: SharedValue<number>, to: number) {
+  "worklet";
   value.value = withSpring(to, SPRING_SNAPPY);
 }
 
 export function fadeTo(value: SharedValue<number>, to: number, duration: number) {
+  "worklet";
   value.value = withTiming(to, { duration });
 }
 

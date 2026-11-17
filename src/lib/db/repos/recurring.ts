@@ -1,6 +1,7 @@
 import { isCurrencyCode } from "../../../constants/currencies";
 import type { IsoDate } from "../../domain/dates";
-import { isIsoDate } from "../../domain/dates";
+import { addDays, isIsoDate } from "../../domain/dates";
+import { isRuleFinished, occurrencesBetween } from "../../domain/recurrence";
 import { newId } from "../../ids";
 import type { Db, RecurringFrequency, RecurringRule, TransactionType } from "../types";
 import { boolToInt, intToBool, nullable } from "../types";
@@ -106,8 +107,17 @@ async function assertRuleLinks(db: Db, input: RecurringRuleDraft): Promise<void>
   if (input.endDate && input.endDate < input.startDate) {
     throw new Error("The end date cannot be before the start date");
   }
-  if (input.dayOfMonth != null && (input.dayOfMonth < 1 || input.dayOfMonth > 31)) {
+  if (
+    input.dayOfMonth != null &&
+    (!Number.isFinite(input.dayOfMonth) || input.dayOfMonth < 1 || input.dayOfMonth > 31)
+  ) {
     throw new Error("The day of month must be between 1 and 31");
+  }
+  if (input.intervalCount != null && (!Number.isFinite(input.intervalCount) || input.intervalCount < 1)) {
+    throw new Error("The interval count must be at least 1");
+  }
+  if (input.remindDays != null && (!Number.isFinite(input.remindDays) || input.remindDays < 0)) {
+    throw new Error("Reminder days must be zero or greater");
   }
 
   const account = await db.getFirstAsync<{ currency: string; is_archived: number }>(
@@ -200,42 +210,46 @@ export async function createRecurringRule(
   db: Db,
   input: RecurringRuleDraft,
 ): Promise<RecurringRule> {
-  await assertRuleLinks(db, input);
-  const draft = normalizeDraft(input);
-  const id = newId();
-  const now = new Date().toISOString();
+  let created: RecurringRule | null = null;
+  await db.withTransactionAsync(async () => {
+    await assertRuleLinks(db, input);
+    const draft = normalizeDraft(input);
+    const id = newId();
+    const now = new Date().toISOString();
 
-  await db.runAsync(
-    `INSERT INTO recurring_rules (id, type, amount_minor, currency, account_id, category_id,
-                                  item_name, place, note, frequency, interval_count, day_of_month,
-                                  start_date, end_date, next_due_at, auto_post, remind_days,
-                                  is_active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [
-      id,
-      draft.type,
-      Math.trunc(draft.amountMinor),
-      draft.currency,
-      draft.accountId,
-      draft.categoryId,
-      draft.itemName,
-      draft.place,
-      draft.note,
-      draft.frequency,
-      draft.intervalCount!,
-      draft.dayOfMonth ?? null,
-      draft.startDate,
-      draft.endDate,
-      draft.nextDueAt,
-      boolToInt(draft.autoPost ?? false),
-      draft.remindDays!,
-      now,
-      now,
-    ],
-  );
+    await db.runAsync(
+      `INSERT INTO recurring_rules (id, type, amount_minor, currency, account_id, category_id,
+                                    item_name, place, note, frequency, interval_count, day_of_month,
+                                    start_date, end_date, next_due_at, auto_post, remind_days,
+                                    is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      [
+        id,
+        draft.type,
+        Math.trunc(draft.amountMinor),
+        draft.currency,
+        draft.accountId,
+        draft.categoryId,
+        draft.itemName,
+        draft.place,
+        draft.note,
+        draft.frequency,
+        draft.intervalCount!,
+        draft.dayOfMonth ?? null,
+        draft.startDate,
+        draft.endDate,
+        draft.nextDueAt,
+        boolToInt(draft.autoPost ?? false),
+        draft.remindDays!,
+        now,
+        now,
+      ],
+    );
 
-  const row = await db.getFirstAsync<RecurringRow>(`${SELECT} WHERE id = ?`, [id]);
-  return mapRule(row!);
+    const row = await db.getFirstAsync<RecurringRow>(`${SELECT} WHERE id = ?`, [id]);
+    created = mapRule(row!);
+  });
+  return created!;
 }
 
 export async function updateRecurringRule(
@@ -243,62 +257,68 @@ export async function updateRecurringRule(
   id: string,
   input: RecurringRuleDraft,
 ): Promise<RecurringRule> {
-  const current = await getRecurringRule(db, id);
-  if (!current) throw new Error(`Recurring rule not found: ${id}`);
-  await assertRuleLinks(db, input);
-  const draft = normalizeDraft(input);
+  let updated: RecurringRule | null = null;
+  await db.withTransactionAsync(async () => {
+    const current = await getRecurringRule(db, id);
+    if (!current) throw new Error(`Recurring rule not found: ${id}`);
+    await assertRuleLinks(db, input);
+    const draft = normalizeDraft(input);
 
-  await db.runAsync(
-    `UPDATE recurring_rules
-        SET type = ?, amount_minor = ?, currency = ?, account_id = ?, category_id = ?,
-            item_name = ?, place = ?, note = ?, frequency = ?, interval_count = ?,
-            day_of_month = ?, start_date = ?, end_date = ?, next_due_at = ?,
-            auto_post = ?, remind_days = ?, updated_at = ?
-      WHERE id = ?`,
-    [
-      draft.type,
-      Math.trunc(draft.amountMinor),
-      draft.currency,
-      draft.accountId,
-      draft.categoryId,
-      draft.itemName,
-      draft.place,
-      draft.note,
-      draft.frequency,
-      draft.intervalCount!,
-      draft.dayOfMonth ?? null,
-      draft.startDate,
-      draft.endDate,
-      draft.nextDueAt,
-      boolToInt(draft.autoPost ?? false),
-      draft.remindDays!,
-      new Date().toISOString(),
-      id,
-    ],
-  );
+    await db.runAsync(
+      `UPDATE recurring_rules
+          SET type = ?, amount_minor = ?, currency = ?, account_id = ?, category_id = ?,
+              item_name = ?, place = ?, note = ?, frequency = ?, interval_count = ?,
+              day_of_month = ?, start_date = ?, end_date = ?, next_due_at = ?,
+              auto_post = ?, remind_days = ?, updated_at = ?
+        WHERE id = ?`,
+      [
+        draft.type,
+        Math.trunc(draft.amountMinor),
+        draft.currency,
+        draft.accountId,
+        draft.categoryId,
+        draft.itemName,
+        draft.place,
+        draft.note,
+        draft.frequency,
+        draft.intervalCount!,
+        draft.dayOfMonth ?? null,
+        draft.startDate,
+        draft.endDate,
+        draft.nextDueAt,
+        boolToInt(draft.autoPost ?? false),
+        draft.remindDays!,
+        new Date().toISOString(),
+        id,
+      ],
+    );
 
-  return (await getRecurringRule(db, id))!;
+    updated = await getRecurringRule(db, id);
+  });
+  return updated!;
 }
 
 export async function setRecurringActive(db: Db, id: string, active: boolean): Promise<void> {
-  if (active) {
-    const account = await db.getFirstAsync<{ is_archived: number }>(
-      `SELECT a.is_archived FROM recurring_rules r
-         JOIN accounts a ON a.id = r.account_id
-        WHERE r.id = ?`,
-      [id],
-    );
-    if (!account) throw new Error(`Recurring rule not found: ${id}`);
-    if (account.is_archived) {
-      throw new Error("Restore the account before resuming this recurring rule");
+  await db.withTransactionAsync(async () => {
+    if (active) {
+      const account = await db.getFirstAsync<{ is_archived: number }>(
+        `SELECT a.is_archived FROM recurring_rules r
+           JOIN accounts a ON a.id = r.account_id
+          WHERE r.id = ?`,
+        [id],
+      );
+      if (!account) throw new Error(`Recurring rule not found: ${id}`);
+      if (account.is_archived) {
+        throw new Error("Restore the account before resuming this recurring rule");
+      }
     }
-  }
 
-  await db.runAsync("UPDATE recurring_rules SET is_active = ?, updated_at = ? WHERE id = ?", [
-    boolToInt(active),
-    new Date().toISOString(),
-    id,
-  ]);
+    await db.runAsync("UPDATE recurring_rules SET is_active = ?, updated_at = ? WHERE id = ?", [
+      boolToInt(active),
+      new Date().toISOString(),
+      id,
+    ]);
+  });
 }
 
 export async function setNextDueAt(db: Db, id: string, nextDueAt: IsoDate): Promise<void> {
@@ -411,12 +431,24 @@ export async function sumCommittedUnposted(
   db: Db,
   options: { currency: string; fromDate: string; toDate: string },
 ): Promise<{ totalMinor: number; count: number }> {
-  const row = await db.getFirstAsync<{ total_minor: number; count: number }>(
-    `SELECT COALESCE(SUM(amount_minor), 0) AS total_minor, COUNT(*) AS count
-       FROM recurring_rules
+  const rows = await db.getAllAsync<RecurringRow>(
+    `${SELECT}
       WHERE is_active = 1 AND type = 'expense' AND currency = ?
-        AND next_due_at BETWEEN ? AND ?`,
-    [options.currency.toUpperCase(), options.fromDate, options.toDate],
+        AND next_due_at <= ?
+        AND (auto_post = 0 OR next_due_at >= ?)`,
+    [options.currency.toUpperCase(), options.toDate, options.fromDate],
   );
-  return { totalMinor: row?.total_minor ?? 0, count: row?.count ?? 0 };
+
+  let totalMinor = 0;
+  let count = 0;
+  for (const row of rows) {
+    const rule = mapRule(row);
+    if (isRuleFinished(rule, rule.nextDueAt)) continue;
+    // Count the stored unposted cursor plus every remaining scheduled occurrence in this window.
+    const rest = occurrencesBetween(rule, addDays(rule.nextDueAt, 1), options.toDate);
+    const occurrences = 1 + rest.length;
+    totalMinor += rule.amountMinor * occurrences;
+    count += occurrences;
+  }
+  return { totalMinor, count };
 }

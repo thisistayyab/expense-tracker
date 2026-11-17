@@ -119,19 +119,21 @@ export function daysRemainingInPeriod(
 
 export function addMonthsClamped(iso: IsoDate, months: number, preferredDay?: number): IsoDate {
   const date = fromIsoDate(iso);
-  const totalMonths = date.getUTCFullYear() * 12 + date.getUTCMonth() + months;
+  const delta = Number.isFinite(months) ? Math.trunc(months) : 0;
+  const totalMonths = date.getUTCFullYear() * 12 + date.getUTCMonth() + delta;
   const year = Math.floor(totalMonths / 12);
   const month = (totalMonths % 12) + 1;
   const day = clampDayOfMonth(year, month, preferredDay ?? date.getUTCDate());
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 export function addYearsClamped(iso: IsoDate, years: number, preferredDay?: number): IsoDate {
   const date = fromIsoDate(iso);
-  const year = date.getUTCFullYear() + years;
+  const delta = Number.isFinite(years) ? Math.trunc(years) : 0;
+  const year = date.getUTCFullYear() + delta;
   const month = date.getUTCMonth() + 1;
   const day = clampDayOfMonth(year, month, preferredDay ?? date.getUTCDate());
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 export type RecurrenceSpec = {

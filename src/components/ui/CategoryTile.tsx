@@ -29,9 +29,18 @@ export type CategoryTileProps = {
   appIcon?: AppIconName;
   color: string | null | undefined;
   size?: number;
-  glyph?: string | null;
   style?: StyleProp<ViewStyle>;
 };
+
+function translucentColor(color: string, alphaHex: string, fallback: string): string {
+  const trimmed = color.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return `${trimmed}${alphaHex}`;
+  if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+    const expanded = `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`;
+    return `${expanded}${alphaHex}`;
+  }
+  return fallback;
+}
 
 /**
  * Smooth tonal iOS squircle category icon badge.
@@ -41,6 +50,11 @@ export function CategoryTile({ icon, appIcon, color, size = 42, style }: Categor
   const foreground = color ?? theme.colors.accent;
   const corner = Math.max(11, Math.round(size * 0.31));
   const glyphSize = Math.round(size * 0.48);
+  const bg = translucentColor(
+    foreground,
+    theme.scheme === "dark" ? "22" : "14",
+    theme.colors.accentSoft,
+  );
 
   return (
     <View
@@ -53,7 +67,7 @@ export function CategoryTile({ icon, appIcon, color, size = 42, style }: Categor
           height: size,
           borderRadius: corner,
           borderCurve: "continuous",
-          backgroundColor: theme.scheme === "dark" ? `${foreground}22` : `${foreground}14`,
+          backgroundColor: bg,
         },
         style,
       ]}

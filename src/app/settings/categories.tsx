@@ -1,7 +1,8 @@
 import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   AppIcon,
@@ -17,21 +18,30 @@ import { CategoryEditorSheet } from "../../features/categories/CategoryEditorShe
 import { listCategories, reorderCategories } from "../../lib/db/repos/categories";
 import type { Category, CategoryKind, Db } from "../../lib/db/types";
 import { categoryNodes, type CategoryNode } from "../../lib/domain/category-tree";
-import { useTheme } from "../../lib/theme";
+import { notifyLedgerChanged } from "../../lib/ledgerEvents";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
+
+type CategorySheetTarget =
+  | { mode: "edit"; category: Category }
+  | { mode: "new"; parentId: string | null };
 
 export default function CategoriesScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const db: Db = useSQLiteContext();
   const [kind, setKind] = useState<CategoryKind>("expense");
   const [categories, setCategories] = useState<Category[]>([]);
-  const [editing, setEditing] = useState<Category | null>(null);
-  const [newCategory, setNewCategory] = useState<{ parentId: string | null } | null>(null);
+  const [sheetTarget, setSheetTarget] = useState<CategorySheetTarget | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const movingRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setCategories(await listCategories(db, { includeArchived: true }));
+    setError(null);
   }, [db]);
 
   useFocusEffect(
@@ -80,39 +90,63 @@ export default function CategoriesScreen() {
     load().catch((cause: unknown) => setError(String(cause)));
   };
 
+  const openEdit = (category: Category) => {
+    setSheetTarget({ mode: "edit", category });
+    setSheetVisible(true);
+  };
+
+  const openNew = (parentId: string | null) => {
+    setSheetTarget({ mode: "new", parentId });
+    setSheetVisible(true);
+  };
+
   const move = async (node: CategoryNode, childIndex?: number) => {
+    if (moving || movingRef.current) return;
     const list = childIndex === undefined ? activeNodes.map((entry) => entry.category) : node.children;
     const index = childIndex ?? list.findIndex((entry) => entry.id === node.category.id);
     if (index < 0) return;
-    const target = childIndex === undefined ? index - 1 : index - 1;
+    const target = index - 1;
     if (target < 0) return;
     const ordered = [...list];
     [ordered[target], ordered[index]] = [ordered[index], ordered[target]];
+    movingRef.current = true;
+    setMoving(true);
     try {
       await reorderCategories(
         db,
         ordered.map((entry) => entry.id),
       );
-      refresh();
+      await load();
+      notifyLedgerChanged();
     } catch (cause) {
       setError(`Could not reorder: ${String(cause)}`);
+    } finally {
+      movingRef.current = false;
+      setMoving(false);
     }
   };
 
   const moveDown = async (node: CategoryNode, childIndex?: number) => {
+    if (moving || movingRef.current) return;
     const list = childIndex === undefined ? activeNodes.map((entry) => entry.category) : node.children;
     const index = childIndex ?? list.findIndex((entry) => entry.id === node.category.id);
     if (index < 0 || index >= list.length - 1) return;
     const ordered = [...list];
     [ordered[index], ordered[index + 1]] = [ordered[index + 1], ordered[index]];
+    movingRef.current = true;
+    setMoving(true);
     try {
       await reorderCategories(
         db,
         ordered.map((entry) => entry.id),
       );
-      refresh();
+      await load();
+      notifyLedgerChanged();
     } catch (cause) {
       setError(`Could not reorder: ${String(cause)}`);
+    } finally {
+      movingRef.current = false;
+      setMoving(false);
     }
   };
 
@@ -136,7 +170,7 @@ export default function CategoriesScreen() {
         }}
       >
         <TactilePressable
-          onPress={() => setEditing(category)}
+          onPress={() => openEdit(category)}
           haptic="selection"
           scaleTo={0.985}
           radius={12}
@@ -168,7 +202,12 @@ export default function CategoriesScreen() {
           <View style={{ flexDirection: "row", gap: 6 }}>
             <ReorderButton
               direction="up"
-              disabled={child ? options.childIndex === 0 : activeNodes.findIndex((node) => node.category.id === category.id) === 0}
+              disabled={
+                moving ||
+                (child
+                  ? options.childIndex === 0
+                  : activeNodes.findIndex((node) => node.category.id === category.id) === 0)
+              }
               onPress={() =>
                 child && options.parent
                   ? move(options.parent, options.childIndex)
@@ -178,10 +217,11 @@ export default function CategoriesScreen() {
             <ReorderButton
               direction="down"
               disabled={
-                child
+                moving ||
+                (child
                   ? options.childIndex === (options.parent?.children.length ?? 1) - 1
                   : activeNodes.findIndex((node) => node.category.id === category.id) ===
-                    activeNodes.length - 1
+                    activeNodes.length - 1)
               }
               onPress={() =>
                 child && options.parent
@@ -192,7 +232,7 @@ export default function CategoriesScreen() {
           </View>
         ) : !options.indented ? (
           <TactilePressable
-            onPress={() => setNewCategory({ parentId: category.id })}
+            onPress={() => openNew(category.id)}
             haptic="selection"
             scaleTo={0.93}
             radius={999}
@@ -207,7 +247,7 @@ export default function CategoriesScreen() {
               justifyContent: "center",
             }}
           >
-            <Text style={[theme.text.caption, { color: theme.colors.accent, fontWeight: "700" }]}>
+            <Text style={[theme.text.caption, { color: theme.colors.accent, fontFamily: FONT_FAMILIES.bold }]}>
               + Sub
             </Text>
           </TactilePressable>
@@ -219,45 +259,46 @@ export default function CategoriesScreen() {
   return (
     <View style={{ flex: 1 }}>
       <ScreenBackground />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
-      >
-        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
-          Rename, recolor, nest one level, reorder and archive. Archived categories disappear from
-          pickers but stay on history.
-        </Text>
+      <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+        >
+          <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+            Rename, recolor, nest one level, reorder and archive. Archived categories disappear from
+            pickers but stay on history.
+          </Text>
 
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
-          <ChoiceChip
-            label="Expense"
-            selected={kind === "expense"}
-            onPress={() => setKind("expense")}
-          />
-          <ChoiceChip
-            label="Income"
-            selected={kind === "income"}
-            onPress={() => setKind("income")}
-          />
-          <View style={{ flex: 1 }} />
-          <ChoiceChip
-            label={reorderMode ? "Done" : "Reorder"}
-            selected={reorderMode}
-            tone="accent"
-            onPress={() => setReorderMode((current) => !current)}
-          />
-        </View>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
+            <ChoiceChip
+              label="Expense"
+              selected={kind === "expense"}
+              onPress={() => setKind("expense")}
+            />
+            <ChoiceChip
+              label="Income"
+              selected={kind === "income"}
+              onPress={() => setKind("income")}
+            />
+            <View style={{ flex: 1 }} />
+            <ChoiceChip
+              label={reorderMode ? "Done" : "Reorder"}
+              selected={reorderMode}
+              tone="accent"
+              onPress={() => setReorderMode((current) => !current)}
+            />
+          </View>
 
-        <View style={{ marginTop: 12 }}>
-          <Button
-            label={`New ${kind} category`}
-            variant="accent"
-            size="sm"
-            leftIcon="plus"
-            onPress={() => setNewCategory({ parentId: null })}
-          />
-        </View>
+          <View style={{ marginTop: 12 }}>
+            <Button
+              label={`New ${kind} category`}
+              variant="accent"
+              size="sm"
+              leftIcon="plus"
+              onPress={() => openNew(null)}
+            />
+          </View>
 
         {loading && !categories.length ? (
           <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 28 }} />
@@ -297,7 +338,7 @@ export default function CategoriesScreen() {
               {archived.map((category, index) => (
                 <TactilePressable
                   key={category.id}
-                  onPress={() => setEditing(category)}
+                  onPress={() => openEdit(category)}
                   haptic="selection"
                   scaleTo={0.985}
                   radius={14}
@@ -334,29 +375,22 @@ export default function CategoriesScreen() {
             {error}
           </Text>
         ) : null}
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
 
-      {editing ? (
+      {sheetTarget ? (
         <CategoryEditorSheet
-          category={editing}
-          kind={editing.kind}
+          visible={sheetVisible}
+          category={sheetTarget.mode === "edit" ? sheetTarget.category : null}
+          kind={sheetTarget.mode === "edit" ? sheetTarget.category.kind : kind}
           categories={categories}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            refresh();
+          defaultParentId={sheetTarget.mode === "new" ? sheetTarget.parentId : null}
+          onClose={() => setSheetVisible(false)}
+          onClosed={() => {
+            if (!sheetVisible) setSheetTarget(null);
           }}
-        />
-      ) : null}
-
-      {newCategory ? (
-        <CategoryEditorSheet
-          kind={kind}
-          categories={categories}
-          defaultParentId={newCategory.parentId}
-          onClose={() => setNewCategory(null)}
           onSaved={() => {
-            setNewCategory(null);
+            setSheetVisible(false);
             refresh();
           }}
         />

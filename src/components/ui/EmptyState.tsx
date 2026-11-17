@@ -24,7 +24,12 @@ export function EmptyState({ title, body, icon, actionLabel, onAction }: EmptySt
           <AppIcon name={icon} size={22} color={theme.colors.accent} />
         </View>
       ) : null}
-      <Text style={[theme.text.title3, { color: theme.colors.textPrimary }]}>{title}</Text>
+      <Text
+        accessibilityRole="header"
+        style={[theme.text.title3, { color: theme.colors.textPrimary }]}
+      >
+        {title}
+      </Text>
       <Text style={[theme.text.body, styles.body, { color: theme.colors.textSecondary }]}>
         {body}
       </Text>

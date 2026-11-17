@@ -26,3 +26,25 @@ export function categoryNodes(categories: Category[], kind: CategoryKind): Categ
     children: ordered(scoped.filter((child) => child.parentId === category.id)),
   }));
 }
+
+/**
+ * Returns categories safe to show in pickers: excludes archived categories and
+ * subcategories whose parent is archived, unless explicitly included (e.g. an
+ * existing historical selection being edited).
+ */
+export function selectableCategories(
+  categories: readonly Category[],
+  options: { kind?: CategoryKind; includeIds?: readonly (string | null | undefined)[] } = {},
+): Category[] {
+  const included = new Set((options.includeIds ?? []).filter((id): id is string => Boolean(id)));
+  const archivedIds = new Set(
+    categories.filter((entry) => entry.isArchived).map((entry) => entry.id),
+  );
+  return categories.filter((category) => {
+    if (options.kind && category.kind !== options.kind) return false;
+    if (included.has(category.id)) return true;
+    if (category.isArchived) return false;
+    if (category.parentId && archivedIds.has(category.parentId)) return false;
+    return true;
+  });
+}

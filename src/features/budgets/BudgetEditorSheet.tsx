@@ -1,8 +1,8 @@
 import { useSQLiteContext } from "expo-sqlite";
-import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useRef, useState } from "react";
+import { Alert, ScrollView, Text, TextInput, View } from "react-native";
 
-import { Button, ChoiceChip, Sheet } from "../../components/ui";
+import { Button, ChoiceChip, Sheet, TactilePressable } from "../../components/ui";
 import { getCurrency } from "../../constants/currencies";
 import { deactivateBudget, upsertBudget } from "../../lib/db/repos/budgets";
 import type { Budget, BudgetPeriod, Db } from "../../lib/db/types";
@@ -40,7 +40,9 @@ export type BudgetEditorSheetProps = {
   /** Keeps a recreated month limit scoped to that month instead of every month. */
   initialScope?: Scope;
   onClose: () => void;
+  onClosed?: () => void;
   onSaved: (budget: Budget) => void;
+  onRemoved?: (budget: Budget) => void;
 };
 
 type Scope = "standing" | "month";
@@ -74,7 +76,9 @@ export function BudgetEditorSheet({
   initialLimitMinor,
   initialScope,
   onClose,
+  onClosed,
   onSaved,
+  onRemoved,
 }: BudgetEditorSheetProps) {
   const { theme } = useTheme();
   const db: Db = useSQLiteContext();
@@ -96,6 +100,7 @@ export function BudgetEditorSheet({
     return "";
   });
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const target = scope === "month" ? monthly : standing;
@@ -106,7 +111,7 @@ export function BudgetEditorSheet({
   const placeholder = exponent === 0 ? "0" : exponent === 3 ? "0.000" : "0.00";
 
   const pickScope = (next: Scope) => {
-    if (next === scope) return;
+    if (saving || next === scope) return;
     const nextTarget = next === "month" ? monthly : standing;
     if (nextTarget) setText(minorToDecimalString(nextTarget.limitMinor, currency));
     setScope(next);
@@ -114,7 +119,8 @@ export function BudgetEditorSheet({
   };
 
   const save = () => {
-    if (saving || minor === null || minor <= 0) return;
+    if (savingRef.current || saving || minor === null || minor <= 0) return;
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     upsertBudget(db, {
@@ -136,11 +142,14 @@ export function BudgetEditorSheet({
         haptics.error();
         setError(`Could not save this limit: ${String(cause)}`);
       })
-      .finally(() => setSaving(false));
+      .finally(() => {
+        savingRef.current = false;
+        setSaving(false);
+      });
   };
 
   const remove = () => {
-    if (!target) return;
+    if (!target || savingRef.current || saving) return;
     const monthScope = scope === "month";
     Alert.alert(
       monthScope ? `Remove the ${monthLabel} limit?` : "Remove this limit?",
@@ -153,13 +162,21 @@ export function BudgetEditorSheet({
           text: "Remove",
           style: "destructive",
           onPress: () => {
+            if (savingRef.current) return;
+            savingRef.current = true;
+            setSaving(true);
             deactivateBudget(db, target.id)
               .then(() => {
                 haptics.success();
-                onSaved(target);
+                if (onRemoved) onRemoved(target);
+                else onSaved(target);
               })
               .catch((cause: unknown) => {
                 setError(`Could not remove this limit: ${String(cause)}`);
+              })
+              .finally(() => {
+                savingRef.current = false;
+                setSaving(false);
               });
           },
         },
@@ -168,9 +185,16 @@ export function BudgetEditorSheet({
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title={title}>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      dismissible={!saving}
+      title={title}
+    >
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8, gap: 14 }}
       >
         <Text style={[theme.text.caption, { color: theme.colors.textTertiary }]}>
@@ -186,12 +210,14 @@ export function BudgetEditorSheet({
               <ChoiceChip
                 label="Every month"
                 selected={scope === "standing"}
+                disabled={saving}
                 onPress={() => pickScope("standing")}
                 accessibilityLabel="Apply this limit to every month"
               />
               <ChoiceChip
                 label={monthLabel}
                 selected={scope === "month"}
+                disabled={saving}
                 onPress={() => pickScope("month")}
                 accessibilityLabel={`Apply this limit to ${monthLabel} only`}
               />
@@ -224,6 +250,7 @@ export function BudgetEditorSheet({
           <TextInput
             value={text}
             onChangeText={(next) => setText(sanitizeMoneyInput(next, currency))}
+            editable={!saving}
             keyboardType={exponent === 0 ? "number-pad" : "decimal-pad"}
             inputMode={exponent === 0 ? "numeric" : "decimal"}
             accessibilityLabel={`${title} amount in ${currency}`}
@@ -242,18 +269,21 @@ export function BudgetEditorSheet({
           <ChoiceChip
             label="+10%"
             selected={false}
+            disabled={saving}
             onPress={() => setText(bump(text, 1.1, currency))}
             accessibilityLabel="Increase by ten percent"
           />
           <ChoiceChip
             label="−10%"
             selected={false}
+            disabled={saving}
             onPress={() => setText(bump(text, 0.9, currency))}
             accessibilityLabel="Decrease by ten percent"
           />
           <ChoiceChip
             label="Clear"
             selected={false}
+            disabled={saving}
             onPress={() => setText("")}
             accessibilityLabel="Clear the amount"
           />
@@ -275,20 +305,23 @@ export function BudgetEditorSheet({
           label={target ? "Save limit" : "Set limit"}
           variant="accent"
           onPress={save}
-          disabled={!valid}
+          disabled={!valid || saving}
           loading={saving}
         />
         {target ? (
-          <Pressable
+          <TactilePressable
             onPress={remove}
+            disabled={saving}
+            radius={12}
+            scaleTo={0.97}
             accessibilityRole="button"
             accessibilityLabel={scope === "month" ? "Remove this month's limit" : "Remove this limit"}
-            style={({ pressed }) => ({ paddingVertical: 8, opacity: pressed ? 0.6 : 1 })}
+            style={{ paddingVertical: 8 }}
           >
             <Text style={[theme.text.label, { color: theme.colors.danger, textAlign: "center" }]}>
               {scope === "month" ? "Remove this month's limit" : "Remove limit"}
             </Text>
-          </Pressable>
+          </TactilePressable>
         ) : null}
       </ScrollView>
     </Sheet>

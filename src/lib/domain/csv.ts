@@ -47,6 +47,16 @@ export function csvCell(value: string | number | null | undefined): string {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+/**
+ * Neutralize spreadsheet formula triggers on free-form text columns (`=`, `+`,
+ * `-`, `@`, `\t`, `\r`) while leaving numeric amount cells untouched for SUM().
+ */
+export function csvTextCell(value: string | null | undefined): string {
+  const text = value ?? "";
+  const safe = /^[\t\r ]*[=+\-@]|^[\t\r]/.test(text) ? `'${text}` : text;
+  return csvCell(safe);
+}
+
 /** Positive for income, negative for expenses and transfers (money leaving). */
 export function csvAmount(type: TransactionType, minor: number, currency: string): string {
   const absolute = minorToDecimalString(Math.abs(Math.trunc(minor)), currency);
@@ -55,22 +65,20 @@ export function csvAmount(type: TransactionType, minor: number, currency: string
 
 export function csvRow(row: CsvTransaction): string {
   return [
-    row.id,
-    row.occurredAt,
-    row.localDate,
-    row.type,
-    csvAmount(row.type, row.amountMinor, row.currency),
-    row.currency,
-    row.accountName,
-    row.categoryName,
-    row.itemName,
-    row.place,
-    row.note,
-    row.transferAccountName ?? null,
-    row.recurringId,
-  ]
-    .map(csvCell)
-    .join(",");
+    csvTextCell(row.id),
+    csvTextCell(row.occurredAt),
+    csvTextCell(row.localDate),
+    csvTextCell(row.type),
+    csvCell(csvAmount(row.type, row.amountMinor, row.currency)),
+    csvTextCell(row.currency),
+    csvTextCell(row.accountName),
+    csvTextCell(row.categoryName),
+    csvTextCell(row.itemName),
+    csvTextCell(row.place),
+    csvTextCell(row.note),
+    csvTextCell(row.transferAccountName ?? null),
+    csvTextCell(row.recurringId),
+  ].join(",");
 }
 
 /**

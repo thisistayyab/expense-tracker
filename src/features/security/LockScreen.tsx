@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, AppState, BackHandler, Platform, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppIcon, Button, Glass, ScreenBackground } from "../../components/ui";
@@ -8,16 +8,18 @@ import { useTheme } from "../../lib/theme";
 import { useAppLock } from "./appLockContext";
 
 /**
- * Full-screen frosted biometric lock overlay preserving navigation & scroll underneath.
+ * Full-screen frosted biometric lock overlay presented inside a top-level Modal
+ * so open sheets cannot sit above the lock gate.
  */
-export function LockScreen() {
+export function LockScreen({ veilOnly = false }: { veilOnly?: boolean }) {
   const { theme } = useTheme();
   const { capability, unlock, turnOffUnavailable } = useAppLock();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appState, setAppState] = useState(AppState.currentState);
   const attempted = useRef(false);
 
-  const attempt = async () => {
+  const attempt = useCallback(async () => {
     setBusy(true);
     setError(null);
     const result = await unlock();
@@ -29,14 +31,26 @@ export function LockScreen() {
       );
     }
     setBusy(false);
-  };
+  }, [unlock]);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener("change", setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    // Only auto-prompt while actively in the foreground; triggering Face ID / biometric
+    // UI during a background transition causes the OS to cancel it immediately.
+    if (veilOnly || appState !== "active") return;
     if (attempted.current || capability === null || !capability.available) return;
     attempted.current = true;
     void attempt();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capability]);
+  }, [appState, attempt, capability, veilOnly]);
+
+  useEffect(() => {
+    const back = BackHandler.addEventListener("hardwareBackPress", () => true);
+    return () => back.remove();
+  }, []);
 
   const unavailable = capability?.available === false;
 
@@ -65,68 +79,67 @@ export function LockScreen() {
             </View>
           </Glass>
 
-          <Text style={[theme.text.title1, styles.title, { color: theme.colors.textPrimary }]}>
+          <Text
+            accessibilityRole="header"
+            style={[theme.text.title1, styles.title, { color: theme.colors.textPrimary }]}
+          >
             Suffice is locked
           </Text>
-          <Text style={[theme.text.body, styles.subtitle, { color: theme.colors.textSecondary }]}>
-            {unavailable
-              ? capability?.reason ?? "This device cannot verify you right now."
-              : "Your financial ledger stays private and on this device."}
-          </Text>
-
-          {error ? (
-            <View
-              style={[
-                styles.errorPill,
-                {
-                  backgroundColor:
-                    theme.scheme === "dark"
-                      ? "rgba(255, 82, 102, 0.16)"
-                      : "rgba(224, 40, 64, 0.10)",
-                },
-              ]}
-            >
-              <Text style={[theme.text.caption, { color: theme.colors.danger, textAlign: "center" }]}>
-                {error}
+          {veilOnly ? null : (
+            <>
+              <Text style={[theme.text.body, styles.subtitle, { color: theme.colors.textSecondary }]}>
+                {unavailable
+                  ? capability?.reason ?? "This device cannot verify you right now."
+                  : "Your financial ledger stays private and on this device."}
               </Text>
-            </View>
-          ) : null}
 
-          <View style={styles.ctaWrap}>
-            {unavailable ? (
-              <Button
-                label="Turn off app lock"
-                variant="ghost"
-                onPress={() =>
-                  Alert.alert(
-                    "Turn off app lock?",
-                    "This device has no screen lock, so the app cannot verify you. Your data stays on the device.",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Turn off",
-                        style: "destructive",
-                        onPress: () => {
-                          void turnOffUnavailable();
-                        },
-                      },
-                    ],
-                  )
-                }
-              />
-            ) : (
-              <Button label="Unlock" variant="accent" onPress={attempt} loading={busy} />
-            )}
-          </View>
+              {error ? (
+                <View
+                  accessibilityLiveRegion="polite"
+                  style={[
+                    styles.errorPill,
+                    {
+                      backgroundColor:
+                        theme.scheme === "dark"
+                          ? "rgba(255, 82, 102, 0.16)"
+                          : "rgba(224, 40, 64, 0.10)",
+                    },
+                  ]}
+                >
+                  <Text style={[theme.text.caption, { color: theme.colors.danger, textAlign: "center" }]}>
+                    {error}
+                  </Text>
+                </View>
+              ) : null}
 
-          <Pressable
-            onPress={() => {
-              setError(null);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Clear error"
-            style={styles.hiddenClear}
-          />
+              <View style={styles.ctaWrap}>
+                {unavailable ? (
+                  <Button
+                    label="Turn off app lock"
+                    variant="ghost"
+                    onPress={() =>
+                      Alert.alert(
+                        "Turn off app lock?",
+                        "This device has no screen lock, so the app cannot verify you. Your data stays on the device.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Turn off",
+                            style: "destructive",
+                            onPress: () => {
+                              void turnOffUnavailable();
+                            },
+                          },
+                        ],
+                      )
+                    }
+                  />
+                ) : (
+                  <Button label="Unlock" variant="accent" onPress={() => void attempt()} loading={busy} />
+                )}
+              </View>
+            </>
+          )}
         </Animated.View>
       </SafeAreaView>
     </View>
@@ -177,9 +190,5 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 320,
     marginTop: 10,
-  },
-  hiddenClear: {
-    height: 1,
-    opacity: 0,
   },
 });

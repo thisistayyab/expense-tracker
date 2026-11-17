@@ -132,39 +132,41 @@ export async function updateCategory(
   id: string,
   patch: CategoryPatch,
 ): Promise<void> {
-  const current = await getCategory(db, id);
-  if (!current) throw new Error(`Category not found: ${id}`);
-  if (patch.name !== undefined && !patch.name.trim()) {
-    throw new Error("A category needs a name");
-  }
+  await db.withTransactionAsync(async () => {
+    const current = await getCategory(db, id);
+    if (!current) throw new Error(`Category not found: ${id}`);
+    if (patch.name !== undefined && !patch.name.trim()) {
+      throw new Error("A category needs a name");
+    }
 
-  const nextParentId =
-    patch.parentId === undefined
-      ? current.parentId
-      : await validParentId(db, { id, parentId: patch.parentId, kind: current.kind });
+    const nextParentId =
+      patch.parentId === undefined
+        ? current.parentId
+        : await validParentId(db, { id, parentId: patch.parentId, kind: current.kind });
 
-  if (nextParentId) {
-    const child = await db.getFirstAsync<{ id: string }>(
-      "SELECT id FROM categories WHERE parent_id = ? LIMIT 1",
-      [id],
+    if (nextParentId) {
+      const child = await db.getFirstAsync<{ id: string }>(
+        "SELECT id FROM categories WHERE parent_id = ? LIMIT 1",
+        [id],
+      );
+      if (child) throw new Error("Move its subcategories out before nesting this category");
+    }
+
+    await db.runAsync(
+      `UPDATE categories SET parent_id = ?, name = ?, icon = ?, color = ?, sort_order = ?,
+              updated_at = ?
+        WHERE id = ?`,
+      [
+        nextParentId,
+        patch.name?.trim() || current.name,
+        patch.icon === undefined ? current.icon : nullable(patch.icon),
+        patch.color === undefined ? current.color : nullable(patch.color),
+        patch.sortOrder ?? current.sortOrder,
+        new Date().toISOString(),
+        id,
+      ],
     );
-    if (child) throw new Error("Move its subcategories out before nesting this category");
-  }
-
-  await db.runAsync(
-    `UPDATE categories SET parent_id = ?, name = ?, icon = ?, color = ?, sort_order = ?,
-            updated_at = ?
-      WHERE id = ?`,
-    [
-      nextParentId,
-      patch.name?.trim() || current.name,
-      patch.icon === undefined ? current.icon : nullable(patch.icon),
-      patch.color === undefined ? current.color : nullable(patch.color),
-      patch.sortOrder ?? current.sortOrder,
-      new Date().toISOString(),
-      id,
-    ],
-  );
+  });
 }
 
 /** Persist a sibling order in one transaction; used by the reorder controls. */

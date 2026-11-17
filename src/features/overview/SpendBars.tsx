@@ -13,7 +13,7 @@ import type { SpendBucket } from "../../lib/domain/overview-analytics";
 import { formatMoneySpoken } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
 import { SPRING_SETTLE } from "../../lib/motion";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 const PLOT_HEIGHT = 82;
 
@@ -72,7 +72,12 @@ export function SpendBars({
   averageMinor: number;
 }) {
   const { theme } = useTheme();
+  const [prevBuckets, setPrevBuckets] = useState(buckets);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  if (prevBuckets !== buckets) {
+    setPrevBuckets(buckets);
+    setSelectedKey(null);
+  }
   const max = Math.max(1, ...buckets.map((bucket) => bucket.spentMinor));
   const avgHeight =
     averageMinor > 0 ? Math.min(PLOT_HEIGHT - 2, (averageMinor / max) * PLOT_HEIGHT) : 0;
@@ -101,7 +106,10 @@ export function SpendBars({
             minor={activeBucket.spentMinor}
             currency={currency}
             tone="default"
-            style={[theme.text.caption, { color: theme.colors.textPrimary, fontWeight: "700" }]}
+            style={[
+              theme.text.caption,
+              { color: theme.colors.textPrimary, fontFamily: FONT_FAMILIES.bold },
+            ]}
           />
         </View>
       ) : null}
@@ -113,7 +121,7 @@ export function SpendBars({
             style={[
               styles.averageLine,
               {
-                bottom: avgHeight,
+                top: PLOT_HEIGHT - avgHeight,
                 borderColor:
                   theme.scheme === "dark" ? "rgba(255,255,255,0.16)" : "rgba(10,18,36,0.14)",
               },
@@ -136,6 +144,7 @@ export function SpendBars({
                 }}
                 accessible
                 accessibilityRole="button"
+                accessibilityState={{ selected: highlighted }}
                 accessibilityLabel={`${bucket.rangeLabel}: ${formatMoneySpoken(
                   bucket.spentMinor,
                   currency,
@@ -155,11 +164,12 @@ export function SpendBars({
                     {
                       marginTop: 6,
                       color: highlighted ? theme.colors.accent : theme.colors.textTertiary,
-                      fontWeight: highlighted ? "700" : "500",
+                      fontFamily: highlighted ? FONT_FAMILIES.bold : FONT_FAMILIES.medium,
                       fontSize: 11.5,
                       fontVariant: ["tabular-nums"],
                     },
                   ]}
+                  maxFontSizeMultiplier={1.25}
                   numberOfLines={1}
                 >
                   {bucket.label}
@@ -191,20 +201,17 @@ const styles = StyleSheet.create({
   },
   plotWrap: {
     position: "relative",
-    height: PLOT_HEIGHT + 24,
-    justifyContent: "flex-end",
   },
   averageLine: {
     position: "absolute",
     left: 0,
     right: 0,
-    marginBottom: 22,
     borderTopWidth: 1,
     borderStyle: "dashed",
   },
   barsRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "flex-start",
     gap: 8,
   },
   column: {

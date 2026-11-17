@@ -2,10 +2,10 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
   BackHandler,
   Keyboard,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -50,8 +50,9 @@ import {
 } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
 import { newId } from "../../lib/ids";
+import { notifyLedgerChanged } from "../../lib/ledgerEvents";
 import { SPRING_SNAPPY } from "../../lib/motion";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { suggestCategoryId } from "./suggestions";
 
 const MAX_NAME = 80;
@@ -113,11 +114,18 @@ export function AddTransactionSheet({
   const { theme } = useTheme();
   const { fontScale } = useWindowDimensions();
   const db: Db = useSQLiteContext();
-  const today = useMemo(() => toIsoDate(new Date()), []);
+  const [today, setToday] = useState(() => toIsoDate(new Date()));
   const amountLineHeight = Math.ceil(52 * Math.min(fontScale, 1.3));
   const reducedMotion = useReducedMotion();
   const [segmentBarWidth, setSegmentBarWidth] = useState(0);
   const thumbOffset = useSharedValue(0);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setToday(toIsoDate(new Date()));
+    });
+    return () => sub.remove();
+  }, []);
 
   const [type, setType] = useState<TransactionType>(
     existing?.type ?? initialType ?? "expense",
@@ -164,6 +172,12 @@ export function AddTransactionSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savingRef = useRef(false);
+  const accountIdRef = useRef(accountId);
+  const suggestionSeqRef = useRef(0);
+
+  useEffect(() => {
+    accountIdRef.current = accountId;
+  }, [accountId]);
 
   const amountMinor = amountText ? parseMoneyInput(amountText, currency) : null;
 
@@ -185,15 +199,22 @@ export function AddTransactionSheet({
         ]);
         if (cancelled) return;
 
-        const inCurrency = allAccounts.filter((account) => account.currency === active);
+        const visibleAccounts = allAccounts.filter(
+          (account) =>
+            !account.isArchived ||
+            account.id === existing?.accountId ||
+            account.id === existing?.transferAccountId,
+        );
+        const inCurrency = visibleAccounts.filter((account) => account.currency === active);
         const remembered = settings[SETTING_KEYS.lastAccountId];
         const nextAccountId =
-          [accountId, remembered].find(
+          [accountIdRef.current, existing?.accountId, initialAccountId, remembered].find(
             (candidate): candidate is string =>
               Boolean(candidate) && inCurrency.some((account) => account.id === candidate),
           ) ??
           inCurrency[0]?.id ??
           null;
+        accountIdRef.current = nextAccountId;
 
         setCurrency(active);
         setAmountText((current) => sanitizeMoneyInput(current, active));
@@ -220,16 +241,21 @@ export function AddTransactionSheet({
     return () => {
       cancelled = true;
     };
-  }, [accountId, db, existing, today, type]);
+  }, [db, existing, initialAccountId, today, type]);
 
   const selectedCategory = categories.find((category) => category.id === categoryId) ?? null;
 
   // Recently used categories move to the front; unused ones keep their sort order
   // underneath. Array.prototype.sort is stable, so equal ranks do not reshuffle.
-  const selectableCategories = useMemo(
-    () => categories.filter((category) => !category.isArchived || category.id === categoryId),
-    [categories, categoryId],
-  );
+  const selectableCategories = useMemo(() => {
+    const archivedIds = new Set(categories.filter((c) => c.isArchived).map((c) => c.id));
+    return categories.filter((category) => {
+      if (category.id === categoryId || category.id === existing?.categoryId) return true;
+      if (category.isArchived) return false;
+      if (category.parentId && archivedIds.has(category.parentId)) return false;
+      return true;
+    });
+  }, [categories, categoryId, existing?.categoryId]);
 
   const orderedCategories = useMemo(() => {
     if (!recentCategoryIds.length) return selectableCategories;
@@ -268,6 +294,7 @@ export function AddTransactionSheet({
   const changeType = (next: TransactionType) => {
     if (next === type || existing) return;
     haptics.selection();
+    suggestionSeqRef.current += 1;
     setType(next);
     setCategoryId(null);
     setError(null);
@@ -275,18 +302,37 @@ export function AddTransactionSheet({
 
   const applySuggestion = () => {
     if (categoryId || type === "transfer" || !itemName.trim()) return;
-    suggestCategoryId(db, { itemName, place, currency })
+    const seq = suggestionSeqRef.current;
+    const targetKind = type === "income" ? "income" : "expense";
+    suggestCategoryId(db, { itemName, place, currency, kind: targetKind })
       .then((suggested) => {
-        if (suggested) setCategoryId((current) => current ?? suggested);
+        if (seq !== suggestionSeqRef.current || !suggested) return;
+        setCategoryId((current) => current ?? suggested);
       })
       .catch(() => {});
   };
 
   const requestClose = useCallback(() => {
-    if (saving) return;
+    if (saving || savingRef.current) return;
     // Close the OS keyboard first so the discard dialog is never hidden behind it.
     Keyboard.dismiss();
-    const dirty = Boolean(amountText || itemName.trim() || place.trim() || note.trim());
+    const dirty = existing
+      ? amountText !== minorToDecimalString(existing.amountMinor, existing.currency) ||
+        itemName.trim().slice(0, MAX_NAME) !== (existing.itemName ?? "") ||
+        place.trim() !== (existing.place ?? "") ||
+        note.trim() !== (existing.note ?? "") ||
+        categoryId !== existing.categoryId ||
+        accountId !== existing.accountId ||
+        (type === "transfer" && transferAccountId !== existing.transferAccountId) ||
+        dateIso !== existing.localDate
+      : Boolean(
+          (amountText && amountText !== (initialAmount ?? "")) ||
+            itemName.trim() ||
+            place.trim() ||
+            note.trim() ||
+            categoryId ||
+            dateIso !== today,
+        );
     if (!dirty) {
       onClose();
       return;
@@ -295,7 +341,22 @@ export function AddTransactionSheet({
       { text: "Keep editing", style: "cancel" },
       { text: "Discard", style: "destructive", onPress: onClose },
     ]);
-  }, [amountText, itemName, note, onClose, place, saving]);
+  }, [
+    accountId,
+    amountText,
+    categoryId,
+    dateIso,
+    existing,
+    initialAmount,
+    itemName,
+    note,
+    onClose,
+    place,
+    saving,
+    today,
+    transferAccountId,
+    type,
+  ]);
 
   // The add route is no longer an RN Modal, so it has no onRequestClose. Keep the
   // Android hardware back path going through the same discard confirmation.
@@ -337,6 +398,7 @@ export function AddTransactionSheet({
         .then(() => getTransaction(db, existing.id))
         .then((saved) => {
           if (!saved) throw new Error("The row could not be read back after saving");
+          notifyLedgerChanged();
           haptics.success();
           onSaved(saved, false);
         })
@@ -389,12 +451,15 @@ export function AddTransactionSheet({
       // Remembering the account is a convenience, never a reason to report a failed
       // save after the row itself was written.
       await setSettings(db, { [SETTING_KEYS.lastAccountId]: saveAccountId }).catch(() => {});
+      notifyLedgerChanged();
       return created;
     });
 
     void persisted
       .catch((saveError: unknown) => {
         haptics.error();
+        notifyLedgerChanged();
+        setSaving(false);
         Alert.alert(
           "Not saved",
           `Your entry could not be stored. ${String(saveError)}`,
@@ -404,7 +469,6 @@ export function AddTransactionSheet({
         savingRef.current = false;
       });
 
-    haptics.success();
     onSaved(optimistic, true, persisted);
   };
 
@@ -416,7 +480,7 @@ export function AddTransactionSheet({
         borderRadius: theme.radius.input,
         borderCurve: "continuous",
         backgroundColor: theme.colors.surfaceMuted,
-        borderWidth: 1,
+        borderWidth: StyleSheet.hairlineWidth,
         borderColor: theme.colors.cardBorder,
         flexDirection: "row",
         alignItems: "center",
@@ -432,6 +496,7 @@ export function AddTransactionSheet({
         placeholderTextColor={theme.colors.textTertiary}
         accessibilityLabel="Item name"
         maxLength={MAX_NAME}
+        editable={!saving}
         returnKeyType="done"
         onSubmitEditing={() => Keyboard.dismiss()}
         style={[
@@ -440,26 +505,95 @@ export function AddTransactionSheet({
         ]}
       />
       {itemName ? (
-        <Pressable
+        <TactilePressable
           onPress={() => setItemName("")}
+          disabled={saving}
           accessibilityRole="button"
           accessibilityLabel="Clear item name"
+          scaleTo={0.9}
           style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
         >
           <AppIcon name="close" color={theme.colors.textTertiary} size={14} />
-        </Pressable>
+        </TactilePressable>
       ) : null}
     </View>
   );
 
   return (
-    <Sheet visible embedded onClose={requestClose}>
+    <Sheet
+      visible
+      embedded
+      onClose={requestClose}
+      dismissible={!saving}
+      overlayChildren={
+        <>
+          <PickerSheet
+            embedded
+            visible={picker === "category"}
+            title="Category"
+            options={selectableCategories.map((category) => ({
+              value: category.id,
+              label: category.isArchived ? `${category.name} (archived)` : category.name,
+            }))}
+            selected={categoryId ?? undefined}
+            searchable
+            searchPlaceholder="Search categories"
+            onSelect={(value) => setCategoryId(value)}
+            onClose={() => setPicker(null)}
+          />
+          <PickerSheet
+            embedded
+            visible={picker === "account"}
+            title={type === "transfer" ? "From account" : "Account"}
+            options={accounts.map((account) => ({
+              value: account.id,
+              label: account.isArchived ? `${account.name} (archived)` : account.name,
+              secondary: account.type,
+            }))}
+            selected={accountId ?? undefined}
+            onSelect={(value) => {
+              accountIdRef.current = value;
+              setAccountId(value);
+              setTransferAccountId((current) =>
+                current === value
+                  ? accounts.find((account) => account.id !== value)?.id ?? null
+                  : current,
+              );
+            }}
+            onClose={() => setPicker(null)}
+          />
+          <PickerSheet
+            embedded
+            visible={picker === "transfer"}
+            title="To account"
+            options={accounts
+              .filter((account) => account.id !== accountId)
+              .map((account) => ({
+                value: account.id,
+                label: account.isArchived ? `${account.name} (archived)` : account.name,
+                secondary: account.type,
+              }))}
+            selected={transferAccountId ?? undefined}
+            onSelect={(value) => setTransferAccountId(value)}
+            onClose={() => setPicker(null)}
+          />
+          <DatePickerSheet
+            embedded
+            visible={picker === "date"}
+            value={dateIso}
+            onSelect={setDateIso}
+            onClose={() => setPicker(null)}
+          />
+        </>
+      }
+    >
       {/* Header stays outside the scroll so Close is always reachable. The body
        * scrolls while the sheet is lifted above the keyboard; Save stays pinned. */}
       <View style={{ paddingHorizontal: 20, paddingBottom: 6 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <TactilePressable
               onPress={requestClose}
+              disabled={saving}
               accessibilityRole="button"
               accessibilityLabel="Close"
               hitSlop={8}
@@ -471,7 +605,7 @@ export function AddTransactionSheet({
                 borderRadius: 19,
                 alignItems: "center",
                 justifyContent: "center",
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.colors.cardBorder,
                 backgroundColor: theme.colors.surfaceMuted,
               }}
@@ -490,7 +624,7 @@ export function AddTransactionSheet({
                 flex: 1,
                 flexDirection: "row",
                 backgroundColor: theme.colors.surfaceMuted,
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.colors.cardBorder,
                 borderRadius: 19,
                 borderCurve: "continuous",
@@ -512,7 +646,7 @@ export function AddTransactionSheet({
                       borderRadius: 16,
                       borderCurve: "continuous",
                       backgroundColor: theme.colors.accentSoft,
-                      borderWidth: 1,
+                      borderWidth: StyleSheet.hairlineWidth,
                       borderColor: theme.colors.glassHighlight,
                     },
                     segmentThumbStyle,
@@ -522,14 +656,15 @@ export function AddTransactionSheet({
               {(["expense", "income", "transfer"] as TransactionType[]).map((option) => {
                 const active = option === type;
                 return (
-                  <Pressable
+                  <TactilePressable
                     key={option}
                     disabled={Boolean(existing) || saving}
                     onPress={() => changeType(option)}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: active, disabled: Boolean(existing) }}
+                    accessibilityState={{ selected: active, disabled: Boolean(existing) || saving }}
                     accessibilityLabel={TYPE_LABELS[option]}
                     hitSlop={6}
+                    scaleTo={0.96}
                     style={{
                       flex: 1,
                       minHeight: 32,
@@ -547,13 +682,13 @@ export function AddTransactionSheet({
                         theme.text.caption,
                         {
                           color: active ? theme.colors.accent : theme.colors.textSecondary,
-                          fontWeight: active ? "700" : "600",
+                          fontFamily: active ? FONT_FAMILIES.bold : FONT_FAMILIES.semibold,
                         },
                       ]}
                     >
                       {TYPE_LABELS[option]}
                     </Text>
-                  </Pressable>
+                  </TactilePressable>
                 );
               })}
             </View>
@@ -565,7 +700,7 @@ export function AddTransactionSheet({
         style={{ flexGrow: 0, flexShrink: 1 }}
         contentContainerStyle={{ paddingBottom: 4 }}
         keyboardShouldPersistTaps="handled"
-        pointerEvents={saving ? "none" : "auto"}
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <View
@@ -598,7 +733,7 @@ export function AddTransactionSheet({
               textAlign: "center",
               fontSize: 48,
               lineHeight: amountLineHeight,
-              fontWeight: "700",
+              fontFamily: FONT_FAMILIES.bold,
               letterSpacing: -1.6,
               fontVariant: ["tabular-nums"],
               paddingVertical: 0,
@@ -627,12 +762,13 @@ export function AddTransactionSheet({
                 return (
                   <TactilePressable
                     key={category.id}
+                    disabled={saving}
                     onPress={() => {
                       haptics.selection();
                       setCategoryId((current) => (current === category.id ? null : category.id));
                     }}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
+                    accessibilityState={{ selected: active, disabled: saving }}
                     accessibilityLabel={category.name}
                     hitSlop={5}
                     style={{
@@ -642,7 +778,7 @@ export function AddTransactionSheet({
                       borderRadius: theme.radius.chip,
                       borderCurve: "continuous",
                       justifyContent: "center",
-                      borderWidth: 1,
+                      borderWidth: StyleSheet.hairlineWidth,
                       borderColor: active ? theme.colors.accent : theme.colors.cardBorder,
                       backgroundColor: active ? theme.colors.accentSoft : theme.colors.surfaceMuted,
                     }}
@@ -651,7 +787,7 @@ export function AddTransactionSheet({
                       style={[
                         theme.text.caption,
                         {
-                          fontWeight: active ? "700" : "600",
+                          fontFamily: active ? FONT_FAMILIES.bold : FONT_FAMILIES.semibold,
                           color: active ? theme.colors.accent : theme.colors.textSecondary,
                         },
                       ]}
@@ -663,6 +799,7 @@ export function AddTransactionSheet({
               })}
               <TactilePressable
                 onPress={() => setPicker("category")}
+                disabled={saving}
                 accessibilityRole="button"
                 accessibilityLabel="More categories"
                 hitSlop={5}
@@ -673,7 +810,7 @@ export function AddTransactionSheet({
                   borderRadius: theme.radius.chip,
                   borderCurve: "continuous",
                   justifyContent: "center",
-                  borderWidth: 1,
+                  borderWidth: StyleSheet.hairlineWidth,
                   borderColor: theme.colors.cardBorder,
                   backgroundColor: theme.colors.surfaceMuted,
                 }}
@@ -702,8 +839,9 @@ export function AddTransactionSheet({
                   Recent
                 </Text>
                 {recentNames.map((name) => (
-                  <Pressable
+                  <TactilePressable
                     key={name}
+                    disabled={saving}
                     onPress={() => {
                       haptics.selection();
                       Keyboard.dismiss();
@@ -712,6 +850,7 @@ export function AddTransactionSheet({
                     accessibilityRole="button"
                     accessibilityLabel={`Use ${name}`}
                     hitSlop={7}
+                    scaleTo={0.95}
                     style={{
                       minHeight: 30,
                       paddingVertical: 5,
@@ -719,7 +858,7 @@ export function AddTransactionSheet({
                       borderRadius: theme.radius.chip,
                       borderCurve: "continuous",
                       justifyContent: "center",
-                      borderWidth: 1,
+                      borderWidth: StyleSheet.hairlineWidth,
                       borderColor: theme.colors.cardBorder,
                       backgroundColor: theme.colors.surfaceMuted,
                     }}
@@ -727,7 +866,7 @@ export function AddTransactionSheet({
                     <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
                       {name}
                     </Text>
-                  </Pressable>
+                  </TactilePressable>
                 ))}
               </ScrollView>
             ) : null}
@@ -741,32 +880,39 @@ export function AddTransactionSheet({
             backgroundColor: theme.colors.surfaceMuted,
             borderRadius: theme.radius.card,
             borderCurve: "continuous",
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.colors.cardBorder,
             overflow: "hidden",
           }}
         >
-            <FieldRow label={type === "transfer" ? "From account" : "Account"} value={accountLabel} onPress={() => setPicker("account")} />
+            <FieldRow
+              label={type === "transfer" ? "From account" : "Account"}
+              value={accountLabel}
+              onPress={saving ? undefined : () => setPicker("account")}
+              muted={saving}
+            />
             {type === "transfer" ? (
               <FieldRow
                 label="To account"
                 value={transferLabel}
                 showDivider
-                onPress={() => setPicker("transfer")}
+                onPress={saving ? undefined : () => setPicker("transfer")}
+                muted={saving}
               />
             ) : null}
             <FieldRow
               label="Date"
               value={dateLabel(dateIso, today)}
               showDivider
-              onPress={() => setPicker("date")}
+              onPress={saving ? undefined : () => setPicker("date")}
+              muted={saving}
             />
             <FieldRow
               label="Note, place, tags…"
               value={detailsOpen ? "Hide" : undefined}
-              muted={!detailsOpen}
+              muted={!detailsOpen || saving}
               showDivider
-              onPress={() => setDetailsOpen((open) => !open)}
+              onPress={saving ? undefined : () => setDetailsOpen((open) => !open)}
             />
         </View>
 
@@ -779,6 +925,7 @@ export function AddTransactionSheet({
               placeholder="Place (optional)"
               placeholderTextColor={theme.colors.textTertiary}
               accessibilityLabel="Place"
+              editable={!saving}
               returnKeyType="done"
               onSubmitEditing={() => Keyboard.dismiss()}
               style={[
@@ -802,6 +949,7 @@ export function AddTransactionSheet({
               placeholder="Anything to remember? (optional)"
               placeholderTextColor={theme.colors.textTertiary}
               accessibilityLabel="Note"
+              editable={!saving}
               multiline
               style={[
                 theme.text.body,
@@ -843,57 +991,6 @@ export function AddTransactionSheet({
           loading={saving}
         />
       </View>
-
-      <PickerSheet
-        visible={picker === "category"}
-        title="Category"
-        options={selectableCategories.map((category) => ({
-          value: category.id,
-          label: category.isArchived ? `${category.name} (archived)` : category.name,
-        }))}
-        selected={categoryId ?? undefined}
-        searchable
-        searchPlaceholder="Search categories"
-        onSelect={(value) => setCategoryId(value)}
-        onClose={() => setPicker(null)}
-      />
-      <PickerSheet
-        visible={picker === "account"}
-        title={type === "transfer" ? "From account" : "Account"}
-        options={accounts.map((account) => ({
-          value: account.id,
-          label: account.name,
-          secondary: account.type,
-        }))}
-        selected={accountId ?? undefined}
-        onSelect={(value) => {
-          setAccountId(value);
-          setTransferAccountId((current) =>
-            current === value
-              ? accounts.find((account) => account.id !== value)?.id ?? null
-              : current,
-          );
-        }}
-        onClose={() => setPicker(null)}
-      />
-      <PickerSheet
-        visible={picker === "transfer"}
-        title="To account"
-        options={accounts
-          .filter((account) => account.id !== accountId)
-          .map((account) => ({ value: account.id, label: account.name, secondary: account.type }))}
-        selected={transferAccountId ?? undefined}
-        onSelect={(value) => setTransferAccountId(value)}
-        onClose={() => setPicker(null)}
-      />
-      {picker === "date" ? (
-        <DatePickerSheet
-          visible
-          value={dateIso}
-          onSelect={setDateIso}
-          onClose={() => setPicker(null)}
-        />
-      ) : null}
     </Sheet>
   );
 }

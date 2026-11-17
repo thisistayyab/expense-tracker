@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -24,8 +24,9 @@ import { exportCsv } from "../../features/settings/dataIO";
 import type { Db } from "../../lib/db/types";
 import type { BreakdownRow, InsightPeriod } from "../../lib/domain/insights";
 import { formatMoney } from "../../lib/format/money";
+import { subscribeLedgerChanged } from "../../lib/ledgerEvents";
 import { iosEnter } from "../../lib/motion";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 export default function InsightsScreen() {
   const { theme } = useTheme();
@@ -33,8 +34,20 @@ export default function InsightsScreen() {
   const insets = useSafeAreaInsets();
   const [period, setPeriod] = useState<InsightPeriod>("month");
   const [exporting, setExporting] = useState(false);
+  const exportingRef = useRef(false);
   const { data, loading, error, refresh } = useInsights(period);
   const firstFocus = useRef(true);
+
+  useEffect(() => {
+    const unsubLedger = subscribeLedgerChanged(() => refresh());
+    const subApp = AppState.addEventListener("change", (state) => {
+      if (state === "active") refresh();
+    });
+    return () => {
+      unsubLedger();
+      subApp.remove();
+    };
+  }, [refresh]);
 
   // A save on another tab must change these numbers without a reload. The first
   // focus is skipped because the hook already loaded on mount.
@@ -68,7 +81,8 @@ export default function InsightsScreen() {
   const otherTotal = otherCurrencies.reduce((sum, row) => sum + row.count, 0);
 
   const exportLedger = async () => {
-    if (exporting) return;
+    if (exporting || exportingRef.current) return;
+    exportingRef.current = true;
     setExporting(true);
     try {
       const result = await exportCsv(db);
@@ -78,6 +92,7 @@ export default function InsightsScreen() {
     } catch (cause) {
       Alert.alert("CSV export failed", String(cause));
     } finally {
+      exportingRef.current = false;
       setExporting(false);
     }
   };
@@ -89,7 +104,7 @@ export default function InsightsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             padding: 20,
-            paddingTop: 10,
+            paddingTop: 14,
             paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
           }}
         >
@@ -130,7 +145,7 @@ export default function InsightsScreen() {
                   <Text
                     style={[
                       theme.text.caption,
-                      { color: theme.colors.accent, fontWeight: "700" },
+                      { color: theme.colors.accent, fontFamily: FONT_FAMILIES.bold },
                     ]}
                   >
                     {exporting ? "Exporting…" : "Export CSV"}
@@ -248,7 +263,7 @@ export default function InsightsScreen() {
                           style={[
                             theme.text.caption,
                             {
-                              fontWeight: "700",
+                              fontFamily: FONT_FAMILIES.bold,
                               fontVariant: ["tabular-nums"],
                               color:
                                 data.trendDelta.pct > 0
@@ -326,7 +341,7 @@ export default function InsightsScreen() {
                             style={[
                               theme.text.caption,
                               {
-                                fontWeight: "700",
+                                fontFamily: FONT_FAMILIES.bold,
                                 fontVariant: ["tabular-nums"],
                                 color:
                                   index === 0 ? theme.colors.accent : theme.colors.textSecondary,

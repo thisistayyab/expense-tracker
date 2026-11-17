@@ -290,4 +290,34 @@ describe("reset all data", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.join(" ")).toMatch(/remembered account/);
   });
+
+  test("refuses cyclic categories, out-of-range recurring day/end_date, and duplicate tag names", async () => {
+    const db = await seededDb();
+    await seedMovements(db);
+    const payload = await backupOf(db);
+
+    // Cycle between two categories.
+    payload.tables.categories[0].parent_id = payload.tables.categories[1].id;
+    payload.tables.categories[1].parent_id = payload.tables.categories[0].id;
+
+    // Invalid recurring day_of_month and end_date < start_date.
+    payload.tables.recurring_rules[0].day_of_month = 32;
+    payload.tables.recurring_rules[0].start_date = "2026-11-20";
+    payload.tables.recurring_rules[0].end_date = "2026-11-10";
+
+    // Duplicate tag names.
+    payload.tables.tags.push(
+      { id: "tag-1", name: "travel", color: null, created_at: "2026-11-01T00:00:00.000Z" },
+      { id: "tag-2", name: "travel", color: null, created_at: "2026-11-01T00:00:00.000Z" },
+    );
+
+    const result = validateBackup(payload, LATEST_SCHEMA_VERSION);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const msg = result.errors.join(" ");
+      expect(msg).toMatch(/day_of_month/i);
+      expect(msg).toMatch(/end_date/i);
+      expect(msg).toMatch(/duplicate name/i);
+    }
+  });
 });

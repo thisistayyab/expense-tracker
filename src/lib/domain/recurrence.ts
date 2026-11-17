@@ -68,16 +68,17 @@ export function occurrenceAt(rule: RecurrenceRule, index: number): IsoDate {
 }
 
 function firstIndexOnOrAfter(rule: RecurrenceRule, date: IsoDate): number {
-  if (date <= rule.startDate) return 0;
+  // Never yield a clamped anchor occurrence earlier than `startDate` itself.
+  const floor = date > rule.startDate ? date : rule.startDate;
   const every = intervalOf(rule);
 
   if (rule.frequency === "daily" || rule.frequency === "weekly") {
     const stepDays = rule.frequency === "weekly" ? every * 7 : every;
-    return Math.ceil(daysBetween(rule.startDate, date) / stepDays);
+    return floor === rule.startDate ? 0 : Math.ceil(daysBetween(rule.startDate, floor) / stepDays);
   }
 
   const start = fromIsoDate(rule.startDate);
-  const target = fromIsoDate(date);
+  const target = fromIsoDate(floor);
   const startMonths = start.getUTCFullYear() * 12 + start.getUTCMonth();
   const targetMonths = target.getUTCFullYear() * 12 + target.getUTCMonth();
   const diff = rule.frequency === "monthly"
@@ -85,9 +86,9 @@ function firstIndexOnOrAfter(rule: RecurrenceRule, date: IsoDate): number {
     : target.getUTCFullYear() - start.getUTCFullYear();
 
   let index = Math.max(0, Math.floor(diff / every));
-  // Calendar clamping means the estimate can be one short (e.g. the 31st compared
-  // with a shorter month). Walk forward at most twice; the schedule is monotonic.
-  for (let guard = 0; guard < 3 && occurrenceAt(rule, index) < date; guard += 1) {
+  // Calendar clamping means the estimate can be one short (or `dayOfMonth < startDate`'s
+  // day leaves index 0 before `startDate`). Walk forward; the schedule is monotonic.
+  for (let guard = 0; guard < 3 && occurrenceAt(rule, index) < floor; guard += 1) {
     index += 1;
   }
   return index;

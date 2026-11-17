@@ -48,9 +48,15 @@ export function Money({
   return (
     <Text
       style={[theme.text[size], { color, fontVariant: ["tabular-nums"] }, style]}
-      maxFontSizeMultiplier={size === "hero" || size === "amountXL" ? 1.3 : undefined}
+      maxFontSizeMultiplier={
+        size === "hero" || size === "amountXL" || size === "display" || size === "total"
+          ? 1.3
+          : undefined
+      }
       numberOfLines={1}
-      adjustsFontSizeToFit={size === "hero" || size === "total" || size === "display"}
+      adjustsFontSizeToFit={
+        size === "hero" || size === "amountXL" || size === "total" || size === "display"
+      }
       minimumFontScale={0.7}
       accessibilityLabel={spoken}
     >

@@ -10,7 +10,7 @@ import Animated, {
 import { INSIGHT_PERIOD_OPTIONS, type InsightPeriod } from "../../lib/domain/insights";
 import { haptics } from "../../lib/haptics";
 import { SPRING_SNAPPY } from "../../lib/motion";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 type SegmentRect = { x: number; width: number };
 
@@ -91,11 +91,11 @@ export function PeriodControl({
                   backgroundColor:
                     theme.scheme === "dark"
                       ? theme.colors.surfaceMuted
-                      : "#FFFFFF",
+                      : theme.colors.surface,
                   borderColor:
                     theme.scheme === "dark"
                       ? "transparent"
-                      : "rgba(15, 23, 42, 0.05)",
+                      : theme.colors.cardBorder,
                 },
                 thumbStyle,
               ]}
@@ -131,12 +131,15 @@ export function PeriodControl({
                   style={styles.segment}
                 >
                   <Text
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.25}
                     style={[
                       theme.text.caption,
                       {
                         color: selected ? theme.colors.textPrimary : theme.colors.textSecondary,
-                        fontWeight: selected ? "700" : "500",
+                        fontFamily: selected ? FONT_FAMILIES.bold : FONT_FAMILIES.medium,
                         fontSize: 13.5,
+                        flexShrink: 1,
                       },
                     ]}
                   >

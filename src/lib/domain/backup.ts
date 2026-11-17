@@ -160,6 +160,7 @@ export const BACKUP_INSERT_ORDER: readonly BackupTable[] = [
 type Check = (value: unknown) => boolean;
 
 const isString: Check = (value) => typeof value === "string";
+const isNonBlankString: Check = (value) => typeof value === "string" && value.trim().length > 0;
 const isNullableString: Check = (value) => value === null || typeof value === "string";
 const isBoolInt: Check = (value) => value === 0 || value === 1;
 const isIso: Check = (value) => typeof value === "string" && isIsoDate(value);
@@ -172,8 +173,11 @@ const isNullableMonth: Check = (value) =>
   (typeof value === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value));
 const integerAtLeast = (minimum: number): Check => (value) =>
   Number.isSafeInteger(value) && (value as number) >= minimum;
-const nullableInteger = (minimum: number): Check => (value) =>
-  value === null || (Number.isSafeInteger(value) && (value as number) >= minimum);
+const nullableInteger = (minimum: number, maximum?: number): Check => (value) =>
+  value === null ||
+  (Number.isSafeInteger(value) &&
+    (value as number) >= minimum &&
+    (maximum === undefined || (value as number) <= maximum));
 const oneOf = (values: readonly string[]): Check => (value) =>
   typeof value === "string" && values.includes(value);
 
@@ -192,8 +196,8 @@ const MATCH_TYPES = [
 
 const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
   accounts: {
-    id: isString,
-    name: isString,
+    id: isNonBlankString,
+    name: isNonBlankString,
     type: oneOf(ACCOUNT_TYPES),
     currency: isCurrency,
     opening_balance_minor: integerAtLeast(Number.MIN_SAFE_INTEGER),
@@ -205,9 +209,9 @@ const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
     updated_at: isInstant,
   },
   categories: {
-    id: isString,
+    id: isNonBlankString,
     parent_id: isNullableString,
-    name: isString,
+    name: isNonBlankString,
     kind: oneOf(CATEGORY_KINDS),
     icon: isNullableString,
     color: isNullableString,
@@ -217,18 +221,18 @@ const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
     updated_at: isInstant,
   },
   recurring_rules: {
-    id: isString,
+    id: isNonBlankString,
     type: oneOf(TRANSACTION_TYPES),
     amount_minor: integerAtLeast(1),
     currency: isCurrency,
-    account_id: isString,
+    account_id: isNonBlankString,
     category_id: isNullableString,
     item_name: isNullableString,
     place: isNullableString,
     note: isNullableString,
     frequency: oneOf(FREQUENCIES),
     interval_count: integerAtLeast(1),
-    day_of_month: nullableInteger(1),
+    day_of_month: nullableInteger(1, 31),
     start_date: isIso,
     end_date: isNullableIso,
     next_due_at: isIso,
@@ -239,11 +243,11 @@ const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
     updated_at: isInstant,
   },
   transactions: {
-    id: isString,
+    id: isNonBlankString,
     type: oneOf(TRANSACTION_TYPES),
     amount_minor: integerAtLeast(1),
     currency: isCurrency,
-    account_id: isString,
+    account_id: isNonBlankString,
     transfer_account_id: isNullableString,
     category_id: isNullableString,
     item_name: isNullableString,
@@ -256,7 +260,7 @@ const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
     updated_at: isInstant,
   },
   budgets: {
-    id: isString,
+    id: isNonBlankString,
     category_id: isNullableString,
     period: oneOf(BUDGET_PERIODS),
     month: isNullableMonth,
@@ -269,35 +273,35 @@ const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
     updated_at: isInstant,
   },
   category_rules: {
-    id: isString,
+    id: isNonBlankString,
     match_type: oneOf(MATCH_TYPES),
     pattern: isString,
-    category_id: isString,
+    category_id: isNonBlankString,
     priority: integerAtLeast(0),
     is_active: isBoolInt,
     created_at: isInstant,
   },
   tags: {
-    id: isString,
-    name: isString,
+    id: isNonBlankString,
+    name: isNonBlankString,
     color: isNullableString,
     created_at: isInstant,
   },
   transaction_tags: {
-    transaction_id: isString,
-    tag_id: isString,
+    transaction_id: isNonBlankString,
+    tag_id: isNonBlankString,
   },
   attachments: {
-    id: isString,
-    transaction_id: isString,
+    id: isNonBlankString,
+    transaction_id: isNonBlankString,
     kind: oneOf(["receipt", "other"]),
-    file_uri: isString,
+    file_uri: isNonBlankString,
     width: nullableInteger(0),
     height: nullableInteger(0),
     created_at: isInstant,
   },
   settings: {
-    key: isString,
+    key: isNonBlankString,
     value: isString,
     updated_at: isInstant,
   },
@@ -347,7 +351,13 @@ function validateRows(table: BackupTable, rows: unknown, errors: string[]): Back
       const value = normalized[column];
       if (!checks[column](value)) {
         push(errors, `${table}[${index}].${column} has an invalid value`);
+      } else if (column === "currency" && typeof value === "string") {
+        normalized[column] = value.trim().toUpperCase();
       }
+    }
+
+    if (table === "settings" && normalized.key === "currency" && typeof normalized.value === "string") {
+      normalized.value = normalized.value.trim().toUpperCase();
     }
 
     out.push(normalized);
@@ -431,7 +441,24 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
     settingKeys.add(key);
   }
 
+  const tagNames = new Set<string>();
+  for (const row of tables.tags) {
+    const name = String(row.name);
+    if (tagNames.has(name)) push(errors, `tags has a duplicate name ${name}`);
+    tagNames.add(name);
+  }
+
+  const transactionTagKeys = new Set<string>();
+  for (const row of tables.transaction_tags) {
+    const key = `${String(row.transaction_id)}|${String(row.tag_id)}`;
+    if (transactionTagKeys.has(key)) {
+      push(errors, `transaction_tags has a duplicate link ${key}`);
+    }
+    transactionTagKeys.add(key);
+  }
+
   const categoryIds = new Set(tables.categories.map((row) => String(row.id)));
+  const categoryById = new Map(tables.categories.map((row) => [String(row.id), row]));
   const accountIds = new Set(tables.accounts.map((row) => String(row.id)));
   const ruleIds = new Set(tables.recurring_rules.map((row) => String(row.id)));
   const transactionIds = new Set(tables.transactions.map((row) => String(row.id)));
@@ -439,8 +466,23 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
 
   // --- referential integrity ---------------------------------------------
   for (const row of tables.categories) {
-    if (row.parent_id !== null && !categoryIds.has(String(row.parent_id))) {
-      push(errors, `Category ${String(row.id)} points at a missing parent`);
+    if (row.parent_id === null) continue;
+    const id = String(row.id);
+    const parentId = String(row.parent_id);
+    if (parentId === id) {
+      push(errors, `Category ${id} cannot be its own parent`);
+      continue;
+    }
+    const parent = categoryById.get(parentId);
+    if (!parent) {
+      push(errors, `Category ${id} points at a missing parent`);
+      continue;
+    }
+    if (parent.kind !== row.kind) {
+      push(errors, `Category ${id} cannot nest under a ${String(parent.kind)} parent`);
+    }
+    if (parent.parent_id !== null) {
+      push(errors, `Category ${id} cannot nest deeper than one subcategory level`);
     }
   }
   for (const row of tables.recurring_rules) {
@@ -452,6 +494,9 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
     }
     if (row.type === "transfer") {
       push(errors, "Recurring transfers are not supported by this schema");
+    }
+    if (row.end_date !== null && String(row.end_date) < String(row.start_date)) {
+      push(errors, `Recurring rule ${String(row.id)} has end_date before start_date`);
     }
   }
   for (const row of tables.transactions) {

@@ -1,6 +1,6 @@
 import { isCurrencyCode } from "../../constants/currencies";
 import { newId } from "../ids";
-import { upsertBudget } from "./repos/budgets";
+import { upsertBudgetInTransaction } from "./repos/budgets";
 import type { BudgetPeriod, Db } from "./types";
 
 export type RegionSelection = {
@@ -40,8 +40,9 @@ export async function applyRegionSelection(
   region: RegionSelection,
   options: ApplyRegionOptions = {},
 ): Promise<void> {
-  const country = region.country.toUpperCase();
-  const currency = region.currency.toUpperCase();
+  const country = region.country.trim().toUpperCase();
+  const currency = region.currency.trim().toUpperCase();
+  if (!isCurrencyCode(currency)) throw new Error(`Unknown currency: ${region.currency}`);
   const locale = region.locale.trim() || "en-US";
   const now = options.now ?? new Date().toISOString();
 
@@ -86,10 +87,9 @@ export async function applyRegionSelection(
     if (
       budget &&
       Number.isSafeInteger(budget.limitMinor) &&
-      budget.limitMinor > 0 &&
-      isCurrencyCode(currency)
+      budget.limitMinor > 0
     ) {
-      await upsertBudget(db, {
+      await upsertBudgetInTransaction(db, {
         categoryId: null,
         period: budget.period,
         limitMinor: budget.limitMinor,

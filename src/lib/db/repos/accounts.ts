@@ -114,67 +114,71 @@ export async function updateAccount(
   id: string,
   patch: AccountPatch,
 ): Promise<void> {
-  const current = await getAccount(db, id);
-  if (!current) throw new Error(`Account not found: ${id}`);
+  await db.withTransactionAsync(async () => {
+    const current = await getAccount(db, id);
+    if (!current) throw new Error(`Account not found: ${id}`);
 
-  if (patch.name !== undefined && !patch.name.trim()) {
-    throw new Error("An account needs a name");
-  }
-  if (patch.type !== undefined && !ACCOUNT_TYPES.includes(patch.type)) {
-    throw new Error(`Unknown account type: ${patch.type}`);
-  }
-
-  const nextCurrency = patch.currency?.trim().toUpperCase() ?? current.currency;
-  if (!isCurrencyCode(nextCurrency)) throw new Error(`Unknown currency: ${nextCurrency}`);
-  if (nextCurrency !== current.currency && (await accountHasTransactions(db, id))) {
-    throw new Error("An account with history cannot change currency");
-  }
-  if (nextCurrency !== current.currency) {
-    const rules = await db.getFirstAsync<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM recurring_rules WHERE account_id = ?",
-      [id],
-    );
-    if ((rules?.count ?? 0) > 0) {
-      throw new Error("An account with recurring rules cannot change currency");
+    if (patch.name !== undefined && !patch.name.trim()) {
+      throw new Error("An account needs a name");
     }
-  }
+    if (patch.type !== undefined && !ACCOUNT_TYPES.includes(patch.type)) {
+      throw new Error(`Unknown account type: ${patch.type}`);
+    }
 
-  await db.runAsync(
-    `UPDATE accounts
-        SET name = ?, type = ?, currency = ?, opening_balance_minor = ?, color = ?, icon = ?,
-            sort_order = ?, updated_at = ?
-      WHERE id = ?`,
-    [
-      patch.name?.trim() || current.name,
-      patch.type ?? current.type,
-      nextCurrency,
-      Math.trunc(patch.openingBalanceMinor ?? current.openingBalanceMinor),
-      patch.color === undefined ? current.color : nullable(patch.color),
-      patch.icon === undefined ? current.icon : nullable(patch.icon),
-      patch.sortOrder ?? current.sortOrder,
-      new Date().toISOString(),
-      id,
-    ],
-  );
+    const nextCurrency = patch.currency?.trim().toUpperCase() ?? current.currency;
+    if (!isCurrencyCode(nextCurrency)) throw new Error(`Unknown currency: ${nextCurrency}`);
+    if (nextCurrency !== current.currency && (await accountHasTransactions(db, id))) {
+      throw new Error("An account with history cannot change currency");
+    }
+    if (nextCurrency !== current.currency) {
+      const rules = await db.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM recurring_rules WHERE account_id = ?",
+        [id],
+      );
+      if ((rules?.count ?? 0) > 0) {
+        throw new Error("An account with recurring rules cannot change currency");
+      }
+    }
+
+    await db.runAsync(
+      `UPDATE accounts
+          SET name = ?, type = ?, currency = ?, opening_balance_minor = ?, color = ?, icon = ?,
+              sort_order = ?, updated_at = ?
+        WHERE id = ?`,
+      [
+        patch.name?.trim() || current.name,
+        patch.type ?? current.type,
+        nextCurrency,
+        Math.trunc(patch.openingBalanceMinor ?? current.openingBalanceMinor),
+        patch.color === undefined ? current.color : nullable(patch.color),
+        patch.icon === undefined ? current.icon : nullable(patch.icon),
+        patch.sortOrder ?? current.sortOrder,
+        new Date().toISOString(),
+        id,
+      ],
+    );
+  });
 }
 
 export async function setAccountArchived(db: Db, id: string, archived: boolean): Promise<void> {
-  if (archived) {
-    // A rule would otherwise keep posting into an account the UI no longer offers.
-    const rules = await db.getFirstAsync<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM recurring_rules WHERE account_id = ? AND is_active = 1",
-      [id],
-    );
-    if ((rules?.count ?? 0) > 0) {
-      throw new Error("Pause recurring rules before archiving this account");
+  await db.withTransactionAsync(async () => {
+    if (archived) {
+      // A rule would otherwise keep posting into an account the UI no longer offers.
+      const rules = await db.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM recurring_rules WHERE account_id = ? AND is_active = 1",
+        [id],
+      );
+      if ((rules?.count ?? 0) > 0) {
+        throw new Error("Pause recurring rules before archiving this account");
+      }
     }
-  }
 
-  await db.runAsync("UPDATE accounts SET is_archived = ?, updated_at = ? WHERE id = ?", [
-    boolToInt(archived),
-    new Date().toISOString(),
-    id,
-  ]);
+    await db.runAsync("UPDATE accounts SET is_archived = ?, updated_at = ? WHERE id = ?", [
+      boolToInt(archived),
+      new Date().toISOString(),
+      id,
+    ]);
+  });
 }
 
 export type AccountWithBalance = Account & {
@@ -184,8 +188,7 @@ export type AccountWithBalance = Account & {
 
 /**
  * Every account with its computed balance in one query. The join matches a
- * transfer once on either side; the CASE decides whether it adds or subtracts.
- * Currency is never converted.
+ * transfer once on either side in the account's own currency; currency is never converted.
  */
 export async function listAccountBalances(
   db: Db,
@@ -199,13 +202,15 @@ export async function listAccountBalances(
             a.opening_balance_minor + COALESCE(SUM(CASE
               WHEN t.type = 'income' AND t.account_id = a.id THEN t.amount_minor
               WHEN t.type = 'expense' AND t.account_id = a.id THEN -t.amount_minor
+              WHEN t.type = 'transfer' AND t.account_id = a.id AND t.transfer_account_id = a.id THEN 0
               WHEN t.type = 'transfer' AND t.account_id = a.id THEN -t.amount_minor
               WHEN t.type = 'transfer' AND t.transfer_account_id = a.id THEN t.amount_minor
               ELSE 0 END), 0) AS balance_minor,
             COUNT(t.id) AS transaction_count
        FROM accounts a
        LEFT JOIN transactions t
-         ON t.account_id = a.id OR t.transfer_account_id = a.id
+         ON (t.account_id = a.id OR t.transfer_account_id = a.id)
+        AND t.currency = a.currency
       ${options.includeArchived ? "" : "WHERE a.is_archived = 0"}
       GROUP BY a.id
       ORDER BY a.sort_order, a.name`,

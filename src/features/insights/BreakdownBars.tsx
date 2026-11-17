@@ -8,7 +8,7 @@ import {
 } from "../../components/ui";
 import type { BreakdownRow } from "../../lib/domain/insights";
 import { formatMoneySpoken } from "../../lib/format/money";
-import { categoryRamp, useTheme } from "../../lib/theme";
+import { categoryRamp, FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 /**
  * Interactive category spend breakdown with spring-animated bars, squircle
@@ -60,6 +60,7 @@ export function BreakdownBars({
                     ]}
                   >
                     <Text
+                      maxFontSizeMultiplier={1.25}
                       style={[
                         theme.text.caption,
                         styles.pctText,
@@ -161,7 +162,7 @@ const styles = StyleSheet.create({
   },
   pctText: {
     fontSize: 11.5,
-    fontWeight: "700",
+    fontFamily: FONT_FAMILIES.bold,
     fontVariant: ["tabular-nums"],
   },
 });

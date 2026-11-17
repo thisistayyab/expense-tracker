@@ -42,8 +42,9 @@ export function BrandMark({ size = 64, framed = true, style }: BrandMarkProps) {
           borderRadius: framed ? frameRadius : 0,
           borderCurve: "continuous",
           overflow: framed ? "hidden" : "visible",
+          backgroundColor: framed ? "#090A0E" : "transparent",
           borderWidth: framed ? StyleSheet.hairlineWidth : 0,
-          borderColor: framed ? "rgba(255, 255, 255, 0.12)" : "transparent",
+          borderColor: framed ? "rgba(128, 138, 160, 0.24)" : "transparent",
         },
         style,
       ]}

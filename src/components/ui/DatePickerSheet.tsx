@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Keyboard, StyleSheet, Text, View } from "react-native";
 import {
   addDays,
   addMonthsClamped,
@@ -8,6 +8,7 @@ import {
   toIsoDate,
 } from "../../lib/domain/dates";
 import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES } from "../../lib/theme/fonts";
 import { AppIcon } from "./AppIcon";
 import { ChoiceChip } from "./ChoiceChip";
 import { Sheet } from "./Sheet";
@@ -18,7 +19,9 @@ export type DatePickerSheetProps = {
   value: string;
   onSelect: (iso: string) => void;
   onClose: () => void;
+  onClosed?: () => void;
   title?: string;
+  embedded?: boolean;
 };
 
 function monthLabel(iso: string): string {
@@ -47,11 +50,22 @@ export function DatePickerSheet({
   value,
   onSelect,
   onClose,
+  onClosed,
   title = "Date",
+  embedded = false,
 }: DatePickerSheetProps) {
   const { theme } = useTheme();
+  const [prevVisible, setPrevVisible] = useState(visible);
   const [month, setMonth] = useState(() => startOfMonth(value));
-  const today = useMemo(() => toIsoDate(new Date()), []);
+  const [today, setToday] = useState(() => toIsoDate(new Date()));
+
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible) {
+      setMonth(startOfMonth(value));
+      setToday(toIsoDate(new Date()));
+    }
+  }
 
   const weekdays = useMemo(
     () =>
@@ -79,12 +93,19 @@ export function DatePickerSheet({
   }, [month]);
 
   const choose = (iso: string) => {
+    Keyboard.dismiss();
     onSelect(iso);
     onClose();
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title={title}>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      title={title}
+      embedded={embedded}
+    >
       <View style={styles.content}>
         <View style={styles.quickRow}>
           <ChoiceChip
@@ -128,7 +149,11 @@ export function DatePickerSheet({
               <AppIcon name="chevronLeft" size={15} color={theme.colors.textPrimary} weight="bold" />
             </TactilePressable>
 
-            <Text style={[theme.text.bodyStrong, { color: theme.colors.textPrimary }]}>
+            <Text
+              accessibilityRole="header"
+              numberOfLines={1}
+              style={[theme.text.bodyStrong, { flexShrink: 1, color: theme.colors.textPrimary }]}
+            >
               {monthLabel(month)}
             </Text>
 
@@ -162,7 +187,7 @@ export function DatePickerSheet({
                 style={[
                   theme.text.caption,
                   styles.weekdayCell,
-                  { color: theme.colors.textTertiary, fontWeight: "600" },
+                  { color: theme.colors.textTertiary, fontFamily: FONT_FAMILIES.semibold },
                 ]}
               >
                 {wd}
@@ -184,6 +209,7 @@ export function DatePickerSheet({
                     accessibilityRole="button"
                     accessibilityLabel={dayLabel(iso)}
                     accessibilityState={{ selected }}
+                    hitSlop={4}
                     haptic="selection"
                     scaleTo={0.88}
                     radius={999}
@@ -194,7 +220,7 @@ export function DatePickerSheet({
                         : isToday
                           ? {
                               backgroundColor: theme.colors.accentSoft,
-                              borderWidth: 1,
+                              borderWidth: StyleSheet.hairlineWidth,
                               borderColor: `${theme.colors.accent}44`,
                             }
                           : undefined,
@@ -210,7 +236,8 @@ export function DatePickerSheet({
                             : isToday
                               ? theme.colors.accent
                               : theme.colors.textPrimary,
-                          fontWeight: selected || isToday ? "700" : "500",
+                          fontFamily:
+                            selected || isToday ? FONT_FAMILIES.bold : FONT_FAMILIES.medium,
                         },
                       ]}
                     >
@@ -241,7 +268,7 @@ const styles = StyleSheet.create({
   calendarCard: {
     borderRadius: 22,
     borderCurve: "continuous",
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: 14,
     gap: 12,
   },
@@ -249,12 +276,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
   },
   navBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
   },

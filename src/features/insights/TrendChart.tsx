@@ -20,7 +20,7 @@ import type { TrendPoint } from "../../lib/domain/insights";
 import { formatMoneySpoken } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
 import { SPRING_SETTLE } from "../../lib/motion";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 type Point = { x: number; y: number };
 
@@ -128,7 +128,12 @@ export function TrendChart({
             },
           ]}
         >
-          <Text style={[theme.text.caption, { color: theme.colors.textSecondary, fontWeight: "700" }]}>
+          <Text
+            style={[
+              theme.text.caption,
+              { color: theme.colors.textSecondary, fontFamily: FONT_FAMILIES.bold },
+            ]}
+          >
             {activePoint.label}
           </Text>
           <View style={styles.dotPair}>
@@ -137,7 +142,10 @@ export function TrendChart({
               minor={activePoint.expenseMinor}
               currency={currency}
               tone="default"
-              style={[theme.text.caption, { color: theme.colors.textPrimary, fontWeight: "700" }]}
+              style={[
+                theme.text.caption,
+                { color: theme.colors.textPrimary, fontFamily: FONT_FAMILIES.bold },
+              ]}
             />
           </View>
           {hasIncome ? (
@@ -147,21 +155,21 @@ export function TrendChart({
                 minor={activePoint.incomeMinor}
                 currency={currency}
                 tone="income"
-                style={[theme.text.caption, { fontWeight: "700" }]}
+                style={[theme.text.caption, { fontFamily: FONT_FAMILIES.bold }]}
               />
             </View>
           ) : null}
         </View>
       ) : null}
 
-      <Animated.View
-        accessible
-        accessibilityRole="text"
-        accessibilityLabel={`Six-month trend. ${spokenSummary}`}
-        style={chartRevealStyle}
-      >
+      <Animated.View style={chartRevealStyle}>
         <View style={{ position: "relative" }}>
-          <Svg width={width} height={height}>
+          <View
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`Six-month trend. ${spokenSummary}`}
+          >
+            <Svg width={width} height={height}>
             <Defs>
               <LinearGradient id="trendAreaGrad" x1="0" y1="0" x2="0" y2="1">
                 <Stop offset="0" stopColor={theme.colors.accent} stopOpacity="0.26" />
@@ -263,7 +271,7 @@ export function TrendChart({
                   cy={activeCoord.y}
                   r={5}
                   fill={theme.colors.accent}
-                  stroke="#FFFFFF"
+                  stroke={theme.colors.surface}
                   strokeWidth={2}
                 />
               </>
@@ -278,14 +286,14 @@ export function TrendChart({
                   index === clampedIdx ? theme.colors.accent : theme.colors.textTertiary
                 }
                 fontSize={11.5}
-                fontFamily={theme.text.caption.fontFamily}
-                fontWeight={index === clampedIdx ? "700" : "500"}
+                fontFamily={index === clampedIdx ? FONT_FAMILIES.bold : FONT_FAMILIES.medium}
                 textAnchor="middle"
               >
                 {point.label}
               </SvgText>
             ))}
-          </Svg>
+            </Svg>
+          </View>
 
           <View style={[StyleSheet.absoluteFill, styles.touchOverlay]}>
             {points.map((point, index) => (
@@ -295,7 +303,12 @@ export function TrendChart({
                   haptics.selection();
                   setSelectedIdx(index);
                 }}
-                accessibilityLabel={`Select ${point.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: index === clampedIdx }}
+                accessibilityLabel={`Select ${point.label}: ${formatMoneySpoken(
+                  point.expenseMinor,
+                  currency,
+                )}`}
                 style={styles.touchColumn}
               />
             ))}

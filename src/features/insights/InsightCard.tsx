@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { AppIcon } from "../../components/ui";
 import type { InsightCardData } from "../../lib/domain/insights";
-import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
 /**
  * Deterministic insight banner with calm tonal tint and SF Symbol badge.
@@ -33,8 +33,7 @@ export function InsightCard({ card }: { card: InsightCardData }) {
             style={
               segment.strong
                 ? {
-                    fontFamily: theme.text.bodyStrong.fontFamily,
-                    fontWeight: "700",
+                    fontFamily: FONT_FAMILIES.bold,
                     color: theme.colors.textPrimary,
                   }
                 : undefined

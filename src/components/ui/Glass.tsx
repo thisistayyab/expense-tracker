@@ -27,8 +27,6 @@ export type GlassProps = {
   interactive?: boolean;
   tintColor?: ColorValue;
   style?: StyleProp<ViewStyle>;
-  /** Adds a subtle top-edge light catch and diagonal optical sheen on blurred glass. */
-  sheen?: boolean;
   /**
    * Overrides the iOS 26 material. `clear` keeps the background visible (cards);
    * `regular` frosts it, which navigation chrome needs so labels stay legible
@@ -53,7 +51,7 @@ const ANDROID_BLUR_INTENSITY: Record<GlassTone, number> = {
 
 /**
  * Native iOS Liquid Glass when supported, or hardware-accelerated BlurView +
- * optical specular highlight + frosted tint everywhere else.
+ * optical hairline rim everywhere else.
  */
 export function Glass({
   children,
@@ -75,7 +73,10 @@ export function Glass({
         ? theme.colors.glassThick
         : theme.colors.glass;
   const sized = [padded ? styles.padded : null, style];
-  const androidBlurred = Platform.OS === "android" && Boolean(blurTarget);
+  // `dimezisBlurViewSdk31Plus` falls back to `'none'` on Android API <= 30;
+  // only opt into sheer glass tinting when real OS blur is active.
+  const androidBlurred =
+    Platform.OS === "android" && Boolean(blurTarget) && Number(Platform.Version) >= 31;
   const useBlur = Platform.OS === "ios" || Platform.OS === "web" || androidBlurred;
 
   if (liquidGlass) {
@@ -94,12 +95,11 @@ export function Glass({
 
   const androidGlassTint =
     theme.scheme === "dark" ? "rgba(24, 27, 36, 0.34)" : "rgba(255, 255, 255, 0.42)";
-  const androidFallbackBg =
-    tone === "thin"
+  const androidFallbackBg = blurTarget
+    ? theme.colors.tabBar
+    : tone === "thin"
       ? theme.colors.surfaceMuted
-      : theme.scheme === "dark"
-        ? "#181B23"
-        : "#FFFFFF";
+      : theme.colors.surface;
 
   return (
     <View
@@ -107,7 +107,6 @@ export function Glass({
         {
           borderRadius: corner,
           borderCurve: "continuous",
-          overflow: "hidden",
           borderWidth: StyleSheet.hairlineWidth,
           borderColor:
             theme.scheme === "dark"
@@ -128,7 +127,17 @@ export function Glass({
       ]}
     >
       {useBlur ? (
-        <>
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: corner,
+              borderCurve: "continuous",
+              overflow: "hidden",
+            },
+          ]}
+        >
           <BlurView
             pointerEvents="none"
             blurTarget={androidBlurred ? blurTarget : undefined}
@@ -142,7 +151,7 @@ export function Glass({
                 : theme.colors.blurTint
             }
             intensity={androidBlurred ? ANDROID_BLUR_INTENSITY[tone] : BLUR_INTENSITY[tone]}
-            style={[StyleSheet.absoluteFill, { borderRadius: corner }]}
+            style={StyleSheet.absoluteFill}
           />
           <View
             pointerEvents="none"
@@ -158,7 +167,7 @@ export function Glass({
               },
             ]}
           />
-        </>
+        </View>
       ) : null}
       {children}
     </View>

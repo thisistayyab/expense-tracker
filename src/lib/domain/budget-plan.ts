@@ -84,7 +84,8 @@ function categoryLookup(categories: readonly Category[]): Map<string, Category> 
  * currencies may hold the same category at the same time.
  */
 function resolveForMonth(budgets: readonly Budget[], month: string): Budget[] {
-  const key = (budget: Budget) => `${budget.currency}|${budget.categoryId ?? "overall"}`;
+  const key = (budget: Budget) =>
+    `${budget.currency.toUpperCase()}|${budget.categoryId ?? "overall"}`;
   const resolved = new Map<string, Budget>();
   for (const budget of budgets) {
     if (budget.month === null) resolved.set(key(budget), budget);
@@ -108,10 +109,12 @@ export function buildBudgetPlan(input: BudgetPlanInput): BudgetPlan {
       : activeForPeriod.filter((budget) => budget.month === null);
 
   const overallBudget =
-    scoped.find((budget) => budget.currency === currency && budget.categoryId === null) ?? null;
+    scoped.find(
+      (budget) => budget.currency.toUpperCase() === currency && budget.categoryId === null,
+    ) ?? null;
 
   const matched = scoped.filter(
-    (budget) => budget.currency === currency && budget.categoryId !== null,
+    (budget) => budget.currency.toUpperCase() === currency && budget.categoryId !== null,
   );
 
   // Rows without a category are real money and are already in `totalSpentMinor`;
@@ -199,7 +202,9 @@ export function buildBudgetPlan(input: BudgetPlanInput): BudgetPlan {
     totalCategoryLimitsMinor: totalLimits(limits),
     categoryLimitsExceedOverall:
       overallLimitMinor !== null && totalLimits(limits) > overallLimitMinor,
-    previousCurrencyBudgets: scoped.filter((budget) => budget.currency !== currency),
+    previousCurrencyBudgets: scoped.filter(
+      (budget) => budget.currency.toUpperCase() !== currency,
+    ),
   };
 }
 

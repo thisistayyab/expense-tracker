@@ -19,6 +19,7 @@ export type ProgressRingProps = {
   color?: string;
   trackColor?: string;
   children?: ReactNode;
+  accessibilityLabel?: string;
 };
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -33,10 +34,12 @@ export function ProgressRing({
   color,
   trackColor,
   children,
+  accessibilityLabel,
 }: ProgressRingProps) {
   const { theme } = useTheme();
   const reduceMotion = useReducedMotion();
-  const clamped = Math.max(0, Math.min(value, 1));
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const clamped = Math.max(0, Math.min(safeValue, 1));
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
 
@@ -50,14 +53,16 @@ export function ProgressRing({
 
   const animatedCircleProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference * (1 - progress.value),
+    strokeOpacity: progress.value <= 0.001 ? 0 : 1,
   }));
 
-  const resolvedColor = color ?? (value >= 1 ? theme.colors.danger : theme.colors.accent);
+  const resolvedColor = color ?? (safeValue >= 1 ? theme.colors.danger : theme.colors.accent);
   const resolvedTrack = trackColor ?? theme.colors.surfaceSunken;
 
   return (
     <View
       accessibilityRole="progressbar"
+      accessibilityLabel={accessibilityLabel}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}
       style={[styles.wrap, { width: size, height: size }]}
     >

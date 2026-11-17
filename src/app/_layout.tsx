@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { router, Stack, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -130,6 +130,15 @@ function Navigation() {
 /** Waits for the onboarding flag so a returning user never sees the welcome screen. */
 function AppShell({ fontsReady }: { fontsReady: boolean }) {
   const { onboarded } = useOnboarding();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (!fontsReady || onboarded !== false) return;
+    const root: string | undefined = segments[0];
+    if (root && root !== "(onboarding)" && root !== "index") {
+      router.replace("/(onboarding)/welcome");
+    }
+  }, [fontsReady, onboarded, segments]);
 
   return (
     <BootGate ready={fontsReady && onboarded !== null}>
@@ -186,20 +195,30 @@ export default function RootLayout() {
     }
   }, [fontError]);
 
+  useEffect(() => {
+    // Failsafe in case SQLite initialization throws before BootGate mounts.
+    const timeout = setTimeout(() => {
+      void SplashScreen.hideAsync().catch(() => {});
+    }, SPLASH_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <Suspense fallback={null}>
-          <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase}>
-            <ThemeGate>
-              <OnboardingProvider>
-                <AppLockProvider>
-                  <AppShell fontsReady={fontsLoaded || Boolean(fontError)} />
-                </AppLockProvider>
-              </OnboardingProvider>
-            </ThemeGate>
-          </SQLiteProvider>
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase}>
+              <ThemeGate>
+                <OnboardingProvider>
+                  <AppLockProvider>
+                    <AppShell fontsReady={fontsLoaded || Boolean(fontError)} />
+                  </AppLockProvider>
+                </OnboardingProvider>
+              </ThemeGate>
+            </SQLiteProvider>
+          </Suspense>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

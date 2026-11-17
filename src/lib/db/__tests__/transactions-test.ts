@@ -3,7 +3,7 @@ import type { SQLiteBindParams } from "expo-sqlite";
 
 import { migrate } from "../migrate";
 import { createAccount, listAccounts } from "../repos/accounts";
-import { listCategories } from "../repos/categories";
+import { createCategory, listCategories, setCategoryArchived } from "../repos/categories";
 import {
   createTransaction,
   deleteTransaction,
@@ -310,5 +310,34 @@ describe("recent categories", () => {
     expect(await listRecentCategoryIds(db, { kind: "income", currency: "USD" })).toEqual([
       incomeCategory.id,
     ]);
+  });
+
+  test("excludes archived categories and subcategories of archived parents", async () => {
+    const { db, cash, categories } = await seededDb();
+    const parent = categories[0];
+    const sub = await createCategory(db, {
+      name: "Subway",
+      kind: "expense",
+      parentId: parent.id,
+    });
+    const active = categories[1];
+
+    const r1 = await createTransaction(
+      db,
+      transaction({ accountId: cash.id, categoryId: sub.id, itemName: "Sub entry" }),
+    );
+    const r2 = await createTransaction(
+      db,
+      transaction({ accountId: cash.id, categoryId: active.id, itemName: "Active entry" }),
+    );
+    await backdate(db, r2.id, "2026-11-01T10:00:00.000Z");
+    await backdate(db, r1.id, "2026-11-02T10:00:00.000Z");
+
+    await setCategoryArchived(db, parent.id, true);
+
+    const recent = await listRecentCategoryIds(db, { kind: "expense", currency: "USD" });
+    expect(recent).not.toContain(sub.id);
+    expect(recent).not.toContain(parent.id);
+    expect(recent).toEqual([active.id]);
   });
 });

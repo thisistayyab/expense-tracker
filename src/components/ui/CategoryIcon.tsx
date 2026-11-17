@@ -26,6 +26,11 @@ export type CategoryIconProps = {
   size?: number;
 };
 
+const WALLET_SYMBOL: SFSymbol =
+  Platform.OS === "ios" && parseFloat(String(Platform.Version)) >= 18
+    ? "wallet.bifold"
+    : "wallet.pass";
+
 const SF_CATEGORY_MAP: Record<CategoryIconName, SFSymbol> = {
   utensils: "fork.knife",
   cart: "cart",
@@ -38,7 +43,7 @@ const SF_CATEGORY_MAP: Record<CategoryIconName, SFSymbol> = {
   book: "book",
   plane: "airplane",
   gift: "gift",
-  wallet: "wallet.bifold",
+  wallet: WALLET_SYMBOL,
   briefcase: "briefcase",
   ellipsis: "ellipsis",
   plus: "plus",

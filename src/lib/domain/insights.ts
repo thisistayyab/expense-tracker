@@ -171,12 +171,15 @@ export function buildBreakdown(
   if (rows.length > maxRows) {
     const head = rows.slice(0, maxRows - 1);
     const tail = rows.slice(maxRows - 1);
+    const tailLabel = head.some((row) => row.name.toLowerCase() === "other")
+      ? "Other categories"
+      : "Other";
     visible = [
       ...head,
       {
         key: "other",
         categoryId: null,
-        name: "Other",
+        name: tailLabel,
         color: null,
         icon: null,
         amountMinor: tail.reduce((sum, row) => sum + row.amountMinor, 0),

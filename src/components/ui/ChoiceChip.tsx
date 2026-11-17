@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Platform, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../../lib/theme";
+import { FONT_FAMILIES } from "../../lib/theme/fonts";
 import { TactilePressable } from "./TactilePressable";
 
 export type ChoiceChipProps = {
@@ -44,6 +45,7 @@ export function ChoiceChip({
       accessibilityState={{ selected, disabled }}
       onPress={onPress}
       disabled={disabled}
+      hitSlop={4}
       haptic="selection"
       scaleTo={0.96}
       radius={999}
@@ -88,7 +90,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   label: {
-    fontWeight: "600",
+    flexShrink: 1,
+    fontFamily: FONT_FAMILIES.semibold,
     fontSize: 13.5,
   },
 });

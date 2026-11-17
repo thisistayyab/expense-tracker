@@ -1,7 +1,8 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   AppIcon,
@@ -21,28 +22,41 @@ import {
   COIN_TONES,
 } from "../../features/accounts/accountMeta";
 import { listAccountBalances, type AccountWithBalance } from "../../lib/db/repos/accounts";
+import { listRecurringRules } from "../../lib/db/repos/recurring";
 import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import type { Db } from "../../lib/db/types";
+import { subscribeLedgerChanged } from "../../lib/ledgerEvents";
 import { useTheme } from "../../lib/theme";
 
 export default function AccountsScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const db: Db = useSQLiteContext();
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
+  const [recurringAccountIds, setRecurringAccountIds] = useState<Set<string>>(() => new Set());
   const [activeCurrency, setActiveCurrency] = useState("USD");
-  const [editing, setEditing] = useState<AccountWithBalance | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [sheetTarget, setSheetTarget] = useState<{ account: AccountWithBalance | null } | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [nextAccounts, settings] = await Promise.all([
+    const [nextAccounts, settings, rules] = await Promise.all([
       listAccountBalances(db, { includeArchived: true }),
       getAllSettings(db),
+      listRecurringRules(db, { includeInactive: true }),
     ]);
     setAccounts(nextAccounts);
+    setRecurringAccountIds(new Set(rules.map((rule) => rule.accountId)));
     setActiveCurrency(settings[SETTING_KEYS.currency] ?? "USD");
+    setError(null);
   }, [db]);
+
+  useEffect(() => {
+    return subscribeLedgerChanged(() => {
+      load().catch(() => {});
+    });
+  }, [load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -60,6 +74,16 @@ export default function AccountsScreen() {
       };
     }, [load]),
   );
+
+  const openNew = () => {
+    setSheetTarget({ account: null });
+    setSheetVisible(true);
+  };
+
+  const openEdit = (account: AccountWithBalance) => {
+    setSheetTarget({ account });
+    setSheetVisible(true);
+  };
 
   const active = useMemo(() => accounts.filter((account) => !account.isArchived), [accounts]);
   const archived = useMemo(() => accounts.filter((account) => account.isArchived), [accounts]);
@@ -82,64 +106,65 @@ export default function AccountsScreen() {
   return (
     <View style={{ flex: 1 }}>
       <ScreenBackground />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
-      >
-        <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
-          Balances include each account&apos;s opening balance and every transaction in its own
-          currency. Nothing is converted.
-        </Text>
+      <SafeAreaView edges={["left", "right"]} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+        >
+          <Text style={[theme.text.body, { color: theme.colors.textSecondary }]}>
+            Balances include each account&apos;s opening balance and every transaction in its own
+            currency. Nothing is converted.
+          </Text>
 
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-          <View style={{ flex: 1 }}>
-            <Button
-              label="Add account"
-              variant="accent"
-              size="sm"
-              leftIcon="plus"
-              onPress={() => setAdding(true)}
-            />
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Add account"
+                variant="accent"
+                size="sm"
+                leftIcon="plus"
+                onPress={openNew}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Transfer"
+                variant="ghost"
+                size="sm"
+                leftIcon="transfer"
+                disabled={!canTransfer}
+                onPress={() =>
+                  router.push({ pathname: "/add", params: { type: "transfer" } })
+                }
+              />
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Button
-              label="Transfer"
-              variant="ghost"
-              size="sm"
-              leftIcon="transfer"
-              disabled={!canTransfer}
-              onPress={() =>
-                router.push({ pathname: "/add", params: { type: "transfer" } })
-              }
-            />
-          </View>
-        </View>
 
-        {loading && !accounts.length ? (
-          <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 32 }} />
-        ) : null}
+          {loading && !accounts.length ? (
+            <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 32 }} />
+          ) : null}
 
-        {!loading && !accounts.length ? (
-          <View style={{ marginTop: 24 }}>
-            <EmptyState
-              icon="wallet"
-              title="Add your first account"
-              body="A cash wallet is enough. You can add bank, card and savings accounts later."
-              actionLabel="Add account"
-              onAction={() => setAdding(true)}
-            />
-          </View>
-        ) : null}
+          {!loading && !accounts.length ? (
+            <View style={{ marginTop: 24 }}>
+              <EmptyState
+                icon="wallet"
+                title="Add your first account"
+                body="A cash wallet is enough. You can add bank, card and savings accounts later."
+                actionLabel="Add account"
+                onAction={openNew}
+              />
+            </View>
+          ) : null}
 
-        {groups.map(([currency, currencyAccounts]) => (
-          <View key={currency}>
-            <SectionHeader title={`${currency} accounts`} />
-            <Card variant="glass" padded={false}>
-              {currencyAccounts.map((account, index) => (
-                <TactilePressable
-                  key={account.id}
-                  onPress={() => setEditing(account)}
+          {groups.map(([currency, currencyAccounts]) => (
+            <View key={currency}>
+              <SectionHeader title={`${currency} accounts`} />
+              <Card variant="glass" padded={false}>
+                {currencyAccounts.map((account, index) => (
+                  <TactilePressable
+                    key={account.id}
+                    onPress={() => openEdit(account)}
                   haptic="selection"
                   scaleTo={0.985}
                   radius={14}
@@ -203,7 +228,7 @@ export default function AccountsScreen() {
               {archived.map((account, index) => (
                 <TactilePressable
                   key={account.id}
-                  onPress={() => setEditing(account)}
+                  onPress={() => openEdit(account)}
                   haptic="selection"
                   scaleTo={0.985}
                   radius={14}
@@ -245,28 +270,25 @@ export default function AccountsScreen() {
         >
           Active currency: {activeCurrency}
         </Text>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
 
-      {adding ? (
+      {sheetTarget ? (
         <AccountEditorSheet
+          visible={sheetVisible}
+          account={sheetTarget.account}
+          balanceMinor={sheetTarget.account?.balanceMinor ?? 0}
+          hasTransactions={(sheetTarget.account?.transactionCount ?? 0) > 0}
+          hasRecurringRules={
+            sheetTarget.account ? recurringAccountIds.has(sheetTarget.account.id) : false
+          }
           activeCurrency={activeCurrency}
-          onClose={() => setAdding(false)}
-          onSaved={() => {
-            setAdding(false);
-            refresh();
+          onClose={() => setSheetVisible(false)}
+          onClosed={() => {
+            if (!sheetVisible) setSheetTarget(null);
           }}
-        />
-      ) : null}
-
-      {editing ? (
-        <AccountEditorSheet
-          account={editing}
-          balanceMinor={editing.balanceMinor}
-          hasTransactions={editing.transactionCount > 0}
-          activeCurrency={activeCurrency}
-          onClose={() => setEditing(null)}
           onSaved={() => {
-            setEditing(null);
+            setSheetVisible(false);
             refresh();
           }}
         />

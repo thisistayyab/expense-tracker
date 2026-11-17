@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Keyboard, Platform, StyleSheet, Text, View } from "react-native";
 import Animated, {
   ReduceMotion,
   SlideInDown,
@@ -23,6 +23,7 @@ import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
 import { AppIcon } from "../../components/ui/AppIcon";
 import { TactilePressable } from "../../components/ui/TactilePressable";
 import { haptics } from "../haptics";
+import { subscribeLedgerReset } from "../ledgerEvents";
 import { useTheme } from "../theme";
 
 type UndoAction = {
@@ -48,8 +49,10 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const [action, setAction] = useState<(UndoAction & { id: number }) | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const counter = useRef(0);
+  const handledId = useRef<number | null>(null);
   const progress = useSharedValue(1);
 
   const clearTimer = useCallback(() => {
@@ -68,9 +71,12 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     (next) => {
       clearTimer();
       counter.current += 1;
+      handledId.current = null;
       setAction({ ...next, id: counter.current });
       progress.set(1);
-      progress.set(withTiming(0, { duration: UNDO_MS }));
+      progress.set(
+        withTiming(0, { duration: UNDO_MS, reduceMotion: ReduceMotion.System }),
+      );
       timer.current = setTimeout(() => {
         setAction(null);
         timer.current = null;
@@ -81,17 +87,44 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => clearTimer, [clearTimer]);
 
+  useEffect(() => subscribeLedgerReset(dismiss), [dismiss]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const handleUndo = async () => {
-    if (!action) return;
+    if (!action || handledId.current === action.id) return;
+    handledId.current = action.id;
     const fn = action.onUndo;
     dismiss();
-    haptics.success();
-    await fn();
+    try {
+      await fn();
+      haptics.success();
+    } catch {
+      haptics.error();
+    }
   };
 
   const progressStyle = useAnimatedStyle(() => ({
     transform: [{ scaleX: progress.value }],
   }));
+
+  const bottomOffset =
+    keyboardHeight > 0
+      ? keyboardHeight + 12
+      : Math.max(insets.bottom, 8) + TAB_BAR_CLEARANCE;
 
   return (
     <UndoContext.Provider value={showUndo}>
@@ -112,10 +145,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
               : SlideOutDown.duration(180).reduceMotion(ReduceMotion.System)
           }
           pointerEvents="box-none"
-          style={[
-            styles.wrapper,
-            { bottom: Math.max(insets.bottom, 8) + TAB_BAR_CLEARANCE },
-          ]}
+          style={[styles.wrapper, { bottom: bottomOffset }]}
         >
           <View
             accessibilityLiveRegion="polite"
