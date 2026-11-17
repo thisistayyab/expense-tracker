@@ -301,7 +301,7 @@ export function Sheet({
     };
   });
 
-  const restPaddingBottom = Math.max(insets.bottom, theme.space.lg);
+  const restPaddingBottom = Math.max(insets.bottom + 14, 24);
   const sheetAnimatedStyle = useAnimatedStyle(() => {
     const entranceY = (1 - progress.value) * initialOffset;
     const availableHeight = Math.max(
@@ -312,14 +312,14 @@ export function Sheet({
       ),
     );
     const activePaddingBottom =
-      keyboardLift.value > 0 ? theme.space.sm : restPaddingBottom;
+      keyboardLift.value > 0 ? 12 : restPaddingBottom;
     return {
       maxHeight: availableHeight,
       marginBottom: keyboardLift.value,
       paddingBottom: activePaddingBottom,
       transform: [{ translateY: entranceY + dragY.value }],
     };
-  }, [initialOffset, insets.top, maxHeightRatio, restPaddingBottom, theme.space.sm, windowHeight]);
+  }, [initialOffset, insets.top, maxHeightRatio, restPaddingBottom, windowHeight]);
 
   const grabberStyle = useAnimatedStyle(() => ({
     width: interpolate(handleActive.value, [0, 1], [38, 48]),
@@ -524,7 +524,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 14,
+    paddingBottom: 2,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

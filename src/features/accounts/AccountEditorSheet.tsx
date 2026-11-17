@@ -216,6 +216,26 @@ export function AccountEditorSheet({
       onClosed={onClosed}
       dismissible={!busy}
       title={account ? "Edit account" : "New account"}
+      footer={
+        <View style={{ gap: 8 }}>
+          <Button
+            label={account ? "Save account" : "Add account"}
+            variant="accent"
+            onPress={save}
+            loading={busy}
+            disabled={!canSave}
+          />
+          {account ? (
+            <Button
+              label={account.isArchived ? "Restore account" : "Archive account"}
+              variant="danger"
+              size="sm"
+              onPress={toggleArchive}
+              disabled={busy}
+            />
+          ) : null}
+        </View>
+      }
       overlayChildren={
         <PickerSheet
           embedded
@@ -236,7 +256,7 @@ export function AccountEditorSheet({
     >
       <ScrollView
         style={{ flexGrow: 0, flexShrink: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 4 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -320,36 +340,26 @@ export function AccountEditorSheet({
               borderTopWidth: StyleSheet.hairlineWidth,
               borderTopColor: theme.colors.border,
               paddingHorizontal: 16,
-              paddingVertical: 12,
-              gap: 6,
+              paddingVertical: 14,
+              gap: 8,
             }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
-                flexWrap: "wrap",
-              }}
-            >
-              <Text style={[theme.text.label, { color: theme.colors.textSecondary }]}>
-                Opening balance
-              </Text>
-              <View style={{ flexDirection: "row", gap: 6 }}>
-                <ChoiceChip
-                  label="Positive (+)"
-                  selected={!negative}
-                  onPress={() => setNegative(false)}
-                  disabled={busy}
-                />
-                <ChoiceChip
-                  label="Debt (−)"
-                  selected={negative}
-                  onPress={() => setNegative(true)}
-                  disabled={busy}
-                />
-              </View>
+            <Text style={[theme.text.label, { color: theme.colors.textSecondary }]}>
+              Opening balance
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <ChoiceChip
+                label="Positive (+)"
+                selected={!negative}
+                onPress={() => setNegative(false)}
+                disabled={busy}
+              />
+              <ChoiceChip
+                label="Debt (−)"
+                selected={negative}
+                onPress={() => setNegative(true)}
+                disabled={busy}
+              />
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               {negative ? (
@@ -409,25 +419,6 @@ export function AccountEditorSheet({
           </Text>
         ) : null}
       </ScrollView>
-
-      <View style={{ paddingHorizontal: 20, paddingTop: 10, gap: 6 }}>
-        <Button
-          label={account ? "Save account" : "Add account"}
-          variant="accent"
-          onPress={save}
-          loading={busy}
-          disabled={!canSave}
-        />
-        {account ? (
-          <Button
-            label={account.isArchived ? "Restore account" : "Archive account"}
-            variant="danger"
-            size="sm"
-            onPress={toggleArchive}
-            disabled={busy}
-          />
-        ) : null}
-      </View>
     </Sheet>
   );
 }

@@ -195,7 +195,7 @@ export function BudgetEditorSheet({
       <ScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8, gap: 14 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, gap: 14 }}
       >
         <Text style={[theme.text.caption, { color: theme.colors.textTertiary }]}>
           {`${PERIOD_LABELS[period]} limit · ${currency}`}

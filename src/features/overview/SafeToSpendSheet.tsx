@@ -67,7 +67,7 @@ export function SafeToSpendSheet({
     <Sheet visible={visible} onClose={onClose} onClosed={onClosed} title="Safe to spend">
       <ScrollView
         style={{ flexGrow: 0, flexShrink: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}
         showsVerticalScrollIndicator={false}
       >
         <Text style={[theme.text.eyebrow, { color: theme.colors.textTertiary, marginTop: 2 }]}>

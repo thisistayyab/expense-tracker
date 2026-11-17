@@ -393,6 +393,15 @@ export function RecurringEditorSheet({
       onClosed={onClosed}
       dismissible={!saving}
       title={editing ? "Edit recurring rule" : "New recurring rule"}
+      footer={
+        <Button
+          label={editing ? "Save changes" : "Add recurring rule"}
+          variant="accent"
+          onPress={() => void save()}
+          loading={saving}
+          disabled={saving || loading}
+        />
+      }
       overlayChildren={
         <>
           <PickerSheet
@@ -481,7 +490,7 @@ export function RecurringEditorSheet({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 8 }}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: 16 }}
       >
         <View style={{ paddingHorizontal: 20, flexDirection: "row", gap: 8 }}>
           <ChoiceChip
@@ -534,6 +543,7 @@ export function RecurringEditorSheet({
           <FieldRow
             label="Currency"
             value={currency}
+            showDivider
             onPress={loading || saving ? undefined : () => setPicker("currency")}
             muted={loading || saving}
           />
@@ -547,7 +557,6 @@ export function RecurringEditorSheet({
           <FieldRow
             label="Category"
             value={selectedCategory?.name ?? "Uncategorized"}
-            showDivider
             onPress={saving ? undefined : () => setPicker("category")}
             muted={saving}
           />
@@ -660,7 +669,6 @@ export function RecurringEditorSheet({
           <FieldRow
             label="Ends"
             value={endDate ?? "No end date"}
-            showDivider
             onPress={saving ? undefined : () => setPicker("end")}
             muted={saving}
           />
@@ -836,16 +844,6 @@ export function RecurringEditorSheet({
           </TactilePressable>
         ) : null}
       </ScrollView>
-
-      <View style={{ paddingHorizontal: 20, paddingTop: 6 }}>
-        <Button
-          label={editing ? "Save changes" : "Add recurring rule"}
-          variant="accent"
-          onPress={() => void save()}
-          loading={saving}
-          disabled={saving || loading}
-        />
-      </View>
     </Sheet>
   );
 }

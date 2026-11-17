@@ -194,10 +194,26 @@ export function FiltersSheet({
       onClosed={onClosed}
       overlayChildren={childPickers}
       title="Filters"
+      footer={
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Button label="Reset" variant="ghost" size="sm" onPress={reset} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              label="Apply"
+              variant="accent"
+              size="sm"
+              disabled={rangeInvalid}
+              onPress={() => onApply(draft)}
+            />
+          </View>
+        </View>
+      }
     >
       <ScrollView
         style={{ flexGrow: 0, flexShrink: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 4 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -302,28 +318,6 @@ export function FiltersSheet({
           />
         </Chips>
       </ScrollView>
-
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 10,
-          paddingHorizontal: 20,
-          paddingTop: 10,
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <Button label="Reset" variant="ghost" size="sm" onPress={reset} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button
-            label="Apply"
-            variant="accent"
-            size="sm"
-            disabled={rangeInvalid}
-            onPress={() => onApply(draft)}
-          />
-        </View>
-      </View>
     </Sheet>
   );
 }

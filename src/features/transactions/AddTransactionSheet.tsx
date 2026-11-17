@@ -525,6 +525,15 @@ export function AddTransactionSheet({
       embedded
       onClose={requestClose}
       dismissible={!saving}
+      footer={
+        <Button
+          label={existing ? "Update" : "Save"}
+          variant="accent"
+          onPress={save}
+          disabled={!canSave}
+          loading={saving}
+        />
+      }
       overlayChildren={
         <>
           <PickerSheet
@@ -698,7 +707,7 @@ export function AddTransactionSheet({
 
       <ScrollView
         style={{ flexGrow: 0, flexShrink: 1 }}
-        contentContainerStyle={{ paddingBottom: 4 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -888,6 +897,7 @@ export function AddTransactionSheet({
             <FieldRow
               label={type === "transfer" ? "From account" : "Account"}
               value={accountLabel}
+              showDivider
               onPress={saving ? undefined : () => setPicker("account")}
               muted={saving}
             />
@@ -911,7 +921,6 @@ export function AddTransactionSheet({
               label="Note, place, tags…"
               value={detailsOpen ? "Hide" : undefined}
               muted={!detailsOpen || saving}
-              showDivider
               onPress={saving ? undefined : () => setDetailsOpen((open) => !open)}
             />
         </View>
@@ -981,16 +990,6 @@ export function AddTransactionSheet({
           </Text>
         ) : null}
       </ScrollView>
-
-      <View style={{ paddingHorizontal: 20, paddingTop: 6 }}>
-        <Button
-          label={existing ? "Update" : "Save"}
-          variant="accent"
-          onPress={save}
-          disabled={!canSave}
-          loading={saving}
-        />
-      </View>
     </Sheet>
   );
 }

@@ -167,6 +167,26 @@ export function CategoryEditorSheet({
       onClosed={onClosed}
       dismissible={!busy}
       title={category ? "Edit category" : "New category"}
+      footer={
+        <View style={{ gap: 8 }}>
+          <Button
+            label={category ? "Save category" : "Add category"}
+            variant="accent"
+            onPress={save}
+            loading={busy}
+            disabled={!name.trim() || busy}
+          />
+          {category ? (
+            <Button
+              label={category.isArchived ? "Restore category" : "Archive category"}
+              variant="danger"
+              size="sm"
+              onPress={toggleArchive}
+              disabled={busy}
+            />
+          ) : null}
+        </View>
+      }
       overlayChildren={
         <PickerSheet
           embedded
@@ -184,7 +204,7 @@ export function CategoryEditorSheet({
     >
       <ScrollView
         style={{ flexGrow: 0, flexShrink: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 4 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -297,25 +317,6 @@ export function CategoryEditorSheet({
           </Text>
         ) : null}
       </ScrollView>
-
-      <View style={{ paddingHorizontal: 20, paddingTop: 10, gap: 6 }}>
-        <Button
-          label={category ? "Save category" : "Add category"}
-          variant="accent"
-          onPress={save}
-          loading={busy}
-          disabled={!name.trim() || busy}
-        />
-        {category ? (
-          <Button
-            label={category.isArchived ? "Restore category" : "Archive category"}
-            variant="danger"
-            size="sm"
-            onPress={toggleArchive}
-            disabled={busy}
-          />
-        ) : null}
-      </View>
     </Sheet>
   );
 }

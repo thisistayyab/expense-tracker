@@ -319,45 +319,9 @@ export default function DataScreen() {
           }
         }}
         title="Restore preview"
-      >
-        {preview ? (
-          <>
-            <Text
-              style={[
-                theme.text.body,
-                { color: theme.colors.textSecondary, paddingHorizontal: 20, paddingBottom: 10 },
-              ]}
-            >
-              {preview.fileName} · schema v{preview.payload.schemaVersion} · exported{" "}
-              {preview.payload.exportedAt.slice(0, 10)}
-            </Text>
-            <ScrollView style={{ maxHeight: 260, paddingHorizontal: 20 }}>
-              {BACKUP_TABLES.map((table) => (
-                <View
-                  key={table}
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    paddingVertical: 8,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: theme.colors.border,
-                  }}
-                >
-                  <Text style={[theme.text.body, { color: theme.colors.textPrimary }]}>
-                    {TABLE_LABELS[table]}
-                  </Text>
-                  <Text
-                    style={[
-                      theme.text.body,
-                      { color: theme.colors.textSecondary, fontVariant: ["tabular-nums"] },
-                    ]}
-                  >
-                    {preview.counts[table].toLocaleString()}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-            <View style={{ padding: 20, gap: 10 }}>
+        footer={
+          preview ? (
+            <View style={{ gap: 10 }}>
               <Button
                 label="Merge into current data"
                 variant="accent"
@@ -378,6 +342,55 @@ export default function DataScreen() {
                 disabled={previewBusy}
               />
             </View>
+          ) : undefined
+        }
+      >
+        {preview ? (
+          <>
+            <Text
+              style={[
+                theme.text.body,
+                {
+                  color: theme.colors.textSecondary,
+                  paddingHorizontal: 20,
+                  paddingTop: 16,
+                  paddingBottom: 10,
+                },
+              ]}
+            >
+              {preview.fileName} · schema v{preview.payload.schemaVersion} · exported{" "}
+              {preview.payload.exportedAt.slice(0, 10)}
+            </Text>
+            <ScrollView
+              style={{ maxHeight: 260 }}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}
+            >
+              {BACKUP_TABLES.map((table, index) => (
+                <View
+                  key={table}
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    paddingVertical: 8,
+                    borderBottomWidth:
+                      index === BACKUP_TABLES.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                    borderBottomColor: theme.colors.border,
+                  }}
+                >
+                  <Text style={[theme.text.body, { color: theme.colors.textPrimary }]}>
+                    {TABLE_LABELS[table]}
+                  </Text>
+                  <Text
+                    style={[
+                      theme.text.body,
+                      { color: theme.colors.textSecondary, fontVariant: ["tabular-nums"] },
+                    ]}
+                  >
+                    {preview.counts[table].toLocaleString()}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
           </>
         ) : null}
       </Sheet>

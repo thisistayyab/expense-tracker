@@ -226,7 +226,7 @@ export default function TransactionDetailScreen() {
                 key={entry.label}
                 label={entry.label}
                 value={entry.value}
-                showDivider={index > 0}
+                showDivider={index < detailRows.length - 1}
               />
             ))}
           </Card>
