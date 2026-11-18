@@ -42,6 +42,7 @@ import {
   sanitizeMoneyInput,
 } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
+import { useAfterKeyboardDismiss } from "../../lib/keyboard";
 import { notifyLedgerChanged } from "../../lib/ledgerEvents";
 import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { processDueRecurring } from "./processDue";
@@ -106,6 +107,10 @@ export function RecurringEditorSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savingRef = useRef(false);
+  const runAfterKeyboard = useAfterKeyboardDismiss();
+  const openPicker = (next: Exclude<PickTarget, null>) => {
+    runAfterKeyboard(() => setPicker(next));
+  };
 
   const openKey = visible ? (rule?.id ?? "new") : null;
   const [lastOpenKey, setLastOpenKey] = useState<string | null>(openKey);
@@ -544,20 +549,20 @@ export function RecurringEditorSheet({
             label="Currency"
             value={currency}
             showDivider
-            onPress={loading || saving ? undefined : () => setPicker("currency")}
+            onPress={loading || saving ? undefined : () => openPicker("currency")}
             muted={loading || saving}
           />
           <FieldRow
             label="Account"
             value={selectedAccount?.name ?? "Choose account"}
             showDivider
-            onPress={saving ? undefined : () => setPicker("account")}
+            onPress={saving ? undefined : () => openPicker("account")}
             muted={saving}
           />
           <FieldRow
             label="Category"
             value={selectedCategory?.name ?? "Uncategorized"}
-            onPress={saving ? undefined : () => setPicker("category")}
+            onPress={saving ? undefined : () => openPicker("category")}
             muted={saving}
           />
         </View>
@@ -581,7 +586,7 @@ export function RecurringEditorSheet({
           <FieldRow
             label="Repeats"
             value={frequencyLabel(frequency, Math.max(1, Number(intervalText) || 1))}
-            onPress={saving ? undefined : () => setPicker("frequency")}
+            onPress={saving ? undefined : () => openPicker("frequency")}
             muted={saving}
           />
           {frequency !== "daily" && frequency !== "weekly" ? (
@@ -663,13 +668,13 @@ export function RecurringEditorSheet({
             label="Starts"
             value={startDate}
             showDivider
-            onPress={saving ? undefined : () => setPicker("start")}
+            onPress={saving ? undefined : () => openPicker("start")}
             muted={saving}
           />
           <FieldRow
             label="Ends"
             value={endDate ?? "No end date"}
-            onPress={saving ? undefined : () => setPicker("end")}
+            onPress={saving ? undefined : () => openPicker("end")}
             muted={saving}
           />
         </View>

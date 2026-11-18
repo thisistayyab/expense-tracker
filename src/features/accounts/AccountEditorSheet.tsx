@@ -23,6 +23,7 @@ import {
   parseMoneyInput,
   sanitizeMoneyInput,
 } from "../../lib/format/money";
+import { useAfterKeyboardDismiss } from "../../lib/keyboard";
 import { notifyLedgerChanged } from "../../lib/ledgerEvents";
 import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { ACCOUNT_TYPES } from "./accountMeta";
@@ -63,6 +64,7 @@ export function AccountEditorSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const runAfterKeyboard = useAfterKeyboardDismiss();
 
   const openKey = visible ? `${account?.id ?? "new"}:${activeCurrency}` : null;
   const [lastOpenKey, setLastOpenKey] = useState<string | null>(openKey);
@@ -332,7 +334,9 @@ export function AccountEditorSheet({
           <FieldRow
             label="Currency"
             value={currencyLabel(currencyMeta)}
-            onPress={currencyLocked || busy ? undefined : () => setCurrencyOpen(true)}
+            onPress={
+              currencyLocked || busy ? undefined : () => runAfterKeyboard(() => setCurrencyOpen(true))
+            }
             muted={currencyLocked}
           />
           <View

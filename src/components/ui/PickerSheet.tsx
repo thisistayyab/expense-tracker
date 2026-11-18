@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { AppIcon } from "./AppIcon";
@@ -41,6 +41,10 @@ export function PickerSheet({
 }: PickerSheetProps) {
   const { theme } = useTheme();
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (visible) Keyboard.dismiss();
+  }, [visible]);
 
   const close = () => {
     Keyboard.dismiss();

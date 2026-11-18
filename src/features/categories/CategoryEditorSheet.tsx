@@ -17,6 +17,7 @@ import {
   updateCategory,
 } from "../../lib/db/repos/categories";
 import type { Category, CategoryKind, Db } from "../../lib/db/types";
+import { useAfterKeyboardDismiss } from "../../lib/keyboard";
 import { notifyLedgerChanged } from "../../lib/ledgerEvents";
 import { categoryRamp, useTheme } from "../../lib/theme";
 
@@ -54,6 +55,7 @@ export function CategoryEditorSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const runAfterKeyboard = useAfterKeyboardDismiss();
 
   const openKey = visible ? `${category?.id ?? "new"}:${kind}:${defaultParentId ?? ""}` : null;
   const [lastOpenKey, setLastOpenKey] = useState<string | null>(openKey);
@@ -295,7 +297,9 @@ export function CategoryEditorSheet({
             label="Parent"
             value={parent?.name ?? "Top level"}
             muted={!parent || hasChildren}
-            onPress={hasChildren || busy ? undefined : () => setParentOpen(true)}
+            onPress={
+              hasChildren || busy ? undefined : () => runAfterKeyboard(() => setParentOpen(true))
+            }
           />
         </View>
         {hasChildren ? (

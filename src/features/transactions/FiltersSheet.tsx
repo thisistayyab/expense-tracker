@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button, ChoiceChip, DatePickerSheet, FieldRow, PickerSheet, Sheet } from "../../components/ui";
 import type { Account, Category } from "../../lib/db/types";
 import { toIsoDate } from "../../lib/domain/dates";
+import { useAfterKeyboardDismiss } from "../../lib/keyboard";
 import { useTheme } from "../../lib/theme";
 import {
   DATE_PRESET_LABELS,
@@ -84,6 +85,16 @@ export function FiltersSheet({
       setToday(toIsoDate(new Date()));
     }
   }
+
+  const runAfterKeyboard = useAfterKeyboardDismiss();
+
+  const openPicker = (next: Exclude<PickerKind, null>) => {
+    runAfterKeyboard(() => setPicker(next));
+  };
+
+  const openDatePicker = (field: Exclude<DateField, null>) => {
+    runAfterKeyboard(() => setDateField(field));
+  };
 
   const accountLabel =
     accounts.find((account) => account.id === draft.accountId)?.name ?? "All accounts";
@@ -247,12 +258,12 @@ export function FiltersSheet({
               label="From"
               value={draft.fromDate ?? "Choose date"}
               showDivider
-              onPress={() => setDateField("fromDate")}
+              onPress={() => openDatePicker("fromDate")}
             />
             <FieldRow
               label="To"
               value={draft.toDate ?? "Choose date"}
-              onPress={() => setDateField("toDate")}
+              onPress={() => openDatePicker("toDate")}
             />
           </View>
         ) : null}
@@ -286,18 +297,23 @@ export function FiltersSheet({
             backgroundColor: theme.colors.surfaceMuted,
           }}
         >
-          <FieldRow label="Account" value={accountLabel} showDivider onPress={() => setPicker("account")} />
+          <FieldRow
+            label="Account"
+            value={accountLabel}
+            showDivider
+            onPress={() => openPicker("account")}
+          />
           <FieldRow
             label="Category"
             value={categoryLabel}
             showDivider={currencies.length > 1}
-            onPress={() => setPicker("category")}
+            onPress={() => openPicker("category")}
           />
           {currencies.length > 1 ? (
             <FieldRow
               label="Currency"
               value={currencyLabel}
-              onPress={() => setPicker("currency")}
+              onPress={() => openPicker("currency")}
             />
           ) : null}
         </View>

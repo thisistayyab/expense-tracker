@@ -50,12 +50,14 @@ import {
 } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
 import { newId } from "../../lib/ids";
+import { useAfterKeyboardDismiss } from "../../lib/keyboard";
 import { notifyLedgerChanged } from "../../lib/ledgerEvents";
 import { SPRING_SNAPPY } from "../../lib/motion";
 import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { suggestCategoryId } from "./suggestions";
 
 const MAX_NAME = 80;
+type PickerKind = "category" | "account" | "transfer" | "date";
 const TYPE_LABELS: Record<TransactionType, string> = {
   expense: "Expense",
   income: "Income",
@@ -168,7 +170,7 @@ export function AddTransactionSheet({
   const [note, setNote] = useState(existing?.note ?? "");
   const [dateIso, setDateIso] = useState(existing?.localDate ?? today);
   const [detailsOpen, setDetailsOpen] = useState(Boolean(existing?.place || existing?.note));
-  const [picker, setPicker] = useState<"category" | "account" | "transfer" | "date" | null>(null);
+  const [picker, setPicker] = useState<PickerKind | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savingRef = useRef(false);
@@ -279,6 +281,17 @@ export function AddTransactionSheet({
     return base;
   }, [orderedCategories, categoryId]);
 
+  const runAfterKeyboard = useAfterKeyboardDismiss();
+
+  // Picker sheets are siblings of the form, never children of the amount field,
+  // so an open keyboard would sit on top of them. Drop it before one opens.
+  const openPicker = useCallback(
+    (next: PickerKind) => {
+      runAfterKeyboard(() => setPicker(next));
+    },
+    [runAfterKeyboard],
+  );
+
   const accountLabel =
     accounts.find((account) => account.id === accountId)?.name ?? "Choose account";
   const transferLabel =
@@ -359,15 +372,19 @@ export function AddTransactionSheet({
   ]);
 
   // The add route is no longer an RN Modal, so it has no onRequestClose. Keep the
-  // Android hardware back path going through the same discard confirmation.
+  // Android hardware back path closing an active picker first, then discard prompt.
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (picker !== null) {
+        setPicker(null);
+        return true;
+      }
       requestClose();
       return true;
     });
     return () => subscription.remove();
-  }, [requestClose]);
+  }, [picker, requestClose]);
 
   const save = () => {
     if (!canSave || savingRef.current || amountMinor === null || !accountId) return;
@@ -730,7 +747,6 @@ export function AddTransactionSheet({
             returnKeyType="done"
             onSubmitEditing={() => Keyboard.dismiss()}
             editable={!saving}
-            selectTextOnFocus
             accessibilityLabel={`Amount in ${currency}`}
             accessibilityValue={{
               text: formatMoneySpoken(amountMinor ?? 0, currency),
@@ -807,7 +823,7 @@ export function AddTransactionSheet({
                 );
               })}
               <TactilePressable
-                onPress={() => setPicker("category")}
+                onPress={() => openPicker("category")}
                 disabled={saving}
                 accessibilityRole="button"
                 accessibilityLabel="More categories"
@@ -898,7 +914,7 @@ export function AddTransactionSheet({
               label={type === "transfer" ? "From account" : "Account"}
               value={accountLabel}
               showDivider
-              onPress={saving ? undefined : () => setPicker("account")}
+              onPress={saving ? undefined : () => openPicker("account")}
               muted={saving}
             />
             {type === "transfer" ? (
@@ -906,7 +922,7 @@ export function AddTransactionSheet({
                 label="To account"
                 value={transferLabel}
                 showDivider
-                onPress={saving ? undefined : () => setPicker("transfer")}
+                onPress={saving ? undefined : () => openPicker("transfer")}
                 muted={saving}
               />
             ) : null}
@@ -914,7 +930,7 @@ export function AddTransactionSheet({
               label="Date"
               value={dateLabel(dateIso, today)}
               showDivider
-              onPress={saving ? undefined : () => setPicker("date")}
+              onPress={saving ? undefined : () => openPicker("date")}
               muted={saving}
             />
             <FieldRow

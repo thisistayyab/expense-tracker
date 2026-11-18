@@ -9,6 +9,7 @@ import {
   type Country,
 } from "../../constants/countries";
 import { currencyLabel, currencyOptions, getCurrency } from "../../constants/currencies";
+import { useAfterKeyboardDismiss } from "../../lib/keyboard";
 import { detectRegionDefaults } from "../../lib/region";
 import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 
@@ -58,6 +59,7 @@ export function RegionEditor({
   const [query, setQuery] = useState("");
   const [currencyTouched, setCurrencyTouched] = useState(false);
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
+  const runAfterKeyboard = useAfterKeyboardDismiss();
 
   const detected = useMemo(() => detectRegionDefaults().country, []);
   const ordered = useMemo(() => {
@@ -295,7 +297,7 @@ export function RegionEditor({
           <FieldRow
             label="Currency"
             value={currencyLabel(selectedCurrency)}
-            onPress={busy ? undefined : () => setCurrencyPickerOpen(true)}
+            onPress={busy ? undefined : () => runAfterKeyboard(() => setCurrencyPickerOpen(true))}
             muted={busy}
           />
         </View>

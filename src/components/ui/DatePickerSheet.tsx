@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Keyboard, StyleSheet, Text, View } from "react-native";
 import {
   addDays,
@@ -58,6 +58,10 @@ export function DatePickerSheet({
   const [prevVisible, setPrevVisible] = useState(visible);
   const [month, setMonth] = useState(() => startOfMonth(value));
   const [today, setToday] = useState(() => toIsoDate(new Date()));
+
+  useEffect(() => {
+    if (visible) Keyboard.dismiss();
+  }, [visible]);
 
   if (visible !== prevVisible) {
     setPrevVisible(visible);

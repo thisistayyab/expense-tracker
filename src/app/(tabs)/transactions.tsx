@@ -26,6 +26,16 @@ import {
   PickerSheet,
   TactilePressable,
 } from "../../components/ui";
+import { isCurrencyCode } from "../../constants/currencies";
+import {
+  activeFilterCount,
+  dateRangeFor,
+  EMPTY_FILTERS,
+  typeLabel,
+  type TransactionFilters,
+} from "../../features/transactions/filters";
+import { dateFilterLabel, FiltersSheet } from "../../features/transactions/FiltersSheet";
+import { TransactionRow } from "../../features/transactions/TransactionRow";
 import { listAccounts } from "../../lib/db/repos/accounts";
 import { listCategories } from "../../lib/db/repos/categories";
 import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
@@ -39,24 +49,15 @@ import {
   updateTransaction,
 } from "../../lib/db/repos/transactions";
 import type { Account, Category, Db, Transaction } from "../../lib/db/types";
-import { isCurrencyCode } from "../../constants/currencies";
 import { selectableCategories } from "../../lib/domain/category-tree";
 import { addDays, isIsoDate, toIsoDate } from "../../lib/domain/dates";
 import { groupTransactionsByDay, type TransactionDaySection } from "../../lib/domain/transaction-groups";
 import { formatMoney } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
+import { useAfterKeyboardDismiss } from "../../lib/keyboard";
 import { notifyLedgerChanged, subscribeLedgerChanged } from "../../lib/ledgerEvents";
 import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { useUndo } from "../../lib/undo/UndoProvider";
-import {
-  activeFilterCount,
-  dateRangeFor,
-  EMPTY_FILTERS,
-  typeLabel,
-  type TransactionFilters,
-} from "../../features/transactions/filters";
-import { FiltersSheet, dateFilterLabel } from "../../features/transactions/FiltersSheet";
-import { TransactionRow } from "../../features/transactions/TransactionRow";
 
 const PAGE_LIMIT = 5_000;
 
@@ -448,18 +449,23 @@ export default function ActivityScreen() {
     [db, refresh, showUndo, today],
   );
 
+  const runAfterKeyboard = useAfterKeyboardDismiss();
+
   const changeCategory = useCallback(
     (row: Transaction) => {
       if (row.type === "transfer") return;
+      Keyboard.dismiss();
       if (categoryOpenTimer.current) clearTimeout(categoryOpenTimer.current);
       // Wait for iOS Alert dismissal animation before presenting the PickerSheet Modal.
       categoryOpenTimer.current = setTimeout(() => {
         categoryOpenTimer.current = null;
-        setCategoryTarget(row);
-        setCategoryPickerVisible(true);
+        runAfterKeyboard(() => {
+          setCategoryTarget(row);
+          setCategoryPickerVisible(true);
+        });
       }, 150);
     },
-    [],
+    [runAfterKeyboard],
   );
 
   const longPressRow = useCallback(
@@ -477,9 +483,8 @@ export default function ActivityScreen() {
   );
 
   const openFilters = useCallback(() => {
-    Keyboard.dismiss();
-    setFilterOpen(true);
-  }, []);
+    runAfterKeyboard(() => setFilterOpen(true));
+  }, [runAfterKeyboard]);
 
   const removeDateFilter = useCallback(() => {
     if (paramFrom || paramTo) router.setParams({ from: "", to: "" });

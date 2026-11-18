@@ -1,6 +1,8 @@
 import { BlurView } from "expo-blur";
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -62,6 +64,8 @@ type SheetStage =
   | "closingInteractive"
   | "nativeDismissing";
 
+const InsideNativeModalContext = createContext(false);
+
 /**
  * Interactive iOS frosted-glass bottom sheet with blur scrim, rubber-banding
  * swipe-to-dismiss handle, and synchronized keyboard lift.
@@ -82,11 +86,14 @@ export function Sheet({
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const insideNativeModal = useContext(InsideNativeModalContext);
+  const handleKeyboardInJs = Platform.OS !== "android" || (embedded && !insideNativeModal);
   const { height: windowHeight } = useWindowDimensions();
   const initialOffset = Math.min(windowHeight, 640);
 
   const [prevVisible, setPrevVisible] = useState(visible);
   const [stage, setStage] = useState<SheetStage>(visible ? "open" : "closed");
+  const [embeddedDismissSeq, setEmbeddedDismissSeq] = useState(0);
 
   if (visible !== prevVisible) {
     setPrevVisible(visible);
@@ -98,7 +105,10 @@ export function Sheet({
   }
 
   const closedNotifiedRef = useRef(false);
+  const keyboardLiftTargetRef = useRef(0);
   const isMountedRef = useRef(true);
+  const animatedStageRef = useRef<SheetStage>("closed");
+  const onCloseRef = useRef(onClose);
   const onClosedRef = useRef(onClosed);
 
   useEffect(() => {
@@ -109,12 +119,21 @@ export function Sheet({
   }, []);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
     onClosedRef.current = onClosed;
   }, [onClosed]);
 
   const progress = useSharedValue(visible && reduceMotion ? 1 : 0);
   const dragY = useSharedValue(0);
   const keyboardLift = useSharedValue(0);
+  // Settled keyboard height, written without animation. It only feeds the height
+  // budget, so it changes the card's bounds once per keyboard state instead of
+  // on every frame — re-laying out the blur and the ScrollView 60 times a second
+  // is what made the sheet blink while typing.
+  const keyboardBudget = useSharedValue(0);
   const handleActive = useSharedValue(0);
   const willDismiss = useSharedValue(false);
 
@@ -134,7 +153,7 @@ export function Sheet({
     (wasInteractive: boolean) => {
       if (!isMountedRef.current) return;
       if (wasInteractive) {
-        onClose();
+        onCloseRef.current();
       }
       if (embedded) {
         setStage("closed");
@@ -143,7 +162,7 @@ export function Sheet({
         setStage("nativeDismissing");
       }
     },
-    [embedded, notifyClosedOnce, onClose],
+    [embedded, notifyClosedOnce],
   );
 
   const dismissInteractive = useCallback(() => {
@@ -152,14 +171,21 @@ export function Sheet({
     haptics.tick();
     if (embedded) {
       dragY.set(reduceMotion ? 0 : withSpring(0, SPRING_SHEET));
-      onClose();
+      setEmbeddedDismissSeq((count) => count + 1);
       return;
     }
     setStage("closingInteractive");
-  }, [dismissible, dragY, embedded, onClose, reduceMotion, stage]);
+  }, [dismissible, dragY, embedded, reduceMotion, stage]);
+
+  useEffect(() => {
+    if (embeddedDismissSeq === 0) return;
+    onCloseRef.current();
+  }, [embeddedDismissSeq]);
 
   useEffect(() => {
     if (stage === "open") {
+      if (animatedStageRef.current === "open") return undefined;
+      animatedStageRef.current = "open";
       closedNotifiedRef.current = false;
       willDismiss.set(false);
       dragY.set(0);
@@ -173,6 +199,7 @@ export function Sheet({
     }
 
     if (stage === "closingExternal" || stage === "closingInteractive") {
+      animatedStageRef.current = stage;
       const wasInteractive = stage === "closingInteractive";
       if (reduceMotion) {
         progress.set(0);
@@ -187,49 +214,87 @@ export function Sheet({
       return undefined;
     }
 
-    if (stage === "nativeDismissing") {
-      // If caller declined to flip `visible` to false on `onClose()`, restore open instead of hiding forever.
-      if (visible) {
-        const recoverTimer = setTimeout(() => {
-          if (isMountedRef.current) setStage("open");
-        }, 32);
-        return () => clearTimeout(recoverTimer);
-      }
-      const timer = setTimeout(finishNativeDismiss, Platform.OS === "ios" ? 400 : 80);
-      return () => clearTimeout(timer);
-    }
-
+    animatedStageRef.current = stage;
     return undefined;
-  }, [dragY, finishNativeDismiss, finishSlideOut, progress, reduceMotion, stage, visible, willDismiss]);
+  }, [dragY, finishSlideOut, progress, reduceMotion, stage, willDismiss]);
 
   useEffect(() => {
-    // Non-embedded Android Modals resize natively via SOFT_INPUT_ADJUST_RESIZE;
-    // adding a JS lift on top double-offsets the sheet above the viewport.
-    if (!embedded && Platform.OS === "android") {
+    if (stage !== "nativeDismissing") return undefined;
+    // If caller declined to flip `visible` to false on `onClose()`, restore open instead of hiding forever.
+    if (visible) {
+      const recoverTimer = setTimeout(() => {
+        if (isMountedRef.current) setStage("open");
+      }, 32);
+      return () => clearTimeout(recoverTimer);
+    }
+    const timer = setTimeout(finishNativeDismiss, Platform.OS === "ios" ? 400 : 80);
+    return () => clearTimeout(timer);
+  }, [finishNativeDismiss, stage, visible]);
+
+  useEffect(() => {
+    // Non-embedded Android Modals (and embedded overlays inside them) resize
+    // natively via SOFT_INPUT_ADJUST_RESIZE; adding a JS lift on top
+    // double-offsets the sheet above the viewport.
+    if (!handleKeyboardInJs) {
+      keyboardLiftTargetRef.current = 0;
+      keyboardBudget.set(0);
       keyboardLift.set(0);
       return undefined;
     }
 
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const applyKeyboardHeight = (height: number, duration: number) => {
+      const target = Math.max(0, Math.round(height));
+      // iOS re-posts the keyboard frame while typing (the autocorrect bar grows
+      // and shrinks). Restarting the animation for an unchanged height made the
+      // sheet stutter on every keystroke, so only react to a real change.
+      if (Math.abs(target - keyboardLiftTargetRef.current) < 2) return;
+      keyboardLiftTargetRef.current = target;
+      keyboardBudget.set(target);
+      keyboardLift.set(
+        reduceMotion ? target : withTiming(target, { duration: duration || 250 }),
+      );
+    };
 
-    const showSub = Keyboard.addListener(showEvent, (event) => {
-      const target = Math.max(0, event.endCoordinates.height);
-      keyboardLift.set(
-        reduceMotion ? target : withTiming(target, { duration: event.duration || 250 }),
-      );
+    if (Platform.OS === "ios") {
+      // `keyboardWillChangeFrame` also catches the keyboard resizing after it is
+      // already up (suggestion bar, smaller keyboard, hardware keyboard).
+      const frameSub = Keyboard.addListener("keyboardWillChangeFrame", (event) => {
+        applyKeyboardHeight(event.endCoordinates.height, event.duration);
+      });
+      const hideSub = Keyboard.addListener("keyboardWillHide", (event) => {
+        applyKeyboardHeight(0, event.duration || 220);
+      });
+      return () => {
+        frameSub.remove();
+        hideSub.remove();
+      };
+    }
+
+    const showSub = Keyboard.addListener("keyboardDidShow", (event) => {
+      applyKeyboardHeight(event.endCoordinates.height, event.duration);
     });
-    const hideSub = Keyboard.addListener(hideEvent, (event) => {
-      keyboardLift.set(
-        reduceMotion ? 0 : withTiming(0, { duration: event.duration || 220 }),
-      );
+    const hideSub = Keyboard.addListener("keyboardDidHide", (event) => {
+      applyKeyboardHeight(0, event.duration || 220);
     });
 
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, [embedded, keyboardLift, reduceMotion]);
+  }, [handleKeyboardInJs, keyboardBudget, keyboardLift, reduceMotion]);
+
+  // A sheet can open while the keyboard is already up (tapping the account row
+  // while the amount field is focused). Keyboard events only fire on transitions,
+  // so without this the new sheet renders underneath the keyboard.
+  useEffect(() => {
+    if (stage !== "open" || !handleKeyboardInJs) return;
+    const metrics = Keyboard.metrics();
+    const target =
+      Keyboard.isVisible() && metrics ? Math.max(0, Math.round(metrics.height)) : 0;
+    keyboardLiftTargetRef.current = target;
+    keyboardBudget.set(target);
+    keyboardLift.set(target);
+  }, [handleKeyboardInJs, keyboardBudget, keyboardLift, stage]);
 
   // RNGH forbids binding the same Gesture instance to multiple GestureDetectors.
   // Keep both builders direct inside useMemo so React Compiler sees the worklets
@@ -302,22 +367,22 @@ export function Sheet({
   });
 
   const restPaddingBottom = Math.max(insets.bottom + 14, 24);
+  // Only the transform animates with the keyboard. The height budget comes from
+  // `keyboardBudget`, which is set without animation, so the card is laid out
+  // once per keyboard state instead of on every animation frame.
   const sheetAnimatedStyle = useAnimatedStyle(() => {
     const entranceY = (1 - progress.value) * initialOffset;
     const availableHeight = Math.max(
       220,
       Math.min(
         Math.round(windowHeight * maxHeightRatio),
-        windowHeight - insets.top - 16 - keyboardLift.value,
+        windowHeight - insets.top - 16 - keyboardBudget.value,
       ),
     );
-    const activePaddingBottom =
-      keyboardLift.value > 0 ? 12 : restPaddingBottom;
     return {
       maxHeight: availableHeight,
-      marginBottom: keyboardLift.value,
-      paddingBottom: activePaddingBottom,
-      transform: [{ translateY: entranceY + dragY.value }],
+      paddingBottom: keyboardBudget.value > 0 ? 14 : restPaddingBottom,
+      transform: [{ translateY: entranceY + dragY.value - keyboardLift.value }],
     };
   }, [initialOffset, insets.top, maxHeightRatio, restPaddingBottom, windowHeight]);
 
@@ -340,6 +405,7 @@ export function Sheet({
       accessibilityViewIsModal
       style={[
         styles.sheet,
+        styles.sheetLayer,
         theme.shadow.sheet,
         {
           borderTopLeftRadius: theme.radius.sheet,
@@ -434,7 +500,7 @@ export function Sheet({
 
   const overlay = (
     <View style={styles.overlay}>
-      <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.backdropLayer, backdropStyle]}>
         {Platform.OS === "ios" || Platform.OS === "web" ? (
           <BlurView
             pointerEvents="none"
@@ -451,7 +517,24 @@ export function Sheet({
         />
       </Animated.View>
       {sheetCard}
-      {overlayChildren}
+      {/* Children such as embedded pickers must overlay the whole screen, not
+       * sit in flow next to the card, where they would only get the leftover
+       * height under it (and could be squeezed behind the keyboard). On Android,
+       * match elevation above `sheetCard` so Hardware Renderer keeps them on top. */}
+      {overlayChildren ? (
+        <View
+          pointerEvents="box-none"
+          style={[
+            StyleSheet.absoluteFill,
+            styles.overlayChildrenLayer,
+            Platform.OS === "android"
+              ? { elevation: theme.shadow.sheet.elevation + 10 }
+              : null,
+          ]}
+        >
+          {overlayChildren}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -469,7 +552,15 @@ export function Sheet({
       onDismiss={finishNativeDismiss}
       onRequestClose={dismissible ? dismissInteractive : () => {}}
     >
-      <GestureHandlerRootView style={styles.flexOne}>{overlay}</GestureHandlerRootView>
+      <GestureHandlerRootView style={styles.flexOne}>
+        {Platform.OS === "android" ? (
+          <InsideNativeModalContext.Provider value={true}>
+            {overlay}
+          </InsideNativeModalContext.Provider>
+        ) : (
+          overlay
+        )}
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -479,6 +570,15 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
+  },
+  backdropLayer: {
+    zIndex: 0,
+  },
+  sheetLayer: {
+    zIndex: 1,
+  },
+  overlayChildrenLayer: {
+    zIndex: 20,
   },
   sheet: {
     borderCurve: "continuous",
