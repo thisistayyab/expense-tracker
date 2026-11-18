@@ -1,8 +1,9 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useRef, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
+  appAlert,
   AppIcon,
   Button,
   ChoiceChip,
@@ -182,7 +183,7 @@ export function AccountEditorSheet({
       balanceMinor !== 0
         ? ` It still has a balance of ${formatMoney(balanceMinor, account.currency)}.`
         : "";
-    Alert.alert(
+    appAlert(
       `Archive ${account.name}?`,
       `History stays viewable and this account disappears from pickers.${balanceLine}`,
       [

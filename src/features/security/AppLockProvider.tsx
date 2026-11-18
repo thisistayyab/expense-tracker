@@ -9,6 +9,7 @@ import {
 } from "react";
 import { AppState, Modal, View } from "react-native";
 
+import { dismissAllAlerts } from "../../components/ui";
 import { getSetting, setSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import type { Db } from "../../lib/db/types";
 import { useTheme } from "../../lib/theme";
@@ -139,9 +140,17 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
     [enabled, locked, capability, enable, disable, unlock, turnOffUnavailable, refresh],
   );
 
-  if (enabled === null) return null;
-
   const modalVisible = locked || obscured;
+  const prevModalVisibleRef = useRef(modalVisible);
+
+  useEffect(() => {
+    if (modalVisible && !prevModalVisibleRef.current) {
+      dismissAllAlerts();
+    }
+    prevModalVisibleRef.current = modalVisible;
+  }, [modalVisible]);
+
+  if (enabled === null) return null;
 
   return (
     <AppLockContext.Provider value={value}>

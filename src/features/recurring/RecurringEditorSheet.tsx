@@ -1,7 +1,6 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   AppState,
   Keyboard,
   ScrollView,
@@ -13,6 +12,7 @@ import {
 } from "react-native";
 
 import {
+  appAlert,
   Button,
   ChoiceChip,
   DatePickerSheet,
@@ -357,7 +357,7 @@ export function RecurringEditorSheet({
 
   const remove = () => {
     if (!rule || savingRef.current || saving) return;
-    Alert.alert(
+    appAlert(
       "Delete this recurring rule?",
       "Entries it already posted stay in Activity. Future occurrences will stop.",
       [

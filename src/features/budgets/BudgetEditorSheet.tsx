@@ -1,8 +1,8 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useRef, useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 
-import { Button, ChoiceChip, Sheet, TactilePressable } from "../../components/ui";
+import { appAlert, Button, ChoiceChip, Sheet, TactilePressable } from "../../components/ui";
 import { getCurrency } from "../../constants/currencies";
 import { deactivateBudget, upsertBudget } from "../../lib/db/repos/budgets";
 import type { Budget, BudgetPeriod, Db } from "../../lib/db/types";
@@ -151,7 +151,7 @@ export function BudgetEditorSheet({
   const remove = () => {
     if (!target || savingRef.current || saving) return;
     const monthScope = scope === "month";
-    Alert.alert(
+    appAlert(
       monthScope ? `Remove the ${monthLabel} limit?` : "Remove this limit?",
       monthScope
         ? "This month falls back to the every-month limit. Spending is untouched."

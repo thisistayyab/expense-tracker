@@ -1,8 +1,9 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useRef, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
+  appAlert,
   Button,
   CATEGORY_ICON_KEYS,
   CategoryTile,
@@ -152,7 +153,7 @@ export function CategoryEditorSheet({
       archive();
       return;
     }
-    Alert.alert(
+    appAlert(
       `Archive ${category.name}?`,
       "History keeps rendering it, but it disappears from the add picker. Its subcategories are hidden with it.",
       [

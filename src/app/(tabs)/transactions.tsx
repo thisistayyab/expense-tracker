@@ -4,7 +4,6 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   Keyboard,
   Platform,
@@ -19,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
 import {
+  appAlert,
   AppIcon,
   ChoiceChip,
   EmptyState,
@@ -408,7 +408,7 @@ export default function ActivityScreen() {
         })
         .catch((cause: unknown) => {
           refresh();
-          Alert.alert("Not deleted", `Nothing was removed. ${String(cause)}`);
+          appAlert("Not deleted", `Nothing was removed. ${String(cause)}`);
         });
     },
     [db, refresh, showUndo],
@@ -443,7 +443,7 @@ export default function ActivityScreen() {
           });
         })
         .catch((cause: unknown) => {
-          Alert.alert("Not duplicated", `Nothing was created. ${String(cause)}`);
+          appAlert("Not duplicated", `Nothing was created. ${String(cause)}`);
         });
     },
     [db, refresh, showUndo, today],
@@ -477,7 +477,7 @@ export default function ActivityScreen() {
           : []),
         { text: "Cancel", style: "cancel" as const },
       ];
-      Alert.alert(row.itemName ?? row.place ?? "Transaction", undefined, actions);
+      appAlert(row.itemName ?? row.place ?? "Transaction", undefined, actions);
     },
     [changeCategory, duplicateRow],
   );
@@ -575,7 +575,7 @@ export default function ActivityScreen() {
         });
       })
       .catch((cause: unknown) => {
-        Alert.alert("Not changed", `The category stayed the same. ${String(cause)}`);
+        appAlert("Not changed", `The category stayed the same. ${String(cause)}`);
       });
   };
 

@@ -1,11 +1,12 @@
 import { useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 
 import {
+  appAlert,
   Button,
   Card,
   ScreenBackground,
@@ -143,7 +144,7 @@ export default function DataScreen() {
 
       const validation = validateBackup(parsed, LATEST_SCHEMA_VERSION);
       if (!validation.ok) {
-        Alert.alert(
+        appAlert(
           "This backup cannot be restored",
           validation.errors.slice(0, 8).join("\n"),
           [{ text: "OK" }],
@@ -191,7 +192,7 @@ export default function DataScreen() {
 
   const confirmReplace = () => {
     if (previewBusy || previewBusyRef.current) return;
-    Alert.alert(
+    appAlert(
       "Replace all data?",
       "Every current row is deleted and replaced with the backup. This cannot be undone.",
       [

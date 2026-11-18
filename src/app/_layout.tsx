@@ -6,6 +6,7 @@ import { Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { AlertHost } from "../components/ui";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AppLockProvider } from "../features/security/AppLockProvider";
 import { RecurringRuntime } from "../features/recurring/RecurringRuntime";
@@ -178,7 +179,10 @@ function ThemeGate({ children }: { children: ReactNode }) {
 
   return (
     <ThemeProvider initialPreference={preference}>
-      <ErrorBoundary>{children}</ErrorBoundary>
+      <ErrorBoundary>
+        {children}
+        <AlertHost />
+      </ErrorBoundary>
     </ThemeProvider>
   );
 }

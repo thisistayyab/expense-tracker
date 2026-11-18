@@ -1,10 +1,10 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Text, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Button, ScreenBackground } from "../../components/ui";
+import { appAlert, Button, ScreenBackground } from "../../components/ui";
 import { RegionEditor, type RegionValue } from "../../features/settings/RegionEditor";
 import { applyRegionSelection } from "../../lib/db/onboarding";
 import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
@@ -89,7 +89,7 @@ export default function SettingsRegionScreen() {
           return;
         }
 
-        Alert.alert(
+        appAlert(
           `Change currency to ${value.currency}?`,
           `Past entries keep ${original.currency} and are never converted. ` +
             `Totals will show ${value.currency} only, and budgets in ` +

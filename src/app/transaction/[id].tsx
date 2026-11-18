@@ -1,10 +1,11 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+  appAlert,
   Button,
   Card,
   CategoryTile,
@@ -79,7 +80,7 @@ export default function TransactionDetailScreen() {
   const remove = () => {
     if (!transaction || busy || busyRef.current) return;
     const snapshot = transaction;
-    Alert.alert("Delete this transaction?", "You will have a few seconds to undo.", [
+    appAlert("Delete this transaction?", "You will have a few seconds to undo.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -104,7 +105,7 @@ export default function TransactionDetailScreen() {
             .catch(() => {
               busyRef.current = false;
               setBusy(false);
-              Alert.alert("Not deleted", "Nothing was removed. Try again.");
+              appAlert("Not deleted", "Nothing was removed. Try again.");
             });
         },
       },

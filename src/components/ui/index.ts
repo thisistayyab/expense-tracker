@@ -1,3 +1,10 @@
+export {
+  AlertHost,
+  appAlert,
+  dismissAllAlerts,
+  type AppAlertButton,
+  type AppAlertOptions,
+} from "./AppAlert";
 export { AppIcon, type AppIconName, type AppIconProps } from "./AppIcon";
 export { BrandMark, type BrandMarkProps } from "./BrandMark";
 export { Button, type ButtonProps, type ButtonVariant } from "./Button";

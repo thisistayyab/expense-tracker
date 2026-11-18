@@ -3,7 +3,6 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+  appAlert,
   Button,
   Card,
   EmptyState,
@@ -146,14 +146,14 @@ export default function RecurringScreen() {
       setToday(currentToday);
       const result = await postNextOccurrence(db, rule, currentToday);
       if (!result.posted) {
-        Alert.alert("Already posted", "This occurrence is already in Activity.");
+        appAlert("Already posted", "This occurrence is already in Activity.");
       } else {
         notifyLedgerChanged();
       }
       await refreshReminders(db);
       await load();
     } catch (cause) {
-      Alert.alert("Not posted", String(cause));
+      appAlert("Not posted", String(cause));
     } finally {
       busyRef.current = false;
       setBusyId(null);

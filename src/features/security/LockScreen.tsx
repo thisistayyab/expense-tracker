@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, AppState, BackHandler, Platform, StyleSheet, Text, View } from "react-native";
+import { AppState, BackHandler, Platform, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AppIcon, Button, Glass, ScreenBackground } from "../../components/ui";
+import { appAlert, AppIcon, Button, Glass, ScreenBackground } from "../../components/ui";
 import { iosEnter } from "../../lib/motion";
 import { useTheme } from "../../lib/theme";
 import { useAppLock } from "./appLockContext";
@@ -118,7 +118,7 @@ export function LockScreen({ veilOnly = false }: { veilOnly?: boolean }) {
                     label="Turn off app lock"
                     variant="ghost"
                     onPress={() =>
-                      Alert.alert(
+                      appAlert(
                         "Turn off app lock?",
                         "This device has no screen lock, so the app cannot verify you. Your data stays on the device.",
                         [

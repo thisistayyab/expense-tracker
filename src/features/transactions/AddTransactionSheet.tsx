@@ -1,7 +1,6 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   AppState,
   BackHandler,
   Keyboard,
@@ -21,6 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import {
+  appAlert,
   AppIcon,
   Button,
   DatePickerSheet,
@@ -350,7 +350,7 @@ export function AddTransactionSheet({
       onClose();
       return;
     }
-    Alert.alert("Discard this entry?", "Nothing has been saved.", [
+    appAlert("Discard this entry?", "Nothing has been saved.", [
       { text: "Keep editing", style: "cancel" },
       { text: "Discard", style: "destructive", onPress: onClose },
     ]);
@@ -477,7 +477,7 @@ export function AddTransactionSheet({
         haptics.error();
         notifyLedgerChanged();
         setSaving(false);
-        Alert.alert(
+        appAlert(
           "Not saved",
           `Your entry could not be stored. ${String(saveError)}`,
         );

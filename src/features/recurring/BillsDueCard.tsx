@@ -1,9 +1,9 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, AppState, Linking, StyleSheet, Text, View } from "react-native";
+import { AppState, Linking, StyleSheet, Text, View } from "react-native";
 
-import { AppIcon, Card, Money, TactilePressable } from "../../components/ui";
+import { appAlert, AppIcon, Card, Money, TactilePressable } from "../../components/ui";
 import { listUpcomingRecurringRules } from "../../lib/db/repos/recurring";
 import type { Db, RecurringRule } from "../../lib/db/types";
 import { addDays, daysBetween, toIsoDate } from "../../lib/domain/dates";
@@ -92,7 +92,7 @@ export function BillsDueCard({ currency }: { currency: string }) {
       setPermission(next);
       if (next === "granted") await refreshReminders(db);
       if (next === "denied") {
-        Alert.alert(
+        appAlert(
           "Notifications are off",
           "Bills still appear here and stay set aside from safe to spend. You can enable reminders in system settings.",
           [
@@ -115,14 +115,14 @@ export function BillsDueCard({ currency }: { currency: string }) {
       const currentToday = toIsoDate(new Date());
       const result = await postNextOccurrence(db, rule, currentToday);
       if (!result.posted) {
-        Alert.alert("Already posted", "This occurrence is already in Activity.");
+        appAlert("Already posted", "This occurrence is already in Activity.");
       } else {
         notifyLedgerChanged();
       }
       await refreshReminders(db);
       await load();
     } catch (cause) {
-      Alert.alert("Not posted", String(cause));
+      appAlert("Not posted", String(cause));
     } finally {
       busyRef.current = false;
       setBusy(false);

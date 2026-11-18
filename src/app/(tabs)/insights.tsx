@@ -1,12 +1,13 @@
 import { router, useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TAB_BAR_CLEARANCE } from "../../components/navigation/tabBar";
 import {
+  appAlert,
   AppIcon,
   Card,
   EmptyState,
@@ -87,10 +88,10 @@ export default function InsightsScreen() {
     try {
       const result = await exportCsv(db);
       if (!result.shared) {
-        Alert.alert("CSV saved", result.uri);
+        appAlert("CSV saved", result.uri);
       }
     } catch (cause) {
-      Alert.alert("CSV export failed", String(cause));
+      appAlert("CSV export failed", String(cause));
     } finally {
       exportingRef.current = false;
       setExporting(false);
