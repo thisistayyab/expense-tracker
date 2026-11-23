@@ -895,7 +895,14 @@ export default function OverviewScreen() {
                             transaction.type === "transfer"
                               ? "Transfer"
                               : (category?.name ?? "Uncategorized")
-                          } · ${dayLabel(transaction.localDate, today)}`;
+                          } · ${dayLabel(transaction.localDate, today)}${
+                            transaction.feeMinor > 0
+                              ? ` · ${formatMoney(
+                                  transaction.feeMinor,
+                                  transaction.currency,
+                                )} fee`
+                              : ""
+                          }`;
                           return (
                             <Fragment key={transaction.id}>
                               {index > 0 ? (
@@ -916,7 +923,14 @@ export default function OverviewScreen() {
                                 accessibilityLabel={`${title}, ${formatMoneySpoken(
                                   transaction.amountMinor,
                                   transaction.currency,
-                                )}, ${subtitle}`}
+                                )}${
+                                  transaction.feeMinor > 0
+                                    ? `, plus a ${formatMoneySpoken(
+                                        transaction.feeMinor,
+                                        transaction.currency,
+                                      )} fee`
+                                    : ""
+                                }, ${subtitle}`}
                                 style={{
                                   flexDirection: "row",
                                   alignItems: "center",

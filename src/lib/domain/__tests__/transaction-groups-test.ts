@@ -6,6 +6,7 @@ function row(overrides: Partial<Transaction>): Transaction {
     id: overrides.id ?? "tx",
     type: "expense",
     amountMinor: 1000,
+    feeMinor: 0,
     currency: "USD",
     accountId: "cash",
     transferAccountId: null,
@@ -54,11 +55,17 @@ describe("transaction day groups", () => {
     expect(sections[1].totals).toEqual([{ currency: "USD", totalMinor: -500 }]);
   });
 
-  test("transfers never change a day total", () => {
+  test("transfers never change a day total, but their fee does", () => {
     const rows = [
-      row({ id: "one", type: "transfer", transferAccountId: "bank", amountMinor: 5000 }),
-      row({ id: "two", type: "expense", amountMinor: 500 }),
+      row({
+        id: "one",
+        type: "transfer",
+        transferAccountId: "bank",
+        amountMinor: 5000,
+        feeMinor: 250,
+      }),
+      row({ id: "two", type: "expense", amountMinor: 500, feeMinor: 25 }),
     ];
-    expect(dayNetForCurrency(rows, "USD")).toBe(-500);
+    expect(dayNetForCurrency(rows, "USD")).toBe(-775);
   });
 });

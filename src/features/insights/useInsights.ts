@@ -12,6 +12,7 @@ import { getAllSettings, SETTING_KEYS } from "../../lib/db/repos/settings";
 import {
   countSpentInOtherCurrencies,
   countTransactions,
+  sumFees,
   sumSpentByCategory,
   sumSpentForComparison,
 } from "../../lib/db/repos/transactions";
@@ -39,6 +40,9 @@ export type InsightsOverview = {
   period: InsightPeriod;
   ranges: InsightRanges;
   totalSpentMinor: number;
+  /** Fees included in `totalSpentMinor`, and how many entries carried one. */
+  feesMinor: number;
+  feeCount: number;
   breakdown: BreakdownRow[];
   topItems: TopItemRow[];
   trend: TrendPoint[];
@@ -92,6 +96,7 @@ export function useInsights(period: InsightPeriod): {
       named,
       unnamed,
       otherCurrency,
+      fees,
       monthTotals,
       recurringRules,
     ] = await Promise.all([
@@ -121,6 +126,11 @@ export function useInsights(period: InsightPeriod): {
         toDate: ranges.current.to,
       }),
       countSpentInOtherCurrencies(db, {
+        currency,
+        fromDate: ranges.current.from,
+        toDate: ranges.current.to,
+      }),
+      sumFees(db, {
         currency,
         fromDate: ranges.current.from,
         toDate: ranges.current.to,
@@ -180,6 +190,8 @@ export function useInsights(period: InsightPeriod): {
       period,
       ranges,
       totalSpentMinor: totalSpent,
+      feesMinor: fees.totalMinor,
+      feeCount: fees.count,
       breakdown,
       topItems,
       trend,

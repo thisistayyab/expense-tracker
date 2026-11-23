@@ -2,7 +2,7 @@ import type { Transaction } from "../db/types";
 
 export type CurrencyTotal = {
   currency: string;
-  /** Income − expenses. Transfers move money, so they never change a day total. */
+  /** Income − (expenses + fees). A transfer's principal never changes a day total. */
   totalMinor: number;
 };
 
@@ -13,9 +13,10 @@ export type TransactionDaySection = {
 };
 
 /**
- * Group rows for Activity without ever adding currencies together. A transfer is
- * excluded from the net total because it moves money between two accounts rather
- * than changing what was earned or spent (02 rule 6).
+ * Group rows for Activity without ever adding currencies together. A transfer's
+ * principal is excluded from the net total because it moves money between two
+ * accounts rather than changing what was earned or spent (02 rule 6). A fee is
+ * excluded from nothing: it leaves the account, so it counts as spending.
  */
 export function groupTransactionsByDay(rows: Transaction[]): TransactionDaySection[] {
   const ordered = [...rows].sort((left, right) => {
@@ -42,7 +43,13 @@ export function groupTransactionsByDay(rows: Transaction[]): TransactionDaySecti
       if (row.type === "income") {
         totals.set(row.currency, (totals.get(row.currency) ?? 0) + row.amountMinor);
       } else if (row.type === "expense") {
-        totals.set(row.currency, (totals.get(row.currency) ?? 0) - row.amountMinor);
+        totals.set(
+          row.currency,
+          (totals.get(row.currency) ?? 0) - (row.amountMinor + row.feeMinor),
+        );
+      } else if (row.feeMinor > 0) {
+        // The principal is a move, not spending; the fee is still lost.
+        totals.set(row.currency, (totals.get(row.currency) ?? 0) - row.feeMinor);
       }
     }
     return {
@@ -57,7 +64,7 @@ export function dayNetForCurrency(rows: Transaction[], currency: string): number
   return rows.reduce((total, row) => {
     if (row.currency.toUpperCase() !== currency.toUpperCase()) return total;
     if (row.type === "income") return total + row.amountMinor;
-    if (row.type === "expense") return total - row.amountMinor;
-    return total;
+    if (row.type === "expense") return total - (row.amountMinor + row.feeMinor);
+    return total - row.feeMinor;
   }, 0);
 }

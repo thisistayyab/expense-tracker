@@ -37,6 +37,7 @@ async function seedMovements(db: Db): Promise<void> {
   await createTransaction(db, {
     type: "expense",
     amountMinor: 1250,
+    feeMinor: 25,
     currency: "USD",
     accountId: account.id,
     categoryId: category.id,
@@ -105,7 +106,8 @@ describe("JSON backup", () => {
     expect(restored.map((row) => row.itemName).sort()).toEqual(["Chicken shawarma", "Refund"]);
     expect(
       await sumSpent(target, { currency: "USD", fromDate: "2026-11-01", toDate: "2026-11-30" }),
-    ).toBe(1250);
+    ).toBe(1275);
+    expect((await listTransactions(target, { limit: 1 }))[0].feeMinor).toBe(25);
   });
 
   test("merge keeps local rows and adds the backup's missing rows", async () => {
@@ -158,6 +160,27 @@ describe("JSON backup", () => {
 });
 
 describe("backup validation", () => {
+  test("a pre-fee backup validates and restores every fee as zero", async () => {
+    const db = await seededDb();
+    await seedMovements(db);
+    const payload = await backupOf(db);
+    payload.schemaVersion = 4;
+    for (const row of payload.tables.transactions) delete row.fee_minor;
+    for (const row of payload.tables.recurring_rules) delete row.fee_minor;
+
+    const result = validateBackup(payload, LATEST_SCHEMA_VERSION);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.tables.transactions.every((row) => row.fee_minor === 0)).toBe(true);
+    expect(result.payload.tables.recurring_rules.every((row) => row.fee_minor === 0)).toBe(true);
+
+    const target = await seededDb();
+    await restoreDatabase(target, result.payload, "replace");
+    const rows = await listTransactions(target, { limit: 10 });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.feeMinor === 0)).toBe(true);
+  });
+
   test("refuses a backup from a newer schema version", async () => {
     const db = await seededDb();
     const payload = await backupOf(db);
@@ -199,6 +222,7 @@ describe("backup validation", () => {
     const base = {
       type: "expense",
       amount_minor: 500,
+      fee_minor: 0,
       currency: "USD",
       account_id: account.id,
       transfer_account_id: null,
@@ -249,6 +273,32 @@ describe("backup validation", () => {
     const result = validateBackup(payload, LATEST_SCHEMA_VERSION);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.join(" ")).toMatch(/archived account/);
+  });
+
+  test("refuses an income transaction or recurring rule with a positive fee", async () => {
+    const db = await seededDb();
+    await seedMovements(db);
+    const payload = await backupOf(db);
+
+    const incomeTx = payload.tables.transactions.find((row) => row.type === "income")!;
+    incomeTx.fee_minor = 50;
+
+    const rule = payload.tables.recurring_rules[0];
+    payload.tables.recurring_rules.push({
+      ...rule,
+      id: "income-rule-with-fee",
+      type: "income",
+      category_id: null,
+      fee_minor: 25,
+    });
+
+    const result = validateBackup(payload, LATEST_SCHEMA_VERSION);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const msg = result.errors.join(" ");
+      expect(msg).toMatch(/Transaction .* fee to income/);
+      expect(msg).toMatch(/Recurring rule .* fee to income/);
+    }
   });
 });
 

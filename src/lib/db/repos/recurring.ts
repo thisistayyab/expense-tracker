@@ -10,6 +10,7 @@ type RecurringRow = {
   id: string;
   type: TransactionType;
   amount_minor: number;
+  fee_minor: number;
   currency: string;
   account_id: string;
   category_id: string | null;
@@ -29,7 +30,7 @@ type RecurringRow = {
   updated_at: string;
 };
 
-const SELECT = `SELECT id, type, amount_minor, currency, account_id, category_id, item_name,
+const SELECT = `SELECT id, type, amount_minor, fee_minor, currency, account_id, category_id, item_name,
                        place, note, frequency, interval_count, day_of_month, start_date,
                        end_date, next_due_at, auto_post, remind_days, is_active,
                        created_at, updated_at
@@ -40,6 +41,7 @@ function mapRule(row: RecurringRow): RecurringRule {
     id: row.id,
     type: row.type,
     amountMinor: row.amount_minor,
+    feeMinor: row.fee_minor,
     currency: row.currency,
     accountId: row.account_id,
     categoryId: row.category_id,
@@ -64,6 +66,8 @@ function mapRule(row: RecurringRow): RecurringRule {
 export type RecurringRuleDraft = {
   type: TransactionType;
   amountMinor: number;
+  /** Fee charged on every posted occurrence; defaults to zero. */
+  feeMinor?: number;
   currency: string;
   accountId: string;
   categoryId?: string | null;
@@ -90,6 +94,13 @@ const FREQUENCIES: readonly RecurringFrequency[] = ["daily", "weekly", "monthly"
 async function assertRuleLinks(db: Db, input: RecurringRuleDraft): Promise<void> {
   if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0) {
     throw new Error("A recurring rule needs a positive integer amount");
+  }
+  const rawFee = input.feeMinor ?? 0;
+  if (!Number.isSafeInteger(rawFee) || rawFee < 0) {
+    throw new Error("A recurring fee must be a non-negative integer");
+  }
+  if (rawFee > 0 && input.type === "income") {
+    throw new Error("A fee cannot be attached to income");
   }
   const currency = input.currency.trim().toUpperCase();
   if (!isCurrencyCode(currency)) throw new Error(`Unknown currency: ${input.currency}`);
@@ -143,6 +154,7 @@ async function assertRuleLinks(db: Db, input: RecurringRuleDraft): Promise<void>
 }
 
 type NormalizedRecurringRule = RecurringRuleDraft & {
+  feeMinor: number;
   categoryId: string | null;
   itemName: string | null;
   place: string | null;
@@ -160,6 +172,7 @@ function normalizeDraft(input: RecurringRuleDraft): NormalizedRecurringRule {
   return {
     type: input.type,
     amountMinor: input.amountMinor,
+    feeMinor: (input.feeMinor ?? 0) === 0 ? 0 : Math.max(0, Math.trunc(input.feeMinor ?? 0)),
     currency: input.currency.trim().toUpperCase(),
     accountId: input.accountId,
     categoryId: nullable(input.categoryId ?? null),
@@ -218,15 +231,16 @@ export async function createRecurringRule(
     const now = new Date().toISOString();
 
     await db.runAsync(
-      `INSERT INTO recurring_rules (id, type, amount_minor, currency, account_id, category_id,
-                                    item_name, place, note, frequency, interval_count, day_of_month,
-                                    start_date, end_date, next_due_at, auto_post, remind_days,
-                                    is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      `INSERT INTO recurring_rules (id, type, amount_minor, fee_minor, currency, account_id,
+                                    category_id, item_name, place, note, frequency, interval_count,
+                                    day_of_month, start_date, end_date, next_due_at, auto_post,
+                                    remind_days, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [
         id,
         draft.type,
         Math.trunc(draft.amountMinor),
+        draft.feeMinor,
         draft.currency,
         draft.accountId,
         draft.categoryId,
@@ -266,14 +280,15 @@ export async function updateRecurringRule(
 
     await db.runAsync(
       `UPDATE recurring_rules
-          SET type = ?, amount_minor = ?, currency = ?, account_id = ?, category_id = ?,
-              item_name = ?, place = ?, note = ?, frequency = ?, interval_count = ?,
-              day_of_month = ?, start_date = ?, end_date = ?, next_due_at = ?,
-              auto_post = ?, remind_days = ?, updated_at = ?
+          SET type = ?, amount_minor = ?, fee_minor = ?, currency = ?, account_id = ?,
+              category_id = ?, item_name = ?, place = ?, note = ?, frequency = ?,
+              interval_count = ?, day_of_month = ?, start_date = ?, end_date = ?,
+              next_due_at = ?, auto_post = ?, remind_days = ?, updated_at = ?
         WHERE id = ?`,
       [
         draft.type,
         Math.trunc(draft.amountMinor),
+        draft.feeMinor,
         draft.currency,
         draft.accountId,
         draft.categoryId,
@@ -395,13 +410,14 @@ export async function insertPostedOccurrence(
 
   const result = await db.runAsync(
     `INSERT OR IGNORE INTO transactions
-       (id, type, amount_minor, currency, account_id, transfer_account_id, category_id,
+       (id, type, amount_minor, fee_minor, currency, account_id, transfer_account_id, category_id,
         item_name, place, note, occurred_at, local_date, recurring_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       newId(),
       rule.type,
       rule.amountMinor,
+      rule.feeMinor,
       rule.currency,
       rule.accountId,
       rule.categoryId,
@@ -447,7 +463,7 @@ export async function sumCommittedUnposted(
     // Count the stored unposted cursor plus every remaining scheduled occurrence in this window.
     const rest = occurrencesBetween(rule, addDays(rule.nextDueAt, 1), options.toDate);
     const occurrences = 1 + rest.length;
-    totalMinor += rule.amountMinor * occurrences;
+    totalMinor += (rule.amountMinor + rule.feeMinor) * occurrences;
     count += occurrences;
   }
   return { totalMinor, count };

@@ -12,6 +12,8 @@ export type CsvTransaction = {
   id: string;
   type: TransactionType;
   amountMinor: number;
+  /** Outflow on top of the amount; blank when zero so old files stay readable. */
+  feeMinor?: number;
   currency: string;
   accountName: string;
   categoryName: string | null;
@@ -30,6 +32,7 @@ export const CSV_HEADER = [
   "local_date",
   "type",
   "amount",
+  "fee",
   "currency",
   "account",
   "category",
@@ -64,12 +67,17 @@ export function csvAmount(type: TransactionType, minor: number, currency: string
 }
 
 export function csvRow(row: CsvTransaction): string {
+  const feeMinor =
+    row.type === "income" ? 0 : Math.max(0, Math.trunc(row.feeMinor ?? 0));
   return [
     csvTextCell(row.id),
     csvTextCell(row.occurredAt),
     csvTextCell(row.localDate),
     csvTextCell(row.type),
     csvCell(csvAmount(row.type, row.amountMinor, row.currency)),
+    // A fee is always money leaving the account. Blank, not 0.00, when absent so
+    // an export without fees reads the same as it did before the column existed.
+    csvCell(feeMinor > 0 ? `-${minorToDecimalString(feeMinor, row.currency)}` : ""),
     csvTextCell(row.currency),
     csvTextCell(row.accountName),
     csvTextCell(row.categoryName),

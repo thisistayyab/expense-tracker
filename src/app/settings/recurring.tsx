@@ -183,7 +183,9 @@ export default function RecurringScreen() {
             scaleTo={0.985}
             radius={12}
             accessibilityRole="button"
-            accessibilityLabel={`${rule.itemName ?? "Recurring rule"}, ${nextLabel(rule, today)}`}
+            accessibilityLabel={`${rule.itemName ?? "Recurring rule"}, ${nextLabel(rule, today)}${
+              rule.feeMinor > 0 ? `, ${formatMoney(rule.feeMinor, rule.currency)} fee` : ""
+            }`}
             style={{
               flex: 1,
               minWidth: 0,
@@ -205,6 +207,7 @@ export default function RecurringScreen() {
               >
                 {frequencyLabel(rule.frequency, rule.intervalCount)} · {nextLabel(rule, today)}
                 {rule.autoPost ? " · auto" : " · manual"}
+                {rule.feeMinor > 0 ? ` · ${formatMoney(rule.feeMinor, rule.currency)} fee` : ""}
               </Text>
             </View>
             <View style={{ alignItems: "flex-end", gap: 2 }}>
@@ -249,7 +252,7 @@ export default function RecurringScreen() {
               maxFontSizeMultiplier={1.3}
               style={[theme.text.caption, { color: theme.colors.accent, fontFamily: FONT_FAMILIES.bold }]}
             >
-              Post this occurrence · {formatMoney(rule.amountMinor, rule.currency)}
+              Post this occurrence · {formatMoney(rule.amountMinor + rule.feeMinor, rule.currency)}
             </Text>
           </TactilePressable>
         ) : null}

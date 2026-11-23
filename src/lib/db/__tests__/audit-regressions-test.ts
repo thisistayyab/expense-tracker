@@ -1,8 +1,19 @@
 import { BACKUP_FORMAT, BACKUP_FORMAT_VERSION, validateBackup } from "../../domain/backup";
 import { LATEST_SCHEMA_VERSION } from "../migrate";
-import { listAccounts } from "../repos/accounts";
+import { accountBalance, createAccount, listAccountBalances, listAccounts } from "../repos/accounts";
 import { dumpDatabase, restoreDatabase } from "../repos/backup";
+import { monthlyTotals } from "../repos/insights";
 import { createRecurringRule, sumCommittedUnposted } from "../repos/recurring";
+import {
+  createTransaction,
+  listTransactions,
+  sumFees,
+  sumSpent,
+  sumSpentByCategory,
+  sumSpentByDay,
+  sumSpentForComparison,
+  updateTransaction,
+} from "../repos/transactions";
 import { seededDb } from "../testDb";
 
 describe("db audit regressions", () => {
@@ -105,6 +116,7 @@ describe("db audit regressions", () => {
         id: "remote-rec-tx",
         type: "expense",
         amount_minor: 1500,
+        fee_minor: 0,
         currency: "USD",
         account_id: cash.id,
         transfer_account_id: null,
@@ -149,5 +161,111 @@ describe("db audit regressions", () => {
       "SELECT transaction_id, tag_id FROM transaction_tags",
     );
     expect(linkRows).toEqual([{ transaction_id: txRows[0].id, tag_id: tagRows[0].id }]);
+  });
+
+  test("rejects fractional or negative feeMinor on transactions and recurring rules", async () => {
+    const db = await seededDb();
+    const [cash] = await listAccounts(db);
+
+    await expect(
+      createTransaction(db, {
+        type: "expense",
+        amountMinor: 1_000,
+        feeMinor: 12.5,
+        currency: "USD",
+        accountId: cash.id,
+        occurredAt: "2026-11-12T12:00:00.000Z",
+        localDate: "2026-11-12",
+      }),
+    ).rejects.toThrow(/fee_minor/);
+
+    await expect(
+      createTransaction(db, {
+        type: "expense",
+        amountMinor: 1_000,
+        feeMinor: -0.5,
+        currency: "USD",
+        accountId: cash.id,
+        occurredAt: "2026-11-12T12:00:00.000Z",
+        localDate: "2026-11-12",
+      }),
+    ).rejects.toThrow(/fee_minor/);
+
+    const valid = await createTransaction(db, {
+      type: "expense",
+      amountMinor: 1_000,
+      feeMinor: 0,
+      currency: "USD",
+      accountId: cash.id,
+      occurredAt: "2026-11-12T12:00:00.000Z",
+      localDate: "2026-11-12",
+    });
+
+    await expect(updateTransaction(db, valid.id, { feeMinor: 2.25 })).rejects.toThrow(/fee_minor/);
+
+    await expect(
+      createRecurringRule(db, {
+        type: "expense",
+        amountMinor: 1_000,
+        feeMinor: 12.5,
+        currency: "USD",
+        accountId: cash.id,
+        frequency: "monthly",
+        intervalCount: 1,
+        dayOfMonth: 1,
+        startDate: "2026-11-01",
+        nextDueAt: "2026-11-01",
+      }),
+    ).rejects.toThrow(/recurring fee/);
+  });
+
+  test("transfer fees debit source account, match balance queries, count only the fee as spend, and match total search", async () => {
+    const db = await seededDb();
+    const [cash] = await listAccounts(db);
+    const bank = await createAccount(db, {
+      name: "Bank",
+      type: "bank",
+      currency: "USD",
+      openingBalanceMinor: 0,
+    });
+
+    await createTransaction(db, {
+      type: "transfer",
+      amountMinor: 1_000,
+      feeMinor: 150,
+      currency: "USD",
+      accountId: cash.id,
+      transferAccountId: bank.id,
+      itemName: "ATM transfer",
+      occurredAt: "2026-11-12T12:00:00.000Z",
+      localDate: "2026-11-12",
+    });
+
+    expect(await accountBalance(db, cash.id)).toBe(-1_150);
+    expect(await accountBalance(db, bank.id)).toBe(1_000);
+    const listed = await listAccountBalances(db);
+    expect(listed.find((a) => a.id === cash.id)?.balanceMinor).toBe(-1_150);
+    expect(listed.find((a) => a.id === bank.id)?.balanceMinor).toBe(1_000);
+
+    const range = { currency: "USD", fromDate: "2026-11-01", toDate: "2026-11-30" };
+    expect(await sumSpent(db, range)).toBe(150);
+    expect(await sumSpentByCategory(db, range)).toEqual([{ categoryId: null, spentMinor: 150 }]);
+    expect(await sumSpentByDay(db, range)).toEqual([{ localDate: "2026-11-12", spentMinor: 150 }]);
+    expect(
+      await sumSpentForComparison(db, {
+        currency: "USD",
+        currentFrom: "2026-11-01",
+        previousFrom: "2026-10-01",
+        previousTo: "2026-10-30",
+        toDate: "2026-11-30",
+      }),
+    ).toEqual({ currentMinor: 150, previousMinor: 0 });
+    expect(await monthlyTotals(db, range)).toEqual([
+      { month: "2026-11", expenseMinor: 150, incomeMinor: 0 },
+    ]);
+    expect(await sumFees(db, range)).toEqual({ totalMinor: 150, count: 1 });
+
+    expect(await listTransactions(db, { text: "10.00" })).toHaveLength(1);
+    expect(await listTransactions(db, { text: "11.50" })).toHaveLength(1);
   });
 });

@@ -81,6 +81,9 @@ export function RecurringEditorSheet({
   const [amountText, setAmountText] = useState(
     rule ? minorToDecimalString(rule.amountMinor, rule.currency) : "",
   );
+  const [feeText, setFeeText] = useState(
+    rule && rule.feeMinor > 0 ? minorToDecimalString(rule.feeMinor, rule.currency) : "",
+  );
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accountId, setAccountId] = useState<string | null>(rule?.accountId ?? null);
@@ -121,6 +124,9 @@ export function RecurringEditorSheet({
     setType(rule?.type === "income" ? "income" : "expense");
     setCurrency(rule?.currency ?? "USD");
     setAmountText(rule ? minorToDecimalString(rule.amountMinor, rule.currency) : "");
+    setFeeText(
+      rule && rule.feeMinor > 0 ? minorToDecimalString(rule.feeMinor, rule.currency) : "",
+    );
     setAccountId(rule?.accountId ?? null);
     setCategoryId(rule?.categoryId ?? null);
     setItemName(rule?.itemName ?? "");
@@ -215,8 +221,10 @@ export function RecurringEditorSheet({
     setCurrency(next);
     if (prevExp !== nextExp) {
       setAmountText("");
+      setFeeText("");
     } else {
       setAmountText((current) => sanitizeMoneyInput(current, next));
+      setFeeText((current) => sanitizeMoneyInput(current, next));
     }
     setAccountId(accounts.find((account) => account.currency === next)?.id ?? null);
     setError(null);
@@ -227,6 +235,8 @@ export function RecurringEditorSheet({
     haptics.selection();
     setType(next);
     setCategoryId(null);
+    // Income has no fee to deduct; clearing avoids a fee silently applying later.
+    if (next === "income") setFeeText("");
   };
 
   const save = async () => {
@@ -239,6 +249,15 @@ export function RecurringEditorSheet({
     }
     if (!accountId) {
       setError("Choose an account in this currency.");
+      return;
+    }
+    const feeMinor = feeText.trim() ? parseMoneyInput(feeText, currency) : 0;
+    if (feeMinor === null) {
+      setError("Enter a valid fee, or leave it blank.");
+      return;
+    }
+    if (feeMinor > 0 && type === "income") {
+      setError("Income cannot carry a fee.");
       return;
     }
     if (!isIsoDate(startDate)) {
@@ -304,6 +323,7 @@ export function RecurringEditorSheet({
     const draft: RecurringRuleDraft = {
       type,
       amountMinor,
+      feeMinor,
       currency,
       accountId,
       categoryId,
@@ -523,6 +543,18 @@ export function RecurringEditorSheet({
             editable={!saving}
             helper={`${currency} · ${type === "income" ? "Income" : "Expense"}`}
           />
+          {type === "expense" ? (
+            <TextField
+              label="Fee (optional)"
+              value={feeText}
+              onChangeText={(value) => setFeeText(sanitizeMoneyInput(value, currency))}
+              placeholder="0"
+              keyboardType={decimalPlaces(currency) === 0 ? "number-pad" : "decimal-pad"}
+              inputMode={decimalPlaces(currency) === 0 ? "numeric" : "decimal"}
+              editable={!saving}
+              helper={`${currency} · charged on every occurrence`}
+            />
+          ) : null}
           <TextField
             label="What is it?"
             value={itemName}

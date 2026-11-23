@@ -96,7 +96,7 @@ describe("migrations", () => {
     const result = await migrate(db);
 
     expect(result.to).toBe(LATEST_SCHEMA_VERSION);
-    expect(result.applied).toEqual([1, 2, 3, 4]);
+    expect(result.applied).toEqual([1, 2, 3, 4, 5]);
 
     const tables = await db.getAllAsync<{ name: string }>(
       `SELECT name FROM sqlite_master
@@ -205,6 +205,35 @@ describe("transactions", () => {
     await expect(
       createTransaction(db, expense(500, "USD", "missing-account", categoryId)),
     ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+  });
+
+  test("a fee is spending and leaves the account alongside the amount", async () => {
+    const { db, accountId, categoryId } = await seededDb();
+
+    await createTransaction(db, {
+      ...expense(1250, "USD", accountId, categoryId),
+      feeMinor: 75,
+    });
+
+    expect(
+      await sumSpent(db, { currency: "USD", fromDate: "2026-11-01", toDate: "2026-11-30" }),
+    ).toBe(1325);
+    expect(await accountBalance(db, accountId)).toBe(-1325);
+  });
+
+  test("a fee cannot be attached to income", async () => {
+    const { db, accountId } = await seededDb();
+    await expect(
+      createTransaction(db, {
+        type: "income",
+        amountMinor: 5000,
+        currency: "USD",
+        accountId,
+        occurredAt: "2026-11-12T12:00:00.000Z",
+        localDate: "2026-11-12",
+        feeMinor: 100,
+      }),
+    ).rejects.toThrow(/income/);
   });
 
   test("account balance follows opening + income − expenses ± transfers", async () => {

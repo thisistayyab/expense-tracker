@@ -5,6 +5,7 @@ type ExportRow = {
   id: string;
   type: TransactionType;
   amount_minor: number;
+  fee_minor: number;
   currency: string;
   account_name: string;
   category_name: string | null;
@@ -23,7 +24,7 @@ type ExportRow = {
  */
 export async function listTransactionsForExport(db: Db): Promise<CsvTransaction[]> {
   const rows = await db.getAllAsync<ExportRow>(
-    `SELECT t.id, t.type, t.amount_minor, t.currency, a.name AS account_name,
+    `SELECT t.id, t.type, t.amount_minor, t.fee_minor, t.currency, a.name AS account_name,
             c.name AS category_name, t.item_name, t.place, t.note, t.occurred_at,
             t.local_date, t.recurring_id, ta.name AS transfer_account_name
        FROM transactions t
@@ -37,6 +38,7 @@ export async function listTransactionsForExport(db: Db): Promise<CsvTransaction[
     id: row.id,
     type: row.type,
     amountMinor: row.amount_minor,
+    feeMinor: row.fee_minor,
     currency: row.currency,
     accountName: row.account_name,
     categoryName: row.category_name,

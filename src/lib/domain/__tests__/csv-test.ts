@@ -4,6 +4,7 @@ const base: CsvTransaction = {
   id: "tx-1",
   type: "expense",
   amountMinor: 1250,
+  feeMinor: 75,
   currency: "USD",
   accountName: "Cash",
   categoryName: "Food & Drink",
@@ -37,7 +38,7 @@ describe("CSV export", () => {
 
     expect(csv.startsWith("\uFEFF")).toBe(true);
     expect(csv).toContain(CSV_HEADER.join(","));
-    expect(csv).toContain("-12.50,USD,Cash");
+    expect(csv).toContain("-12.50,-0.75,USD,Cash");
     expect(csv.endsWith("\r\n")).toBe(true);
 
     const withoutBom = transactionsToCsv([base], { bom: false });
@@ -48,9 +49,23 @@ describe("CSV export", () => {
     const csv = transactionsToCsv([{ ...base, itemName: 'Lunch, coffee' }], { bom: false });
     expect(csv).toContain('"Lunch, coffee"');
 
-    // 13 columns per line; the quoted comma must not add one.
+    // 14 columns per line; the quoted comma must not add one.
     const firstDataLine = csv.split("\r\n")[1];
-    expect(firstDataLine.split(",").length).toBeGreaterThan(13);
+    expect(firstDataLine.split(",").length).toBeGreaterThan(14);
     expect(firstDataLine).toContain('"Lunch, coffee"');
+  });
+
+  test("a fee is serialized with the row's exponent and omitted when absent", () => {
+    const withFee = transactionsToCsv([{ ...base, feeMinor: 125 }], { bom: false });
+    expect(withFee).toContain("-12.50,-1.25,USD,Cash");
+
+    const withoutFee = transactionsToCsv([{ ...base, feeMinor: 0 }], { bom: false });
+    expect(withoutFee).toContain("-12.50,,USD,Cash");
+
+    const incomeWithFee = transactionsToCsv(
+      [{ ...base, type: "income", feeMinor: 125 }],
+      { bom: false },
+    );
+    expect(incomeWithFee).toContain("12.50,,USD,Cash");
   });
 });

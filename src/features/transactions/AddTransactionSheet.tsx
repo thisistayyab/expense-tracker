@@ -154,6 +154,11 @@ export function AddTransactionSheet({
       ? minorToDecimalString(existing.amountMinor, existing.currency)
       : (initialAmount ?? ""),
   );
+  const [feeText, setFeeText] = useState(
+    existing && existing.feeMinor > 0
+      ? minorToDecimalString(existing.feeMinor, existing.currency)
+      : "",
+  );
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [recentNames, setRecentNames] = useState<string[]>([]);
@@ -169,7 +174,9 @@ export function AddTransactionSheet({
   const [place, setPlace] = useState(existing?.place ?? "");
   const [note, setNote] = useState(existing?.note ?? "");
   const [dateIso, setDateIso] = useState(existing?.localDate ?? today);
-  const [detailsOpen, setDetailsOpen] = useState(Boolean(existing?.place || existing?.note));
+  const [detailsOpen, setDetailsOpen] = useState(
+    Boolean(existing?.place || existing?.note),
+  );
   const [picker, setPicker] = useState<PickerKind | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +189,9 @@ export function AddTransactionSheet({
   }, [accountId]);
 
   const amountMinor = amountText ? parseMoneyInput(amountText, currency) : null;
+  // Blank means no fee. A typed value that cannot be parsed blocks saving rather
+  // than silently being saved as zero.
+  const feeMinor = feeText.trim() ? parseMoneyInput(feeText, currency) : 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -220,6 +230,7 @@ export function AddTransactionSheet({
 
         setCurrency(active);
         setAmountText((current) => sanitizeMoneyInput(current, active));
+        setFeeText((current) => sanitizeMoneyInput(current, active));
         setAccounts(inCurrency);
         setCategories(kindCategories);
         setRecentNames(recent);
@@ -301,6 +312,7 @@ export function AddTransactionSheet({
     !saving &&
     amountMinor !== null &&
     amountMinor > 0 &&
+    feeMinor !== null &&
     Boolean(accountId) &&
     (type !== "transfer" || (Boolean(transferAccountId) && transferAccountId !== accountId));
 
@@ -310,6 +322,8 @@ export function AddTransactionSheet({
     suggestionSeqRef.current += 1;
     setType(next);
     setCategoryId(null);
+    // Income has no fee to deduct, so a fee typed for an expense must not follow.
+    if (next === "income") setFeeText("");
     setError(null);
   };
 
@@ -331,6 +345,7 @@ export function AddTransactionSheet({
     Keyboard.dismiss();
     const dirty = existing
       ? amountText !== minorToDecimalString(existing.amountMinor, existing.currency) ||
+        feeMinor !== existing.feeMinor ||
         itemName.trim().slice(0, MAX_NAME) !== (existing.itemName ?? "") ||
         place.trim() !== (existing.place ?? "") ||
         note.trim() !== (existing.note ?? "") ||
@@ -340,6 +355,7 @@ export function AddTransactionSheet({
         dateIso !== existing.localDate
       : Boolean(
           (amountText && amountText !== (initialAmount ?? "")) ||
+            feeText.trim() ||
             itemName.trim() ||
             place.trim() ||
             note.trim() ||
@@ -358,6 +374,8 @@ export function AddTransactionSheet({
     accountId,
     amountText,
     categoryId,
+    feeMinor,
+    feeText,
     dateIso,
     existing,
     initialAmount,
@@ -397,12 +415,14 @@ export function AddTransactionSheet({
     const trimmedName = itemName.trim().slice(0, MAX_NAME) || null;
     const trimmedPlace = place.trim() || null;
     const trimmedNote = note.trim() || null;
+    const saveFeeMinor = type === "income" ? 0 : (feeMinor ?? 0);
 
     if (existing) {
       // An edit is only reported after it lands: the detail screen reloads on focus,
       // so handing it a row that is still being written would race the write.
       updateTransaction(db, existing.id, {
         amountMinor,
+        feeMinor: saveFeeMinor,
         accountId: saveAccountId,
         transferAccountId: type === "transfer" ? transferAccountId : null,
         categoryId: type === "transfer" ? existing.categoryId : categoryId,
@@ -437,6 +457,7 @@ export function AddTransactionSheet({
       id: newId(),
       type,
       amountMinor,
+      feeMinor: saveFeeMinor,
       currency,
       accountId: saveAccountId,
       transferAccountId: type === "transfer" ? transferAccountId : null,
@@ -455,6 +476,7 @@ export function AddTransactionSheet({
       id: optimistic.id,
       type,
       amountMinor,
+      feeMinor: saveFeeMinor,
       currency,
       accountId: saveAccountId,
       transferAccountId: optimistic.transferAccountId,
@@ -772,6 +794,68 @@ export function AddTransactionSheet({
             {currency} ·{" "}
             {type === "transfer" ? "Transfer" : (selectedCategory?.name ?? "Uncategorized")}
           </Text>
+          {type !== "income" ? (
+            <View
+              style={{
+                alignSelf: "center",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                marginTop: 10,
+                minHeight: 36,
+                paddingHorizontal: 14,
+                borderRadius: theme.radius.chip,
+                borderCurve: "continuous",
+                backgroundColor: theme.colors.surfaceMuted,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: feeMinor === null ? theme.colors.danger : theme.colors.cardBorder,
+              }}
+            >
+              <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>Fee</Text>
+              <TextInput
+                value={feeText}
+                onChangeText={(value) => setFeeText(sanitizeMoneyInput(value, currency))}
+                placeholder="0"
+                placeholderTextColor={theme.colors.textTertiary}
+                keyboardType={decimalPlaces(currency) === 0 ? "number-pad" : "decimal-pad"}
+                inputMode={decimalPlaces(currency) === 0 ? "numeric" : "decimal"}
+                returnKeyType="done"
+                onSubmitEditing={() => Keyboard.dismiss()}
+                editable={!saving}
+                accessibilityLabel={`Fee in ${currency}, optional`}
+                accessibilityHint="Money charged by the account on top of this transaction"
+                maxLength={12}
+                maxFontSizeMultiplier={1.3}
+                style={[
+                  theme.text.bodyStrong,
+                  {
+                    minWidth: 44,
+                    textAlign: "center",
+                    paddingVertical: 0,
+                    color: feeMinor === null ? theme.colors.danger : theme.colors.textPrimary,
+                    fontVariant: ["tabular-nums"],
+                  },
+                ]}
+              />
+              <Text style={[theme.text.caption, { color: theme.colors.textSecondary }]}>
+                {currency}
+              </Text>
+              {feeText ? (
+                <TactilePressable
+                  onPress={() => setFeeText("")}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear fee"
+                  hitSlop={6}
+                  scaleTo={0.9}
+                  style={{ width: 22, height: 22, alignItems: "center", justifyContent: "center" }}
+                >
+                  <AppIcon name="close" color={theme.colors.textTertiary} size={12} />
+                </TactilePressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {type !== "transfer" ? (

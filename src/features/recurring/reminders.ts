@@ -126,9 +126,11 @@ export function refreshReminders(
           content: {
             title: "Bill due soon",
             body: `${rule.itemName ?? "A recurring bill"} · ${formatMoney(
-              rule.amountMinor,
+              rule.amountMinor + rule.feeMinor,
               rule.currency,
-            )} due ${due}`,
+            )}${
+              rule.feeMinor > 0 ? ` (incl. ${formatMoney(rule.feeMinor, rule.currency)} fee)` : ""
+            } due ${due}`,
             data: { url: "/settings/recurring" },
           },
           trigger: {

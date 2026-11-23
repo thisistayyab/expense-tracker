@@ -25,11 +25,14 @@ export async function monthlyTotals(
     income_minor: number;
   }>(
     `SELECT substr(local_date, 1, 7) AS month,
-            COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor ELSE 0 END), 0) AS expense_minor,
+            COALESCE(SUM(CASE
+              WHEN type = 'expense' THEN amount_minor + fee_minor
+              WHEN type = 'transfer' THEN fee_minor
+              ELSE 0 END), 0) AS expense_minor,
             COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income_minor
        FROM transactions
       WHERE currency = ? AND local_date BETWEEN ? AND ?
-        AND type IN ('expense', 'income')
+        AND (type IN ('expense', 'income') OR (type = 'transfer' AND fee_minor > 0))
       GROUP BY month
       ORDER BY month`,
     [options.currency.toUpperCase(), options.fromDate, options.toDate],
@@ -68,7 +71,7 @@ export async function topItemTotals(
   }>(
     `SELECT lower(trim(item_name)) AS item_key,
             MAX(item_name) AS label,
-            COALESCE(SUM(amount_minor), 0) AS amount_minor,
+            COALESCE(SUM(amount_minor + fee_minor), 0) AS amount_minor,
             COUNT(*) AS count
        FROM transactions
       WHERE type = 'expense' AND currency = ?
@@ -106,7 +109,7 @@ export async function unnamedItemTotals(
     count: number;
   }>(
     `SELECT category_id,
-            COALESCE(SUM(amount_minor), 0) AS amount_minor,
+            COALESCE(SUM(amount_minor + fee_minor), 0) AS amount_minor,
             COUNT(*) AS count
        FROM transactions
       WHERE type = 'expense' AND currency = ?

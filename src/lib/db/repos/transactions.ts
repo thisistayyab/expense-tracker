@@ -8,6 +8,7 @@ type TransactionRow = {
   id: string;
   type: TransactionType;
   amount_minor: number;
+  fee_minor: number;
   currency: string;
   account_id: string;
   transfer_account_id: string | null;
@@ -22,7 +23,7 @@ type TransactionRow = {
   updated_at: string;
 };
 
-const COLUMNS = `id, type, amount_minor, currency, account_id, transfer_account_id,
+const COLUMNS = `id, type, amount_minor, fee_minor, currency, account_id, transfer_account_id,
                  category_id, item_name, place, note, occurred_at, local_date,
                  recurring_id, created_at, updated_at`;
 
@@ -39,6 +40,7 @@ function mapTransaction(row: TransactionRow): Transaction {
     id: row.id,
     type: row.type,
     amountMinor: row.amount_minor,
+    feeMinor: row.fee_minor,
     currency: row.currency,
     accountId: row.account_id,
     transferAccountId: row.transfer_account_id,
@@ -59,6 +61,8 @@ export type NewTransaction = {
   id?: string;
   type: TransactionType;
   amountMinor: number;
+  /** Optional fee paid on top of the amount; defaults to zero. */
+  feeMinor?: number;
   currency: string;
   accountId: string;
   transferAccountId?: string | null;
@@ -94,6 +98,18 @@ function assertAmount(amountMinor: number): void {
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
     throw new Error("amount_minor must be a positive integer in the currency's minor unit");
   }
+}
+
+/** A fee is optional but never negative, and income has no fee to deduct. */
+function normalizeFee(feeMinor: number | undefined, type: TransactionType): number {
+  const raw = feeMinor ?? 0;
+  if (!Number.isSafeInteger(raw) || raw < 0) {
+    throw new Error("fee_minor must be a non-negative integer in the currency's minor unit");
+  }
+  if (raw > 0 && type === "income") {
+    throw new Error("A fee cannot be attached to income");
+  }
+  return raw === 0 ? 0 : raw;
 }
 
 function buildFilter(filter: TransactionFilter): { where: string; params: (string | number)[] } {
@@ -152,8 +168,18 @@ function buildFilter(filter: TransactionFilter): { where: string; params: (strin
         "printf('%.0f', t.amount_minor) LIKE ?",
         "printf('%.2f', t.amount_minor / 100.0) LIKE ?",
         "printf('%.3f', t.amount_minor / 1000.0) LIKE ?",
+        "(t.fee_minor > 0 AND (CAST(t.amount_minor + t.fee_minor AS TEXT) LIKE ? OR printf('%.0f', t.amount_minor + t.fee_minor) LIKE ? OR printf('%.2f', (t.amount_minor + t.fee_minor) / 100.0) LIKE ? OR printf('%.3f', (t.amount_minor + t.fee_minor) / 1000.0) LIKE ?))",
       );
-      textParams.push(amountLike, amountLike, amountLike, amountLike);
+      textParams.push(
+        amountLike,
+        amountLike,
+        amountLike,
+        amountLike,
+        amountLike,
+        amountLike,
+        amountLike,
+        amountLike,
+      );
     }
 
     clauses.push(`(${parts.join(" OR ")})`);
@@ -202,6 +228,7 @@ export async function createTransaction(db: Db, input: NewTransaction): Promise<
   }
 
   const categoryId = input.type === "transfer" ? null : nullable(input.categoryId ?? null);
+  const feeMinor = normalizeFee(input.feeMinor, input.type);
   const id = input.id ?? newId();
   const now = new Date().toISOString();
 
@@ -229,14 +256,15 @@ export async function createTransaction(db: Db, input: NewTransaction): Promise<
     }
 
     await db.runAsync(
-      `INSERT INTO transactions (id, type, amount_minor, currency, account_id, transfer_account_id,
+      `INSERT INTO transactions (id, type, amount_minor, fee_minor, currency, account_id, transfer_account_id,
                                  category_id, item_name, place, note, occurred_at, local_date,
                                  recurring_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.type,
         Math.trunc(input.amountMinor),
+        feeMinor,
         currency,
         input.accountId,
         input.type === "transfer" ? input.transferAccountId! : null,
@@ -265,6 +293,7 @@ export async function createTransaction(db: Db, input: NewTransaction): Promise<
  */
 export type TransactionPatch = {
   amountMinor?: number;
+  feeMinor?: number;
   accountId?: string;
   transferAccountId?: string | null;
   categoryId?: string | null;
@@ -285,6 +314,10 @@ export async function updateTransaction(
     if (!current) throw new Error(`Transaction not found: ${id}`);
 
     if (patch.amountMinor !== undefined) assertAmount(patch.amountMinor);
+    const nextFeeMinor = normalizeFee(
+      patch.feeMinor === undefined ? current.feeMinor : patch.feeMinor,
+      current.type,
+    );
     if (patch.localDate !== undefined && !isIsoDate(patch.localDate)) {
       throw new Error(`Invalid localDate: ${patch.localDate}`);
     }
@@ -339,12 +372,13 @@ export async function updateTransaction(
 
     await db.runAsync(
       `UPDATE transactions
-          SET amount_minor = ?, account_id = ?, transfer_account_id = ?, category_id = ?,
-              item_name = ?, place = ?, note = ?, occurred_at = ?, local_date = ?,
-              updated_at = ?
+          SET amount_minor = ?, fee_minor = ?, account_id = ?, transfer_account_id = ?,
+              category_id = ?, item_name = ?, place = ?, note = ?, occurred_at = ?,
+              local_date = ?, updated_at = ?
         WHERE id = ?`,
       [
         Math.trunc(patch.amountMinor ?? current.amountMinor),
+        nextFeeMinor,
         nextAccountId,
         nextTransferAccountId,
         nextCategoryId,
@@ -359,6 +393,8 @@ export async function updateTransaction(
     );
   });
 }
+
+
 
 export async function deleteTransaction(db: Db, id: string): Promise<void> {
   await db.runAsync("DELETE FROM transactions WHERE id = ?", [id]);
@@ -385,12 +421,32 @@ export async function sumSpent(
   }
 
   const row = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amount_minor), 0) AS total
+    // Spending is the price plus the fee. A transfer's principal is not spending,
+    // but a fee charged on it is real money lost, so that row contributes its fee.
+    `SELECT COALESCE(SUM(
+              CASE WHEN type = 'expense' THEN amount_minor + fee_minor ELSE fee_minor END
+            ), 0) AS total
        FROM transactions
-      WHERE type = 'expense' AND currency = ? AND local_date BETWEEN ? AND ? ${categoryClause}`,
+      WHERE currency = ? AND local_date BETWEEN ? AND ?
+        AND (type = 'expense' OR (type = 'transfer' AND fee_minor > 0)) ${categoryClause}`,
     params,
   );
   return row?.total ?? 0;
+}
+
+/** Fees alone for one currency and window, plus how many entries carried one. */
+export async function sumFees(
+  db: Db,
+  options: { currency: string; fromDate: string; toDate: string },
+): Promise<{ totalMinor: number; count: number }> {
+  const row = await db.getFirstAsync<{ total: number; count: number }>(
+    `SELECT COALESCE(SUM(fee_minor), 0) AS total, COUNT(*) AS count
+       FROM transactions
+      WHERE fee_minor > 0 AND currency = ? AND local_date BETWEEN ? AND ?
+        AND type IN ('expense', 'transfer')`,
+    [options.currency.toUpperCase(), options.fromDate, options.toDate],
+  );
+  return { totalMinor: row?.total ?? 0, count: row?.count ?? 0 };
 }
 
 /**
@@ -409,11 +465,18 @@ export async function sumSpentForComparison(
   },
 ): Promise<{ currentMinor: number; previousMinor: number }> {
   const row = await db.getFirstAsync<{ current_minor: number; previous_minor: number }>(
+    // Kept as one scan rather than a derived table so the covering index can answer
+    // it without materialising an intermediate result set.
     `SELECT
-       COALESCE(SUM(CASE WHEN local_date >= ? THEN amount_minor ELSE 0 END), 0) AS current_minor,
-       COALESCE(SUM(CASE WHEN local_date <= ? THEN amount_minor ELSE 0 END), 0) AS previous_minor
+       COALESCE(SUM(CASE WHEN local_date >= ? THEN
+         CASE WHEN type = 'expense' THEN amount_minor + fee_minor ELSE fee_minor END
+       ELSE 0 END), 0) AS current_minor,
+       COALESCE(SUM(CASE WHEN local_date <= ? THEN
+         CASE WHEN type = 'expense' THEN amount_minor + fee_minor ELSE fee_minor END
+       ELSE 0 END), 0) AS previous_minor
        FROM transactions
-      WHERE type = 'expense' AND currency = ? AND local_date BETWEEN ? AND ?`,
+      WHERE currency = ? AND local_date BETWEEN ? AND ?
+        AND (type = 'expense' OR (type = 'transfer' AND fee_minor > 0))`,
     [
       options.currentFrom,
       options.previousTo,
@@ -440,9 +503,13 @@ export async function sumSpentByDay(
   options: { currency: string; fromDate: string; toDate: string },
 ): Promise<DailySpendRow[]> {
   const rows = await db.getAllAsync<{ local_date: string; spent_minor: number }>(
-    `SELECT local_date, COALESCE(SUM(amount_minor), 0) AS spent_minor
+    `SELECT local_date,
+            COALESCE(SUM(
+              CASE WHEN type = 'expense' THEN amount_minor + fee_minor ELSE fee_minor END
+            ), 0) AS spent_minor
        FROM transactions
-      WHERE type = 'expense' AND currency = ? AND local_date BETWEEN ? AND ?
+      WHERE currency = ? AND local_date BETWEEN ? AND ?
+        AND (type = 'expense' OR (type = 'transfer' AND fee_minor > 0))
       GROUP BY local_date
       ORDER BY local_date`,
     [options.currency.toUpperCase(), options.fromDate, options.toDate],
@@ -530,13 +597,14 @@ export async function listRecentCategoryIds(
 export async function restoreTransaction(db: Db, transaction: Transaction): Promise<void> {
   await db.runAsync(
     `INSERT INTO transactions
-       (id, type, amount_minor, currency, account_id, transfer_account_id, category_id,
+       (id, type, amount_minor, fee_minor, currency, account_id, transfer_account_id, category_id,
         item_name, place, note, occurred_at, local_date, recurring_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       transaction.id,
       transaction.type,
       transaction.amountMinor,
+      transaction.feeMinor,
       transaction.currency,
       transaction.accountId,
       transaction.transferAccountId,
@@ -568,9 +636,13 @@ export async function sumSpentByCategory(
   options: { currency: string; fromDate: string; toDate: string },
 ): Promise<CategorySpendRow[]> {
   const rows = await db.getAllAsync<{ category_id: string | null; spent_minor: number }>(
-    `SELECT category_id, COALESCE(SUM(amount_minor), 0) AS spent_minor
+    `SELECT category_id,
+            COALESCE(SUM(
+              CASE WHEN type = 'expense' THEN amount_minor + fee_minor ELSE fee_minor END
+            ), 0) AS spent_minor
        FROM transactions
-      WHERE type = 'expense' AND currency = ? AND local_date BETWEEN ? AND ?
+      WHERE currency = ? AND local_date BETWEEN ? AND ?
+        AND (type = 'expense' OR (type = 'transfer' AND fee_minor > 0))
       GROUP BY category_id`,
     [options.currency.toUpperCase(), options.fromDate, options.toDate],
   );
@@ -591,7 +663,8 @@ export async function countSpentInOtherCurrencies(
   return db.getAllAsync<{ currency: string; count: number }>(
     `SELECT currency, COUNT(*) AS count
        FROM transactions
-      WHERE type = 'expense' AND currency <> ? AND local_date BETWEEN ? AND ?
+      WHERE currency <> ? AND local_date BETWEEN ? AND ?
+        AND (type = 'expense' OR (type = 'transfer' AND fee_minor > 0))
       GROUP BY currency
       ORDER BY count DESC`,
     [options.currency.toUpperCase(), options.fromDate, options.toDate],

@@ -216,6 +216,18 @@ export default function InsightsScreen() {
                   >
                     {`${data.ranges.rangeLabel} · ${data.breakdown.length ? "tap a category to see its entries" : "no spending recorded"}`}
                   </Text>
+                  {data.feeCount > 0 ? (
+                    <Text
+                      style={[
+                        theme.text.caption,
+                        { color: theme.colors.warning, marginTop: 6 },
+                      ]}
+                    >
+                      {`${formatMoney(data.feesMinor, data.currency)} of this was fees on ${
+                        data.feeCount
+                      } ${data.feeCount === 1 ? "entry" : "entries"}.`}
+                    </Text>
+                  ) : null}
 
                   {data.breakdown.length ? (
                     <BreakdownBars

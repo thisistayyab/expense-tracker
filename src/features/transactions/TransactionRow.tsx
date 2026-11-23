@@ -11,7 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { AppIcon, type AppIconName, CategoryTile, Money } from "../../components/ui";
 import type { Account, Category, Transaction } from "../../lib/db/types";
-import { formatMoneySpoken } from "../../lib/format/money";
+import { formatMoney, formatMoneySpoken } from "../../lib/format/money";
 import { useTheme } from "../../lib/theme";
 
 const ACTION_WIDTH = 76;
@@ -166,12 +166,20 @@ export const TransactionRow = memo(function TransactionRow({
     category?.name ||
     (transaction.type === "transfer" ? "Transfer" : "Uncategorized");
 
+  const feeSuffix =
+    transaction.feeMinor > 0
+      ? ` · ${formatMoney(transaction.feeMinor, transaction.currency)} fee`
+      : "";
   const subtitle =
-    transaction.type === "transfer"
+    (transaction.type === "transfer"
       ? `${account?.name ?? "Account"} → ${transferAccount?.name ?? "Account"}`
-      : `${category?.name ?? "Uncategorized"} · ${account?.name ?? "Account"}`;
+      : `${category?.name ?? "Uncategorized"} · ${account?.name ?? "Account"}`) + feeSuffix;
 
   const spokenAmount = formatMoneySpoken(transaction.amountMinor, transaction.currency);
+  const spokenFee =
+    transaction.feeMinor > 0
+      ? `, plus a ${formatMoneySpoken(transaction.feeMinor, transaction.currency)} fee`
+      : "";
 
   const left = (progress: SharedValue<number>, methods: SwipeableMethods) => (
     <SwipeActions
@@ -221,7 +229,7 @@ export const TransactionRow = memo(function TransactionRow({
         onPress={() => onPress(transaction)}
         onLongPress={() => onLongPress(transaction)}
         accessibilityRole="button"
-        accessibilityLabel={`${title}, ${spokenAmount}, ${subtitle}`}
+        accessibilityLabel={`${title}, ${spokenAmount}${spokenFee}, ${subtitle}`}
         accessibilityHint="Opens transaction details. Swipe right to edit or left to delete."
         style={({ pressed }) => [
           styles.row,

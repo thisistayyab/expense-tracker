@@ -8,9 +8,10 @@ import {
   listRecurringRules,
   listUpcomingRecurringRules,
   setRecurringActive,
+  sumCommittedUnposted,
   type RecurringRuleDraft,
 } from "../repos/recurring";
-import { listTransactions } from "../repos/transactions";
+import { listTransactions, sumSpent } from "../repos/transactions";
 import { seededDb } from "../testDb";
 import type { Db } from "../types";
 
@@ -64,6 +65,32 @@ describe("recurring posting", () => {
     const second = await processDueRecurring(seeded.db, "2026-11-12");
     expect(second).toEqual({ rules: 0, posted: 0 });
     expect(await listTransactions(seeded.db, { limit: 20 })).toHaveLength(4);
+  });
+
+  test("a recurring fee posts with each occurrence and is counted as spending", async () => {
+    const seeded = await seed();
+    await createRecurringRule(seeded.db, draft(seeded, { amountMinor: 500, feeMinor: 100 }));
+
+    await processDueRecurring(seeded.db, "2026-08-01");
+    const rows = await listTransactions(seeded.db, { limit: 10 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].feeMinor).toBe(100);
+    expect(
+      await sumSpent(seeded.db, {
+        currency: "USD",
+        fromDate: "2026-08-01",
+        toDate: "2026-08-31",
+      }),
+    ).toBe(600);
+
+    // Future occurrences set the fee aside too: three bills of 500 + 100.
+    expect(
+      await sumCommittedUnposted(seeded.db, {
+        currency: "USD",
+        fromDate: "2026-09-01",
+        toDate: "2026-11-30",
+      }),
+    ).toEqual({ totalMinor: 1_800, count: 3 });
   });
 
   test("the 31st clamps through February and resumes on March 31", async () => {

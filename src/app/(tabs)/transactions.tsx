@@ -419,6 +419,7 @@ export default function ActivityScreen() {
       createTransaction(db, {
         type: row.type,
         amountMinor: row.amountMinor,
+        feeMinor: row.feeMinor,
         currency: row.currency,
         accountId: row.accountId,
         transferAccountId: row.transferAccountId,

@@ -2,6 +2,7 @@ import { migration001 } from "./migrations/001-initial";
 import { migration002 } from "./migrations/002-insight-index";
 import { migration003 } from "./migrations/003-recurring-unique";
 import { migration004 } from "./migrations/004-budget-month";
+import { migration005 } from "./migrations/005-transaction-fee";
 import type { Db } from "./types";
 
 export type Migration = {
@@ -15,6 +16,7 @@ export const migrations: readonly Migration[] = [
   migration002,
   migration003,
   migration004,
+  migration005,
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations[migrations.length - 1].version;

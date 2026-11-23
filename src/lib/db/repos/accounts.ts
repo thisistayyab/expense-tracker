@@ -201,9 +201,9 @@ export async function listAccountBalances(
             a.is_archived, a.sort_order, a.created_at, a.updated_at,
             a.opening_balance_minor + COALESCE(SUM(CASE
               WHEN t.type = 'income' AND t.account_id = a.id THEN t.amount_minor
-              WHEN t.type = 'expense' AND t.account_id = a.id THEN -t.amount_minor
-              WHEN t.type = 'transfer' AND t.account_id = a.id AND t.transfer_account_id = a.id THEN 0
-              WHEN t.type = 'transfer' AND t.account_id = a.id THEN -t.amount_minor
+              WHEN t.type = 'expense' AND t.account_id = a.id THEN -(t.amount_minor + t.fee_minor)
+              WHEN t.type = 'transfer' AND t.account_id = a.id AND t.transfer_account_id = a.id THEN -t.fee_minor
+              WHEN t.type = 'transfer' AND t.account_id = a.id THEN -(t.amount_minor + t.fee_minor)
               WHEN t.type = 'transfer' AND t.transfer_account_id = a.id THEN t.amount_minor
               ELSE 0 END), 0) AS balance_minor,
             COUNT(t.id) AS transaction_count
@@ -224,19 +224,20 @@ export async function listAccountBalances(
 }
 
 /**
- * opening balance + income − expenses + transfers in − transfers out, restricted to
- * rows in the account's own currency. Currency is never converted.
+ * opening balance + income − (expenses + fees) + transfers in − (transfers out +
+ * fees), restricted to rows in the account's own currency. Currency is never
+ * converted: a fee leaves the account the transaction was written against.
  */
 export async function accountBalance(db: Db, id: string): Promise<number> {
   const row = await db.getFirstAsync<{ balance: number }>(
     `SELECT a.opening_balance_minor
        + COALESCE((SELECT SUM(t.amount_minor) FROM transactions t
                    WHERE t.type = 'income' AND t.account_id = a.id AND t.currency = a.currency), 0)
-       - COALESCE((SELECT SUM(t.amount_minor) FROM transactions t
+       - COALESCE((SELECT SUM(t.amount_minor + t.fee_minor) FROM transactions t
                    WHERE t.type = 'expense' AND t.account_id = a.id AND t.currency = a.currency), 0)
        + COALESCE((SELECT SUM(t.amount_minor) FROM transactions t
                    WHERE t.type = 'transfer' AND t.transfer_account_id = a.id AND t.currency = a.currency), 0)
-       - COALESCE((SELECT SUM(t.amount_minor) FROM transactions t
+       - COALESCE((SELECT SUM(t.amount_minor + t.fee_minor) FROM transactions t
                    WHERE t.type = 'transfer' AND t.account_id = a.id AND t.currency = a.currency), 0)
        AS balance
      FROM accounts a WHERE a.id = ?`,

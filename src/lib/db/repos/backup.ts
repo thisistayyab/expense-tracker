@@ -207,6 +207,13 @@ async function assertMergedInvariants(db: Db): Promise<void> {
     throw new Error("Merge would leave a recurring rule incompatible with its account");
   }
 
+  const badRuleFee = await db.getFirstAsync<{ id: string }>(
+    "SELECT id FROM recurring_rules WHERE type = 'income' AND fee_minor > 0 LIMIT 1",
+  );
+  if (badRuleFee) {
+    throw new Error("Merge would leave an income recurring rule with a fee");
+  }
+
   const badTx = await db.getFirstAsync<{ id: string }>(
     `SELECT t.id FROM transactions t
        JOIN accounts a ON a.id = t.account_id
@@ -216,6 +223,13 @@ async function assertMergedInvariants(db: Db): Promise<void> {
   );
   if (badTx) {
     throw new Error("Merge would create a transaction currency mismatch with its account");
+  }
+
+  const badTxFee = await db.getFirstAsync<{ id: string }>(
+    "SELECT id FROM transactions WHERE type = 'income' AND fee_minor > 0 LIMIT 1",
+  );
+  if (badTxFee) {
+    throw new Error("Merge would leave an income transaction with a fee");
   }
 }
 

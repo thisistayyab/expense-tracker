@@ -18,6 +18,7 @@ import { getAccount } from "../../lib/db/repos/accounts";
 import { getCategory } from "../../lib/db/repos/categories";
 import { deleteTransaction, getTransaction, restoreTransaction } from "../../lib/db/repos/transactions";
 import type { Account, Category, Db, Transaction } from "../../lib/db/types";
+import { formatMoney } from "../../lib/format/money";
 import { haptics } from "../../lib/haptics";
 import { notifyLedgerChanged } from "../../lib/ledgerEvents";
 import { useTheme } from "../../lib/theme";
@@ -160,8 +161,20 @@ export default function TransactionDetailScreen() {
     .filter(Boolean)
     .join(" · ");
 
+  const hasFee = transaction.feeMinor > 0;
+  const totalOutMinor = transaction.amountMinor + transaction.feeMinor;
   const detailRows: { label: string; value: string }[] = [
     ...(category && !isTransfer ? [{ label: "Category", value: category.name }] : []),
+    ...(hasFee
+      ? [
+          {
+            label: isTransfer ? "Transfer amount" : "Amount",
+            value: formatMoney(transaction.amountMinor, transaction.currency),
+          },
+          { label: "Fee", value: formatMoney(transaction.feeMinor, transaction.currency) },
+          { label: "Total out", value: formatMoney(totalOutMinor, transaction.currency) },
+        ]
+      : []),
     ...(transaction.place ? [{ label: "Place", value: transaction.place }] : []),
     ...(transaction.note ? [{ label: "Note", value: transaction.note }] : []),
     ...(account
@@ -209,11 +222,21 @@ export default function TransactionDetailScreen() {
             </View>
             <View style={{ marginTop: 18 }}>
               <Money
-                minor={transaction.amountMinor}
+                minor={totalOutMinor}
                 currency={transaction.currency}
                 size="amountXL"
                 tone={transaction.type === "income" ? "income" : "default"}
               />
+              {hasFee ? (
+                <Text
+                  style={[theme.text.caption, { color: theme.colors.warning, marginTop: 4 }]}
+                >
+                  {`Includes a ${formatMoney(
+                    transaction.feeMinor,
+                    transaction.currency,
+                  )} fee (${formatMoney(transaction.amountMinor, transaction.currency)} + fee).`}
+                </Text>
+              ) : null}
             </View>
             <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 6 }]}>
               {subtitle}

@@ -7,7 +7,7 @@ import { appAlert, AppIcon, Card, Money, TactilePressable } from "../../componen
 import { listUpcomingRecurringRules } from "../../lib/db/repos/recurring";
 import type { Db, RecurringRule } from "../../lib/db/types";
 import { addDays, daysBetween, toIsoDate } from "../../lib/domain/dates";
-import { formatMoneySpoken } from "../../lib/format/money";
+import { formatMoney, formatMoneySpoken } from "../../lib/format/money";
 import { notifyLedgerChanged, subscribeLedgerChanged } from "../../lib/ledgerEvents";
 import { FONT_FAMILIES, useTheme } from "../../lib/theme";
 import { postNextOccurrence } from "./processDue";
@@ -195,7 +195,11 @@ export function BillsDueCard({ currency }: { currency: string }) {
             accessibilityLabel={`${rule.itemName ?? "Recurring bill"}, ${formatMoneySpoken(
               rule.amountMinor,
               rule.currency,
-            )}, ${dueLabel(rule.nextDueAt, today)}${rule.autoPost ? "" : ", unpaid"}`}
+            )}${
+              rule.feeMinor > 0
+                ? `, plus a ${formatMoneySpoken(rule.feeMinor, rule.currency)} fee`
+                : ""
+            }, ${dueLabel(rule.nextDueAt, today)}${rule.autoPost ? "" : ", unpaid"}`}
             scaleTo={0.985}
             radius={14}
             style={{
@@ -215,6 +219,7 @@ export function BillsDueCard({ currency }: { currency: string }) {
               </Text>
               <Text style={[theme.text.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
                 {dueLabel(rule.nextDueAt, today)} · {rule.autoPost ? "Auto-posts" : "Unpaid"}
+                {rule.feeMinor > 0 ? ` · ${formatMoney(rule.feeMinor, rule.currency)} fee` : ""}
               </Text>
             </View>
             <Money minor={rule.amountMinor} currency={rule.currency} />

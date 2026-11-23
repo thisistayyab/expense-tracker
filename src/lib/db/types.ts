@@ -53,6 +53,8 @@ export type Transaction = {
   id: string;
   type: TransactionType;
   amountMinor: number;
+  /** Optional account/bank fee paid on top of the amount; 0 when there is none. */
+  feeMinor: number;
   currency: string;
   accountId: string;
   transferAccountId: string | null;
@@ -86,6 +88,8 @@ export type RecurringRule = {
   id: string;
   type: TransactionType;
   amountMinor: number;
+  /** Fee charged on each posted occurrence; 0 when there is none. */
+  feeMinor: number;
   currency: string;
   accountId: string;
   categoryId: string | null;

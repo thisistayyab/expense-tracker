@@ -72,6 +72,7 @@ export const TABLE_COLUMNS: Record<BackupTable, readonly string[]> = {
     "id",
     "type",
     "amount_minor",
+    "fee_minor",
     "currency",
     "account_id",
     "category_id",
@@ -94,6 +95,7 @@ export const TABLE_COLUMNS: Record<BackupTable, readonly string[]> = {
     "id",
     "type",
     "amount_minor",
+    "fee_minor",
     "currency",
     "account_id",
     "transfer_account_id",
@@ -224,6 +226,7 @@ const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
     id: isNonBlankString,
     type: oneOf(TRANSACTION_TYPES),
     amount_minor: integerAtLeast(1),
+    fee_minor: integerAtLeast(0),
     currency: isCurrency,
     account_id: isNonBlankString,
     category_id: isNullableString,
@@ -246,6 +249,7 @@ const COLUMN_CHECKS: Record<BackupTable, Record<string, Check>> = {
     id: isNonBlankString,
     type: oneOf(TRANSACTION_TYPES),
     amount_minor: integerAtLeast(1),
+    fee_minor: integerAtLeast(0),
     currency: isCurrency,
     account_id: isNonBlankString,
     transfer_account_id: isNullableString,
@@ -315,7 +319,12 @@ function push(errors: string[], message: string): void {
   if (errors.length < 50) errors.push(message);
 }
 
-function validateRows(table: BackupTable, rows: unknown, errors: string[]): BackupRow[] {
+function validateRows(
+  table: BackupTable,
+  rows: unknown,
+  errors: string[],
+  schemaVersion: number,
+): BackupRow[] {
   if (!Array.isArray(rows)) {
     push(errors, `${table} must be an array`);
     return [];
@@ -343,6 +352,15 @@ function validateRows(table: BackupTable, rows: unknown, errors: string[]): Back
         // limits that apply to every month, which is exactly what null means.
         if (table === "budgets" && column === "month") {
           normalized.month = null;
+          continue;
+        }
+        // Backups written before schema 5 have no fees: every row is fee-free.
+        if (
+          schemaVersion < 5 &&
+          column === "fee_minor" &&
+          (table === "transactions" || table === "recurring_rules")
+        ) {
+          normalized.fee_minor = 0;
           continue;
         }
         push(errors, `${table}[${index}] is missing ${column}`);
@@ -415,7 +433,7 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
 
   const tables = emptyBackupTables();
   for (const table of BACKUP_TABLES) {
-    tables[table] = validateRows(table, rawTables[table], errors);
+    tables[table] = validateRows(table, rawTables[table], errors, schemaVersion as number);
   }
 
   // Do not stop after row-level errors: identity, referential and duplicate checks
@@ -495,6 +513,9 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
     if (row.type === "transfer") {
       push(errors, "Recurring transfers are not supported by this schema");
     }
+    if (row.type === "income" && Number(row.fee_minor) > 0) {
+      push(errors, `Recurring rule ${String(row.id)} cannot attach a fee to income`);
+    }
     if (row.end_date !== null && String(row.end_date) < String(row.start_date)) {
       push(errors, `Recurring rule ${String(row.id)} has end_date before start_date`);
     }
@@ -520,6 +541,9 @@ export function validateBackup(value: unknown, currentSchemaVersion: number): Ba
     }
     if (row.type !== "transfer" && row.transfer_account_id !== null) {
       push(errors, `Transaction ${String(row.id)} has a destination but is not a transfer`);
+    }
+    if (row.type === "income" && Number(row.fee_minor) > 0) {
+      push(errors, `Transaction ${String(row.id)} cannot attach a fee to income`);
     }
   }
   for (const row of tables.budgets) {
